@@ -1,0 +1,72 @@
+
+\documentclass[10pt]{report}
+
+\usepackage{url}
+\usepackage{tabularx}
+\usepackage{graphicx}
+%\usepackage[boxed,linesnumbered,ruled,vlined]{algorithm2e}
+%\usepackage{amssymb,amsmath,amsthm,amssymb}
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{ctable}
+\usepackage{balance}
+\usepackage{listings}
+%\usepackage{hyperref}
+
+
+\begin{document}
+%
+% paper title
+% can use linebreaks \\ within to get better formatting as desired
+%\title{Topology-Aware Load Balancing for Parallel Applications on Multi-Core Systems}
+%\title{Livrable 1.1.2\\}
+\title{AGIOS User Guide}
+
+
+\author{
+Francieli Zanon Boito\\Philippe O. A. Navaux\\Yves Denneulin}
+
+\date{March 2015}
+
+% make the title area
+\maketitle
+
+\tableofcontents
+
+
+\chapter{Introduction}
+
+\input{sections/introduction.tex}
+
+\chapter{Getting Started} \label{chapter:starting}
+
+\input{sections/getting_started.tex}
+
+\chapter{I/O Scheduling Algorithms} \label{chapter:algorithms}
+
+\input{sections/scheduling_algorithms.tex}
+
+\chapter{Trace Files and the Prediction Module} \label{chapter:trace}
+
+\input{sections/trace_predict.tex}
+
+\chapter{Providing Information about the Storage Device with SeRRa} \label{chapter:serra}
+
+\input{sections/serra.tex}
+
+\chapter{The Configuration File} \label{chapter:configfile}
+
+\input{sections/config_file.tex}
+
+\chapter{Giving Credit} \label{chapter:citing}
+
+\input{sections/credit.tex}
+
+
+\balance
+%\bibliographystyle{IEEEtran}
+%\bibliography{fboito}
+
+% that's all folks
+\end{document}

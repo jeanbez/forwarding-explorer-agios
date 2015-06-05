@@ -1,0 +1,60 @@
+This chapter presents the five scheduling algorithms available with AGIOS: aIOLi, SJF, TO, and TO-agg. These algorithms were selected for their variety, in order to represent different situations and complement each other's characteristics.
+
+\section{aIOLi} \label{sec:agios_aioli}
+
+We have adapted the \emph{aIOLi} scheduling algorithm from Lebre et al. A full explanation and discussion about this algorithm's characteristics can be found in the paper that describes it\footnote{A. Lebre, Y. Denneulin, G. Huard, and P. Sowa, “I/o scheduling service for multi-application clusters,” in Proceedings of IEEE Cluster 2006, conference on cluster computing, sep 2006.}, but we can summarize it as follows:
+
+\begin{itemize}
+
+  \item Whenever new requests arrive to the scheduler, they are inserted in
+    the appropriate queue according to the file to be accessed. There are two
+    queues for each file: one for reads, and another for writes.
+
+  \item New requests receive an initial quantum of 0 bytes. 
+
+  \item Each queue is traversed in offset order and aggregations of
+    contiguous requests are made. When an aggregation is performed, a
+    \emph{virtual request} is created, and this request will have a quantum
+    that is the sum of its parts' quanta.
+
+  \item All quanta (including the virtual requests' ones) are increased by a value that depends on its queue's past quanta usage.
+
+  \item In order to choose a request to be served, the algorithm uses an
+    offset order inside each queue and a FCFS criterion between
+    different queues. Additionally, to be selected, the request's
+    quantum must be large enough to allow its whole execution (it needs to match the request's size). 
+
+  \item The scheduler may decide to wait before processing some requests if a) a shift phenomenon is suspected or b) better aggregations were recently achieved for this queue.
+
+  \item After processing a request, if there is quantum left, other contiguous request from the same queue can be processed - given that they fit the remaining quantum. After stopping for a queue, its quanta usage ratio is updated.
+This scheduling algorithm works synchronously, in the sense that it waits until a virtual request is processed before selecting other ones.
+\end{itemize}
+
+The implementation uses a hash table indexed by file identifier for accessing the requests queues. 
+At a given moment, the cost of including a new request to a queue can be represented as the sum of the required time to find the right queue plus the time to find its place inside the queue (sorted by offset order).  This cost is expected to be $O( (M / S_{hash}) + N_{queue} )$, where M is the number of files being concurrently accessed, $S_{hash}$ is the number of entries in the hash table, and $N_{queue}$ is the number of requests in the largest queue. Selecting a request for processing, on the other hand, involves going through all queues: $O( 2 \times M )$
+
+\section{MLF}
+
+Under a workload where several files are being accessed at the same time, the cost of aIOLi's selection may become a significant part of requests' lifetime in the server. This happens due to the synchronous approach where the algorithm waits until the previous request was served before selecting a new one. In order to have a scheduler capable of providing more throughput, we developed a variation of aIOLi that we called \emph{MLF}. 
+%We have chosen this name because our version is closer to the traditional MLF task scheduling algorithm than aIOLi.
+
+To reduce the algorithm's overhead, we removed the synchronization between user and library after processing requests. Therefore, the new algorithm works repeatedly, possibly overflowing its user with requests. 
+%
+Despite its possibly high scheduling overhead, one advantage of the synchronous approach is that having some time before the next algorithm's step gives chance for new requests to arrive and more aggregations to be performed. Therefore, it is possible that this new algorithm will not be able to perform as many aggregations as aIOLi. 
+
+Other difference between MLF and aIOLi is that MLF does not respect a FCFS order between the different queues. Therefore, not all queues need to be considered before selecting a request, improving the algorithm's throughput.
+MLF's cost for including new requests is the same as aIOLi's, but its cost for selection is $O(1)$.
+
+\section{SJF} \label{agios_sjf}
+
+We have also developed for our study a variation of the \emph{Shortest Job First (SJF)} scheduling algorithm that performs requests aggregation. Its implementation also uses two queues per file and considers requests from each queue in offset order. The selection of the next request is done by going through the queues and selecting requests from the smallest one (considering each queue's total size, i.e. the sum of all its requests' sizes).
+%
+Therefore, the cost for including a new request and for selection are the same as aIOLi's. However, as MLF, our SJF variation does not work synchronously.
+
+\section{TO and TO-agg}
+
+\emph{TO} is a timeorder algorithm. It has a single queue, from where requests are extracted for processing in arrival time order (FCFS). Both the costs of including and selecting requests are, therefore, constant. 
+%We have included TO in our analysis to cover situations where no scheduling algorithm is able to improve performance. 
+
+We have also included a timeorder variation that performs aggregations: \emph{TO-agg.} Since there is a single queue for requests, aggregating a request possibly requires going through the whole queue looking for a contiguous one. Therefore, this algorithm's cost for including requests is $O( N )$, where N is the number of requests currently on the scheduler. The time for selection is still constant. 
+
