@@ -1,0 +1,2357 @@
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/include/pvfs2-mgmt.h orangefs-2.8.7/include/pvfs2-mgmt.h
+--- /home/fran/Downloads/orangefs-2.8.7/include/pvfs2-mgmt.h	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/include/pvfs2-mgmt.h	2015-06-05 13:53:56.002883263 -0300
+@@ -149,6 +149,21 @@ PVFS_error PVFS_mgmt_noop(
+     PVFS_BMI_addr_t addr,
+     PVFS_hint hints);
+ 
++PVFS_error PVFS_imgmt_writestats(
++    PVFS_fs_id fs_id,
++    PVFS_credentials *credentials,
++    PVFS_BMI_addr_t addr,
++    PVFS_mgmt_op_id *op_id,
++    PVFS_hint hints,
++    void *user_ptr);
++
++PVFS_error PVFS_mgmt_writestats(
++    PVFS_fs_id fs_id,
++    PVFS_credentials *credentials,
++    PVFS_BMI_addr_t addr,
++    PVFS_hint hints);
++
++
+ const char* PVFS_mgmt_map_addr(
+     PVFS_fs_id fs_id,
+     PVFS_credentials *credentials,
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/include/pvfs2-sysint.h orangefs-2.8.7/include/pvfs2-sysint.h
+--- /home/fran/Downloads/orangefs-2.8.7/include/pvfs2-sysint.h	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/include/pvfs2-sysint.h	2015-06-05 13:53:56.002883263 -0300
+@@ -191,6 +191,12 @@ struct PVFS_sysresp_statfs_s
+ };
+ typedef struct PVFS_sysresp_statfs_s PVFS_sysresp_statfs;
+ 
++struct PVFS_sysresp_writestats_s
++{
++	int32_t nada;
++};
++typedef struct PVFS_sysresp_writestats_s PVFS_sysresp_writestats;
++
+ struct PVFS_sysresp_getparent_s
+ {
+     PVFS_object_ref parent_ref;
+@@ -525,6 +531,23 @@ PVFS_error PVFS_isys_statfs(
+     PVFS_hint hints,
+     void *user_ptr);
+ 
++PVFS_error PVFS_isys_writestats(
++    PVFS_fs_id fs_id,
++    const PVFS_credentials *credentials,
++    PVFS_sysresp_writestats *writestats,
++    PVFS_sys_op_id *op_id,
++    PVFS_hint hints,
++    void *user_ptr);
++
++
++
++PVFS_error PVFS_sys_writestats(
++    PVFS_fs_id fs_id,
++    const PVFS_credentials *credentials,
++    PVFS_sysresp_writestats *resp,
++    PVFS_hint hints);
++
++
+ PVFS_error PVFS_sys_statfs(
+     PVFS_fs_id fs_id,
+     const PVFS_credentials *credentials,
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/Makefile.in orangefs-2.8.7/Makefile.in
+--- /home/fran/Downloads/orangefs-2.8.7/Makefile.in	2013-01-02 18:41:48.000000000 -0200
++++ orangefs-2.8.7/Makefile.in	2015-06-05 13:53:56.166883266 -0300
+@@ -193,7 +193,7 @@ CFLAGS = -I$(srcdir)/include @CFLAGS@ @C
+ LDFLAGS = -L@BUILD_ABSOLUTE_TOP@/lib
+ LDFLAGS += @LDFLAGS@
+ SERVER_LDFLAGS = -L@BUILD_ABSOLUTE_TOP@/lib
+-SERVER_LDFLAGS += @SERVER_LDFLAGS@
++SERVER_LDFLAGS += @SERVER_LDFLAGS@ -lm
+ DB_CFLAGS = @DB_CFLAGS@
+ LDSHARED = $(CC) -shared -L@BUILD_ABSOLUTE_TOP@/lib
+ PICFLAGS = -fPIC
+@@ -798,7 +798,7 @@ modldflags = $(MODLDFLAGS_$(call canonna
+ # rule for building the pvfs2 server
+ $(SERVER): $(SERVERBINOBJS) lib/libpvfs2-server.a 
+ 	$(Q) "  LD		$@"
+-	$(E)$(LD) $^ -o $@ $(SERVER_LDFLAGS) $(SERVERLIBS)
++	$(E)$(LD) $^ -o $@ $(SERVER_LDFLAGS) -lagios $(SERVERLIBS) -lm
+ 
+ # special rules for admin tool objects which also require server components
+ $(ADMINOBJS_SERVER): %.o: %.c
+@@ -828,7 +828,7 @@ endif
+ lib/libpvfs2.a: $(LIBOBJS)
+ 	$(Q) "  RANLIB	$@"
+ 	$(E)$(INSTALL) -d lib
+-	$(E)ar rcs $@ $(LIBOBJS)
++	$(E)ar rcs $@ $(LIBOBJS) /usr/lib/libagios.so.1.0.1
+ 
+ # rule for building the _multithreaded_ pvfs2 library
+ lib/libpvfs2-threaded.a: $(LIBTHREADEDOBJS)
+@@ -898,7 +898,7 @@ lib/liborangefsposix.so: lib/libpvfs2.so
+ lib/libpvfs2-server.a: $(SERVEROBJS)
+ 	$(Q) "  RANLIB	$@"
+ 	$(E)$(INSTALL) -d lib
+-	$(E)ar rcs $@ $(SERVEROBJS)
++	$(E)ar rcs $@ $(SERVEROBJS) /usr/lib/libagios.so.1.0.1
+ 
+ # rule for building karma gui and its objects
+ $(KARMA): $(KARMAOBJS) $(LIBRARIES)
+@@ -924,7 +924,7 @@ $(DEVELTOOLS): %: %.o
+ # default rule for building executables from object files
+ %: %.o $(LIBRARIES)
+ 	$(Q) "  LD		$@"
+-	$(E)$(LD) -o $@ $(LDFLAGS) $< $(LIBS) $(call modldflags,$<)
++	$(E)$(LD) -o $@ $(LDFLAGS) $< $(LIBS) -lrt $(call modldflags,$<) /usr/lib/libagios.so.1.0.1 -lm
+ 
+ %-threaded: %.o $(LIBRARIES)
+ 	$(Q) "  LD              $@"
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/apps/admin/module.mk.in orangefs-2.8.7/src/apps/admin/module.mk.in
+--- /home/fran/Downloads/orangefs-2.8.7/src/apps/admin/module.mk.in	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/apps/admin/module.mk.in	2015-06-05 13:53:55.994883263 -0300
+@@ -28,7 +28,8 @@ ADMINSRC := \
+ 	$(DIR)/pvfs2-perror.c \
+ 	$(DIR)/pvfs2-check-server.c \
+ 	$(DIR)/pvfs2-drop-caches.c \
+-	$(DIR)/pvfs2-get-uid.c
++	$(DIR)/pvfs2-get-uid.c \
++	$(DIR)/pvfs2-writestats.c
+ 
+ ADMINSRC_SERVER := \
+ 	$(DIR)/pvfs2-mkspace.c \
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/apps/admin/pvfs2-agios-writestats.c orangefs-2.8.7/src/apps/admin/pvfs2-agios-writestats.c
+--- /home/fran/Downloads/orangefs-2.8.7/src/apps/admin/pvfs2-agios-writestats.c	1969-12-31 21:00:00.000000000 -0300
++++ orangefs-2.8.7/src/apps/admin/pvfs2-agios-writestats.c	2015-06-05 13:53:55.998883262 -0300
+@@ -0,0 +1,666 @@
++/*
++ * (C) 2001 Clemson University and The University of Chicago
++ *
++ * See COPYING in top-level directory.
++ */
++
++#include <unistd.h>
++#include <stdio.h>
++#include <errno.h>
++#include <string.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <fcntl.h>
++#include <sys/time.h>
++#include <time.h>
++#include <stdlib.h>
++#include <getopt.h>
++
++#include "pvfs2.h"
++#include "pvfs2-mgmt.h"
++#include "pint-sysint-utils.h"
++#include "server-config.h"
++#include "pvfs2-internal.h"
++
++#ifndef PVFS2_VERSION
++#define PVFS2_VERSION "Unknown"
++#endif
++
++struct options
++{
++    char* fs_path_hack;
++    char* fs_path_real;
++    char* mnt_point;
++};
++
++static struct options* parse_args(int argc, char* argv[]);
++static void usage(int argc, char** argv);
++static void print_mntent(
++    struct PVFS_sys_mntent *entries, int num_entries);
++static int print_config(PVFS_fs_id fsid);
++static int noop_all_servers(PVFS_fs_id fsid);
++static void print_error_details(PVFS_error_details * error_details);
++static void print_root_check_error_details(PVFS_error_details * error_details);
++
++int main(int argc, char **argv)
++{
++    int ret = -1, err = 0;
++    int i;
++    PVFS_fs_id cur_fs;
++    const PVFS_util_tab* tab;
++    struct options* user_opts = NULL;
++    char pvfs_path[PVFS_NAME_MAX] = {0};
++    PVFS_credentials creds;
++    PVFS_sysresp_lookup resp_lookup;
++    PVFS_error_details * error_details;
++    struct PVFS_mgmt_setparam_value param_value;
++    int count;
++
++    /* look at command line arguments */
++    user_opts = parse_args(argc, argv);
++    if(!user_opts)
++    {
++	fprintf(stderr, "Error: failed to parse command line "
++                "arguments.\n");
++	usage(argc, argv);
++	return(-1);
++    }
++
++    printf("\n(1) Parsing tab file...\n");
++    tab = PVFS_util_parse_pvfstab(NULL);
++    if (!tab)
++    {
++	PVFS_perror("PVFS_util_parse_pvfstab", ret);
++        fprintf(stderr, "Failure: could not parse pvfstab.\n");
++        return(-1);
++    }
++
++    printf("\n(2) Initializing system interface...\n");
++    ret = PVFS_sys_initialize(GOSSIP_NO_DEBUG);
++    if(ret < 0)
++    {
++	PVFS_perror("PVFS_sys_initialize", ret);
++	fprintf(stderr, "Failure: could not initialize system "
++                "interface.\n");
++	return(-1);
++    }
++
++    printf("\n(3) Initializing each file system found "
++           "in tab file: %s...\n", tab->tabfile_name);
++
++    for(i=0; i<tab->mntent_count; i++)
++    {
++        print_mntent(&tab->mntent_array[i], 1);
++        fflush(stdout);
++        ret = PVFS_sys_fs_add(&tab->mntent_array[i]);
++	printf("   %s: ", tab->mntent_array[i].mnt_dir);
++	if(ret < 0)
++	{
++	    printf("FAILURE!\n");
++            err = 1;
++	}
++	else
++	{   
++	    printf("Ok\n");
++	}
++    }
++    fflush(stdout);
++    if(err)
++    {
++        fprintf(stderr, "\nFailure: could not initialze at "
++                "least one of the target file systems.\n");
++    }
++    printf("\n(4) Searching for %s in pvfstab...\n",
++           user_opts->fs_path_real);
++
++    /* translate local path into pvfs2 relative path */
++    ret = PVFS_util_resolve(user_opts->fs_path_hack,
++        &cur_fs, pvfs_path, PVFS_NAME_MAX);
++    if(ret < 0)
++    {
++        fprintf(stderr, "Failure: could not find filesystem for %s "
++                "in pvfs2tab %s\n", user_opts->fs_path_real, tab->tabfile_name);
++        for (i = 0; i < tab->mntent_count; i++)
++        {
++            fprintf(stderr, "Entry %d: %s\n", i, tab->mntent_array[i].mnt_dir);
++        }
++        return(-1);
++    }
++
++    print_mntent(tab->mntent_array, tab->mntent_count);
++
++    PVFS_util_gen_credentials(&creds);
++
++    /* dump some key parts of the config file */
++    ret = print_config(cur_fs);
++    if(ret < 0)
++    {
++	PVFS_perror("print_config", ret);
++	fprintf(stderr, "Failure: could not print configuration.\n");
++	return(-1);
++    }
++
++    printf("\n(5) Verifying that all servers are responding...\n");
++
++    /* send noop to everyone */
++    ret = noop_all_servers(cur_fs);
++    if(ret < 0)
++    {
++        fprintf(stderr, "Failure: could not communicate with "
++                "one of the servers.\n");
++        err = 1;
++    }
++
++    printf("\n(6) Verifying that fsid %ld is acceptable "
++           "to all servers...\n",(long)cur_fs);
++
++    ret = PVFS_mgmt_count_servers(
++        cur_fs, &creds, PVFS_MGMT_IO_SERVER|PVFS_MGMT_META_SERVER, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_count_servers()", ret);
++	return ret;
++    }
++
++    error_details = PVFS_error_details_new(count);
++    if(!error_details)
++    {
++        PVFS_perror("PVFS_error_details_new", -ENOMEM);
++        fprintf(stderr, "Failure: could not create error details\n");
++        return(-1);
++    }
++
++    param_value.type = PVFS_MGMT_PARAM_TYPE_UINT64;
++    param_value.u.value = (uint64_t)cur_fs;
++
++    /* check that the fsid exists on all of the servers */
++    /* TODO: we need a way to get information out about which server fails
++     * in error cases here 
++     */
++    ret = PVFS_mgmt_setparam_all(
++        cur_fs, &creds, PVFS_SERV_PARAM_FSID_CHECK,
++        &param_value, error_details, NULL);
++    if(ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_setparam_all", ret);
++	fprintf(stderr, "Failure: not all servers accepted fsid %ld\n", 
++	    (long)cur_fs);
++        if (ret == -PVFS_EDETAIL)
++            print_error_details(error_details);
++        err = 1;
++    }
++    else
++    {
++        printf("\n   Ok; all servers understand fs_id %ld\n", (long) cur_fs);
++    }
++
++    printf("\n(7) Verifying that root handle is owned by one server...\n");    
++
++    ret = PVFS_sys_lookup(cur_fs, "/", &creds,
++                          &resp_lookup, PVFS2_LOOKUP_LINK_NO_FOLLOW, NULL);
++    if(ret != 0)
++    {
++	PVFS_perror("PVFS_sys_lookup", ret);
++	fprintf(stderr, "Failure: could not lookup root handle.\n");
++	return(-1);
++    }
++    printf("\n   Root handle: %llu\n", llu(resp_lookup.ref.handle));
++
++    param_value.type = PVFS_MGMT_PARAM_TYPE_UINT64;
++    param_value.u.value = (uint64_t)resp_lookup.ref.handle;
++
++    /* check that only one server controls root handle */
++    /* TODO: we need a way to get information out about which server
++     * failed in error cases here
++     */
++    ret = PVFS_mgmt_setparam_all(
++        cur_fs, &creds, PVFS_SERV_PARAM_ROOT_CHECK,
++        &param_value, error_details, NULL);
++
++    if(ret < 0)
++    {
++	PVFS_perror("Failure: check root handle failed\n"
++                    "PVFS_mgmt_setparam_all", ret);
++        if(ret == -PVFS_EDETAIL) 
++        {
++            print_root_check_error_details(error_details);
++        }
++
++        err = 1;
++    }
++
++    PVFS_error_details_free(error_details);
++
++    if (!err)
++    {
++        /* if we hit this point, then everything is ok */
++        printf("     Ok; root handle is owned by exactly one server.\n");
++        printf("\n");
++    }
++
++    PVFS_sys_finalize();
++
++    printf("=============================================================\n");
++    if (err)
++    {
++        printf("\nThe PVFS2 filesystem at %s appears to have "
++               "problems.\n\n", user_opts->fs_path_real);
++    }
++    else
++    {
++        printf("\nThe PVFS2 filesystem at %s appears to be "
++               "correctly configured.\n\n", user_opts->fs_path_real);
++    }
++
++    return(ret);
++}
++
++
++/* noop_all_servers()
++ *
++ * sends a noop to all servers listed in the config file 
++ *
++ * returns -PVFS_error on failure, 0 on success
++ */
++static int noop_all_servers(PVFS_fs_id fsid)
++{
++    PVFS_credentials creds;
++    int ret = -1;
++    int count;
++    PVFS_BMI_addr_t* addr_array;
++    int i;
++    int tmp;
++ 
++    PVFS_util_gen_credentials(&creds);
++
++    printf("\n   meta servers:\n");
++    ret = PVFS_mgmt_count_servers(
++        fsid, &creds, PVFS_MGMT_META_SERVER, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_count_servers()", ret);
++	return ret;
++    }
++    addr_array = (PVFS_BMI_addr_t *) malloc(
++        count * sizeof(PVFS_BMI_addr_t));
++    if (addr_array == NULL)
++    {
++	perror("malloc");
++	return -PVFS_ENOMEM;
++    }
++
++    ret = PVFS_mgmt_get_server_array(
++        fsid, &creds, PVFS_MGMT_META_SERVER, addr_array, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_get_server_array()", ret);
++	return ret;
++    }
++
++    for (i = 0; i < count; i++)
++    {
++	printf("   %s ",
++               PVFS_mgmt_map_addr(fsid, &creds, addr_array[i], &tmp));
++	ret = PVFS_mgmt_noop(fsid, &creds, addr_array[i], NULL);
++	if (ret == 0)
++	{
++	    printf("Ok\n");
++	}
++	else
++	{
++	    printf("FAILURE: PVFS_mgmt_noop failed for server: %s\n",
++                   PVFS_mgmt_map_addr(fsid, &creds, addr_array[i], &tmp));
++	    return ret;
++	}
++    }
++    free(addr_array);
++
++    printf("\n   data servers:\n");
++    ret = PVFS_mgmt_count_servers(
++        fsid, &creds, PVFS_MGMT_IO_SERVER, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_count_servers()", ret);
++	return ret;
++    }
++    addr_array = (PVFS_BMI_addr_t *)malloc(
++        count * sizeof(PVFS_BMI_addr_t));
++    if (addr_array == NULL)
++    {
++	perror("malloc");
++	return -PVFS_ENOMEM;
++    }
++
++    ret = PVFS_mgmt_get_server_array(
++        fsid, &creds, PVFS_MGMT_IO_SERVER, addr_array, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_get_server_array()", ret);
++	return ret;
++    }
++
++    for (i = 0; i < count; i++)
++    {
++	printf("   %s ",
++               PVFS_mgmt_map_addr(fsid, &creds, addr_array[i], &tmp));
++	ret = PVFS_mgmt_noop(fsid, &creds, addr_array[i], NULL);
++	if (ret == 0)
++	{
++	    printf("Ok\n");
++	}
++	else
++	{
++	    printf("Failure!\n");
++	    return ret;
++	}
++    }
++    free(addr_array);
++
++    return(0);
++}
++
++/* print_config()
++ *
++ * prints out config file information
++ *
++ * returns -PVFS_error on failure, 0 on success
++ */
++static int print_config(PVFS_fs_id fsid)
++{
++    PVFS_credentials creds;
++    int i;
++    int ret = -1;
++    int tmp;
++    int count;
++    PVFS_BMI_addr_t *addr_array;
++ 
++    PVFS_util_gen_credentials(&creds);
++
++    printf("\n   meta servers:\n");
++    ret = PVFS_mgmt_count_servers(
++        fsid, &creds, PVFS_MGMT_META_SERVER, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_count_servers()", ret);
++	return ret;
++    }
++    addr_array = (PVFS_BMI_addr_t *)malloc(
++        count * sizeof(PVFS_BMI_addr_t));
++    if (addr_array == NULL)
++    {
++	perror("malloc");
++	return -PVFS_ENOMEM;
++    }
++
++    ret = PVFS_mgmt_get_server_array(
++        fsid, &creds, PVFS_MGMT_META_SERVER, addr_array, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_get_server_array()", ret);
++	return ret;
++    }
++
++    for (i=0; i<count; i++)
++    {
++	printf("   %s\n",
++               PVFS_mgmt_map_addr(fsid, &creds, addr_array[i], &tmp));
++    }
++    free(addr_array);
++
++    printf("\n   data servers:\n");
++    ret = PVFS_mgmt_count_servers(
++        fsid, &creds, PVFS_MGMT_IO_SERVER, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_count_servers()", ret);
++	return ret;
++    }
++    addr_array = (PVFS_BMI_addr_t *)malloc(
++        count * sizeof(PVFS_BMI_addr_t));
++    if (addr_array == NULL)
++    {
++	perror("malloc");
++	return -PVFS_ENOMEM;
++    }
++
++    ret = PVFS_mgmt_get_server_array(
++        fsid, &creds, PVFS_MGMT_IO_SERVER, addr_array, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_get_server_array()", ret);
++	return ret;
++    }
++
++    for(i=0; i<count; i++)
++    {
++	printf("   %s\n",
++               PVFS_mgmt_map_addr(fsid, &creds, addr_array[i], &tmp));
++    }
++    free(addr_array);
++
++    return 0;
++}
++
++/* print_mntent()
++ *
++ * prints out pvfstab information 
++ *
++ * no return value
++ */
++static void print_mntent(struct PVFS_sys_mntent *entries, int num_entries)
++{
++    int i, j;
++
++    for (i = 0; i < num_entries; i++)
++    {
++        printf("\n   PVFS2 servers:");
++        for (j=0; j<entries[i].num_pvfs_config_servers; j++) {
++            printf(" %s", entries[i].pvfs_config_servers[j]);
++            if (entries[i].num_pvfs_config_servers > 1) {
++                if (entries[i].the_pvfs_config_server
++                  == entries[i].pvfs_config_servers[j])
++                    printf(" (active)");
++                if (j < entries[i].num_pvfs_config_servers-1)
++                    printf(",");
++            }
++        }
++        printf("\n");
++        printf("   Storage name: %s\n", entries[i].pvfs_fs_name);
++        printf("   Local mount point: %s\n", entries[i].mnt_dir);
++    }
++    return;
++}
++
++/* parse_args()
++ *
++ * parses command line arguments
++ *
++ * returns pointer to options structure on success, NULL on failure
++ */
++static struct options* parse_args(int argc, char* argv[])
++{
++    char flags[] = "vm:";
++    int one_opt = 0;
++    int len;
++
++    struct options* tmp_opts = NULL;
++    int ret = -1;
++
++    if (argc == 1)
++    {
++        usage(argc, argv);
++        exit(EXIT_FAILURE);
++    }
++
++    /* create storage for the command line options */
++    tmp_opts = (struct options *) malloc(sizeof(struct options));
++    if (tmp_opts == NULL)
++    {
++	return(NULL);
++    }
++    memset(tmp_opts, 0, sizeof(struct options));
++
++    /* look at command line arguments */
++    while ((one_opt = getopt(argc, argv, flags)) != EOF)
++    {
++	switch (one_opt)
++        {
++            case('v'):
++                printf("%s\n", PVFS2_VERSION);
++                exit(0);
++	    case('m'):
++		/* taken from pvfs2-statfs.c */
++		len = strlen(optarg)+1;
++		tmp_opts->mnt_point = (char*)malloc(len+1);
++		if (!tmp_opts->mnt_point)
++		{
++		    free(tmp_opts);
++		    return NULL;
++		}
++		memset(tmp_opts->mnt_point, 0, len+1);
++		ret = sscanf(optarg, "%s", tmp_opts->mnt_point);
++		if (ret < 1){
++		    free(tmp_opts);
++		    return NULL;
++		}
++		/* TODO: dirty hack... fix later.  The remove_dir_prefix()
++		 * function expects some trailing segments or at least
++		 * a slash off of the mount point
++		 */
++		strcat(tmp_opts->mnt_point, "/");
++		break;
++	    case('?'):
++		usage(argc, argv);
++		exit(EXIT_FAILURE);
++	}
++    }
++
++    if (optind != (argc ))
++    {
++	usage(argc, argv);
++	exit(EXIT_FAILURE);
++    }
++
++    /* get the path of the file system, this one has a trailing slash
++     * tacked on, see comment below for why 
++     */
++    tmp_opts->fs_path_hack = (char *) malloc(strlen(argv[argc-1]) + 2);
++    if (tmp_opts->fs_path_hack == NULL)
++    {
++	free(tmp_opts);
++	return NULL;
++    }
++    ret = sscanf(argv[argc-1], "%s", tmp_opts->fs_path_hack);
++    if (ret < 1)
++    {
++	free(tmp_opts->fs_path_hack);
++	free(tmp_opts);
++	return NULL;
++    }
++    /* TODO: this is a hack... fix later.  The remove_dir_prefix()
++     * function expects some trailing segments or at least a slash
++     * off of the mount point
++     */
++    strcat(tmp_opts->fs_path_hack, "/");
++    
++    /* also preserve the real path, to use in print statements elsewhre */
++    tmp_opts->fs_path_real = (char *) malloc(strlen(argv[argc-1]) + 2);
++    if (tmp_opts->fs_path_real == NULL)
++    {
++	free(tmp_opts->fs_path_hack);
++	free(tmp_opts);
++	return NULL;
++    }
++    ret = sscanf(argv[argc-1], "%s", tmp_opts->fs_path_real);
++    if (ret < 1)
++    {
++	free(tmp_opts->fs_path_hack);
++	free(tmp_opts->fs_path_real);
++	free(tmp_opts);
++	return NULL;
++    }
++ 
++    return(tmp_opts);
++}
++
++static void print_root_check_error_details(PVFS_error_details * error_details)
++{
++    int i = 0;
++    int owners = 0;
++    int fatal_errors = 0;
++    /* find # of servers that report ownership of root */
++    for(i = 0; i < error_details->count_used; ++i)
++    {
++        if(error_details->error[i].error == 0)
++        {
++            ++owners;
++        }
++        else if(error_details->error[i].error != -PVFS_ENOENT)
++        {
++            ++fatal_errors;
++        }
++    }
++
++    /* now figure out what error to print */
++    if(owners == 0)
++    {
++        fprintf(stderr, "\n\tExactly one server must own the root handle.\n"
++                        "\tIn this setup, no servers own the root handle.\n");
++    }
++    else if(owners > 1)
++    {
++        fprintf(stderr, "\n\tExactly one server must own the root handle.\n"
++                        "\tIn this setup, multiple servers report "
++                        "ownership of root handle.\n");
++    }
++
++    fprintf(stderr, "\nPer-server errors:\n");
++    for(i = 0; i < error_details->count_used; ++i)
++    {
++        char perrorstr[100];
++        if(error_details->error[i].error == 0)
++        {
++            fprintf(stderr, "\tServer: %s: Reports ownership of root handle\n",
++                    BMI_addr_rev_lookup(error_details->error[i].addr));
++        }
++        else if(error_details->error[i].error != -PVFS_ENOENT)
++        {
++            PVFS_strerror_r(error_details->error[i].error, perrorstr, 100);
++        }
++
++    }
++}
++
++static void print_error_details(PVFS_error_details * error_details)
++{
++    int i = 0;
++    fprintf(stderr, "\tPer-server errors:\n");
++    for(i = 0; i < error_details->count_used; ++i)
++    {
++        char perrorstr[100];
++        if(error_details->error[i].error != 0)
++        {
++            PVFS_strerror_r(error_details->error[i].error, perrorstr, 100);
++            fprintf(stderr, "\tServer: %s: %s\n",
++                    BMI_addr_rev_lookup(error_details->error[i].addr),
++                    perrorstr);
++        }
++    }
++}
++
++static void usage(int argc, char** argv)
++{
++    fprintf(stderr, "%s version %s\n\n", argv[0], PVFS2_VERSION);
++    fprintf(stderr, "Usage  : %s -m file_system_path\n", argv[0]);
++    fprintf(stderr, "Example: %s -m /mnt/pvfs2\n", argv[0]);
++    return;
++}
++
++/*
++ * Local variables:
++ *  c-indent-level: 4
++ *  c-basic-offset: 4
++ * End:
++ *
++ * vim: ts=8 sts=4 sw=4 expandtab
++ */
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/apps/admin/pvfs2-writestats.c orangefs-2.8.7/src/apps/admin/pvfs2-writestats.c
+--- /home/fran/Downloads/orangefs-2.8.7/src/apps/admin/pvfs2-writestats.c	1969-12-31 21:00:00.000000000 -0300
++++ orangefs-2.8.7/src/apps/admin/pvfs2-writestats.c	2015-06-05 13:53:55.994883263 -0300
+@@ -0,0 +1,431 @@
++/*
++ * (C) 2001 Clemson University and The University of Chicago
++ *
++ * See COPYING in top-level directory.
++ */
++
++#include <unistd.h>
++#include <stdio.h>
++#include <errno.h>
++#include <string.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <fcntl.h>
++#include <sys/time.h>
++#include <time.h>
++#include <stdlib.h>
++#include <getopt.h>
++
++#include "pvfs2.h"
++#include "pvfs2-mgmt.h"
++#include "pint-sysint-utils.h"
++#include "server-config.h"
++#include "pvfs2-internal.h"
++
++#ifndef PVFS2_VERSION
++#define PVFS2_VERSION "Unknown"
++#endif
++
++struct options
++{
++    char* fs_path_hack;
++    char* fs_path_real;
++    char* mnt_point;
++};
++
++static struct options* parse_args(int argc, char* argv[]);
++static void usage(int argc, char** argv);
++static void print_mntent(
++    struct PVFS_sys_mntent *entries, int num_entries);
++static int print_config(PVFS_fs_id fsid);
++static int writestats_all_servers(PVFS_fs_id fsid);
++
++int main(int argc, char **argv)
++{
++    int ret = -1, err = 0;
++    int i;
++    PVFS_fs_id cur_fs;
++    const PVFS_util_tab* tab;
++    struct options* user_opts = NULL;
++    char pvfs_path[PVFS_NAME_MAX] = {0};
++    PVFS_credentials creds;
++
++    /* look at command line arguments */
++    user_opts = parse_args(argc, argv);
++    if(!user_opts)
++    {
++	fprintf(stderr, "Error: failed to parse command line "
++                "arguments.\n");
++	usage(argc, argv);
++	return(-1);
++    }
++
++    printf("\n(1) Parsing tab file...\n");
++    tab = PVFS_util_parse_pvfstab(NULL);
++    if (!tab)
++    {
++	PVFS_perror("PVFS_util_parse_pvfstab", ret);
++        fprintf(stderr, "Failure: could not parse pvfstab.\n");
++        return(-1);
++    }
++
++    printf("\n(2) Initializing system interface...\n");
++    ret = PVFS_sys_initialize(GOSSIP_NO_DEBUG);
++    if(ret < 0)
++    {
++	PVFS_perror("PVFS_sys_initialize", ret);
++	fprintf(stderr, "Failure: could not initialize system "
++                "interface.\n");
++	return(-1);
++    }
++
++    printf("\n(3) Initializing each file system found "
++           "in tab file: %s...\n", tab->tabfile_name);
++
++    for(i=0; i<tab->mntent_count; i++)
++    {
++        print_mntent(&tab->mntent_array[i], 1);
++        fflush(stdout);
++        ret = PVFS_sys_fs_add(&tab->mntent_array[i]);
++	printf("   %s: ", tab->mntent_array[i].mnt_dir);
++	if(ret < 0)
++	{
++	    printf("FAILURE!\n");
++            err = 1;
++	}
++	else
++	{   
++	    printf("Ok\n");
++	}
++    }
++    fflush(stdout);
++    if(err)
++    {
++        fprintf(stderr, "\nFailure: could not initialze at "
++                "least one of the target file systems.\n");
++    }
++    printf("\n(4) Searching for %s in pvfstab...\n",
++           user_opts->fs_path_real);
++
++    /* translate local path into pvfs2 relative path */
++    ret = PVFS_util_resolve(user_opts->fs_path_hack,
++        &cur_fs, pvfs_path, PVFS_NAME_MAX);
++    if(ret < 0)
++    {
++        fprintf(stderr, "Failure: could not find filesystem for %s "
++                "in pvfs2tab %s\n", user_opts->fs_path_real, tab->tabfile_name);
++        for (i = 0; i < tab->mntent_count; i++)
++        {
++            fprintf(stderr, "Entry %d: %s\n", i, tab->mntent_array[i].mnt_dir);
++        }
++        return(-1);
++    }
++
++    print_mntent(tab->mntent_array, tab->mntent_count);
++
++    PVFS_util_gen_credentials(&creds);
++
++    /* dump some key parts of the config file */
++    ret = print_config(cur_fs);
++    if(ret < 0)
++    {
++	PVFS_perror("print_config", ret);
++	fprintf(stderr, "Failure: could not print configuration.\n");
++	return(-1);
++    }
++
++    printf("\n(5) Asking all servers to write statsfile...\n");
++
++    /* send msg to everyone */
++    ret = writestats_all_servers(cur_fs);
++    if(ret < 0)
++    {
++        fprintf(stderr, "Failure: could not communicate with "
++                "one of the servers.\n");
++        err = 1;
++    }
++
++    if (err)
++    {
++        printf("\nThe PVFS2 filesystem at %s appears to have "
++               "problems.\n\n", user_opts->fs_path_real);
++    }
++    else
++    {
++        printf("\nThe PVFS2 servers wrote statsfile to /tmp/agios_statsfile.txt\n");
++    }
++
++    return(ret);
++}
++
++
++/* writestats_all_servers()
++ *
++ * sends a msg to all servers listed in the config file 
++ *
++ * returns -PVFS_error on failure, 0 on success
++ */
++static int writestats_all_servers(PVFS_fs_id fsid)
++{
++    PVFS_credentials creds;
++    int ret = -1;
++    int count;
++    PVFS_BMI_addr_t* addr_array;
++    int i;
++    int tmp;
++ 
++    PVFS_util_gen_credentials(&creds);
++
++    printf("\n   data servers:\n");
++    ret = PVFS_mgmt_count_servers(
++        fsid, &creds, PVFS_MGMT_IO_SERVER, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_count_servers()", ret);
++	return ret;
++    }
++    addr_array = (PVFS_BMI_addr_t *)malloc(
++        count * sizeof(PVFS_BMI_addr_t));
++    if (addr_array == NULL)
++    {
++	perror("malloc");
++	return -PVFS_ENOMEM;
++    }
++
++    ret = PVFS_mgmt_get_server_array(
++        fsid, &creds, PVFS_MGMT_IO_SERVER, addr_array, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_get_server_array()", ret);
++	return ret;
++    }
++
++    for (i = 0; i < count; i++)
++    {
++	printf("   %s ",
++               PVFS_mgmt_map_addr(fsid, &creds, addr_array[i], &tmp));
++	ret = PVFS_mgmt_writestats(fsid, &creds, addr_array[i], NULL);
++	if (ret == 0)
++	{
++	    printf("Ok\n");
++	}
++	else
++	{
++	    printf("Failure!\n");
++	    return ret;
++	}
++    }
++    free(addr_array);
++
++    return(0);
++}
++
++/* print_config()
++ *
++ * prints out config file information
++ *
++ * returns -PVFS_error on failure, 0 on success
++ */
++static int print_config(PVFS_fs_id fsid)
++{
++    PVFS_credentials creds;
++    int i;
++    int ret = -1;
++    int tmp;
++    int count;
++    PVFS_BMI_addr_t *addr_array;
++ 
++    PVFS_util_gen_credentials(&creds);
++
++    printf("\n   data servers:\n");
++    ret = PVFS_mgmt_count_servers(
++        fsid, &creds, PVFS_MGMT_IO_SERVER, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_count_servers()", ret);
++	return ret;
++    }
++    addr_array = (PVFS_BMI_addr_t *)malloc(
++        count * sizeof(PVFS_BMI_addr_t));
++    if (addr_array == NULL)
++    {
++	perror("malloc");
++	return -PVFS_ENOMEM;
++    }
++
++    ret = PVFS_mgmt_get_server_array(
++        fsid, &creds, PVFS_MGMT_IO_SERVER, addr_array, &count);
++    if (ret < 0)
++    {
++	PVFS_perror("PVFS_mgmt_get_server_array()", ret);
++	return ret;
++    }
++
++    for(i=0; i<count; i++)
++    {
++	printf("   %s\n",
++               PVFS_mgmt_map_addr(fsid, &creds, addr_array[i], &tmp));
++    }
++    free(addr_array);
++
++    return 0;
++}
++
++/* print_mntent()
++ *
++ * prints out pvfstab information 
++ *
++ * no return value
++ */
++static void print_mntent(struct PVFS_sys_mntent *entries, int num_entries)
++{
++    int i, j;
++
++    for (i = 0; i < num_entries; i++)
++    {
++        printf("\n   PVFS2 servers:");
++        for (j=0; j<entries[i].num_pvfs_config_servers; j++) {
++            printf(" %s", entries[i].pvfs_config_servers[j]);
++            if (entries[i].num_pvfs_config_servers > 1) {
++                if (entries[i].the_pvfs_config_server
++                  == entries[i].pvfs_config_servers[j])
++                    printf(" (active)");
++                if (j < entries[i].num_pvfs_config_servers-1)
++                    printf(",");
++            }
++        }
++        printf("\n");
++        printf("   Storage name: %s\n", entries[i].pvfs_fs_name);
++        printf("   Local mount point: %s\n", entries[i].mnt_dir);
++    }
++    return;
++}
++
++/* parse_args()
++ *
++ * parses command line arguments
++ *
++ * returns pointer to options structure on success, NULL on failure
++ */
++static struct options* parse_args(int argc, char* argv[])
++{
++    char flags[] = "vm:";
++    int one_opt = 0;
++    int len;
++
++    struct options* tmp_opts = NULL;
++    int ret = -1;
++
++    if (argc == 1)
++    {
++        usage(argc, argv);
++        exit(EXIT_FAILURE);
++    }
++
++    /* create storage for the command line options */
++    tmp_opts = (struct options *) malloc(sizeof(struct options));
++    if (tmp_opts == NULL)
++    {
++	return(NULL);
++    }
++    memset(tmp_opts, 0, sizeof(struct options));
++
++    /* look at command line arguments */
++    while ((one_opt = getopt(argc, argv, flags)) != EOF)
++    {
++	switch (one_opt)
++        {
++            case('v'):
++                printf("%s\n", PVFS2_VERSION);
++                exit(0);
++	    case('m'):
++		/* taken from pvfs2-statfs.c */
++		len = strlen(optarg)+1;
++		tmp_opts->mnt_point = (char*)malloc(len+1);
++		if (!tmp_opts->mnt_point)
++		{
++		    free(tmp_opts);
++		    return NULL;
++		}
++		memset(tmp_opts->mnt_point, 0, len+1);
++		ret = sscanf(optarg, "%s", tmp_opts->mnt_point);
++		if (ret < 1){
++		    free(tmp_opts);
++		    return NULL;
++		}
++		/* TODO: dirty hack... fix later.  The remove_dir_prefix()
++		 * function expects some trailing segments or at least
++		 * a slash off of the mount point
++		 */
++		strcat(tmp_opts->mnt_point, "/");
++		break;
++	    case('?'):
++		usage(argc, argv);
++		exit(EXIT_FAILURE);
++	}
++    }
++
++    if (optind != (argc ))
++    {
++	usage(argc, argv);
++	exit(EXIT_FAILURE);
++    }
++
++    /* get the path of the file system, this one has a trailing slash
++     * tacked on, see comment below for why 
++     */
++    tmp_opts->fs_path_hack = (char *) malloc(strlen(argv[argc-1]) + 2);
++    if (tmp_opts->fs_path_hack == NULL)
++    {
++	free(tmp_opts);
++	return NULL;
++    }
++    ret = sscanf(argv[argc-1], "%s", tmp_opts->fs_path_hack);
++    if (ret < 1)
++    {
++	free(tmp_opts->fs_path_hack);
++	free(tmp_opts);
++	return NULL;
++    }
++    /* TODO: this is a hack... fix later.  The remove_dir_prefix()
++     * function expects some trailing segments or at least a slash
++     * off of the mount point
++     */
++    strcat(tmp_opts->fs_path_hack, "/");
++    
++    /* also preserve the real path, to use in print statements elsewhre */
++    tmp_opts->fs_path_real = (char *) malloc(strlen(argv[argc-1]) + 2);
++    if (tmp_opts->fs_path_real == NULL)
++    {
++	free(tmp_opts->fs_path_hack);
++	free(tmp_opts);
++	return NULL;
++    }
++    ret = sscanf(argv[argc-1], "%s", tmp_opts->fs_path_real);
++    if (ret < 1)
++    {
++	free(tmp_opts->fs_path_hack);
++	free(tmp_opts->fs_path_real);
++	free(tmp_opts);
++	return NULL;
++    }
++ 
++    return(tmp_opts);
++}
++
++static void usage(int argc, char** argv)
++{
++    fprintf(stderr, "%s version %s\n\n", argv[0], PVFS2_VERSION);
++    fprintf(stderr, "Usage  : %s -m file_system_path\n", argv[0]);
++    fprintf(stderr, "Example: %s -m /mnt/pvfs2\n", argv[0]);
++    return;
++}
++
++/*
++ * Local variables:
++ *  c-indent-level: 4
++ *  c-basic-offset: 4
++ * End:
++ *
++ * vim: ts=8 sts=4 sw=4 expandtab
++ */
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/client/sysint/agios-writestats.sm orangefs-2.8.7/src/client/sysint/agios-writestats.sm
+--- /home/fran/Downloads/orangefs-2.8.7/src/client/sysint/agios-writestats.sm	1969-12-31 21:00:00.000000000 -0300
++++ orangefs-2.8.7/src/client/sysint/agios-writestats.sm	2015-06-05 13:53:55.934883266 -0300
+@@ -0,0 +1,133 @@
++#include "client-state-machine.h"
++#include "pvfs2-debug.h"
++#include "job.h"
++#include "gossip.h"
++#include "str-utils.h"
++#include "pint-cached-config.h"
++#include "PINT-reqproto-encode.h"
++#include "pvfs2-internal.h"
++
++extern job_context_id pint_client_sm_context;
++
++%%
++
++machine pvfs2_client_writestats_sm
++{
++	state setup_msgpair
++	{
++		run client_writestats_init;
++		success => xfer_msgpair;
++		default => cleanup;
++	}
++	state xfer_msgpair
++	{
++		jump pvfs2_msgpairarray_sm;
++		default => cleanup;
++	}
++	state cleanup
++	{
++		run client_writestats_cleanup;
++		default => terminate;
++	}
++}
++
++%%
++PVFS_error PVFS_imgmt_writestats(
++    PVFS_fs_id fs_id,
++    PVFS_credentials *credentials,
++    PVFS_BMI_addr_t addr,
++    PVFS_mgmt_op_id *op_id,
++    PVFS_hint hints,
++    void *user_ptr)
++{
++    PINT_smcb *smcb = NULL;
++    PINT_client_sm *sm_p = NULL;
++
++    gossip_debug(GOSSIP_CLIENT_DEBUG, "PVFS_imgmt_writestats entered\n");
++
++    PINT_smcb_alloc(&smcb, PVFS_CLIENT_WRITESTATS,
++             sizeof(struct PINT_client_sm),
++             client_op_state_get_machine,
++             client_state_machine_terminate,
++             pint_client_sm_context);
++    if (!smcb)
++    {
++        return -PVFS_ENOMEM;
++    }
++    sm_p = PINT_sm_frame(smcb, PINT_FRAME_CURRENT);
++
++    PINT_init_msgarray_params(sm_p, fs_id);
++    PINT_init_sysint_credentials(sm_p->cred_p, credentials);
++    PINT_msgpair_init(&sm_p->msgarray_op);
++    sm_p->msgarray_op.msgpair.fs_id = fs_id;
++    sm_p->msgarray_op.msgpair.retry_flag = PVFS_MSGPAIR_NO_RETRY;
++    sm_p->msgarray_op.msgpair.svr_addr = addr;
++
++    PVFS_hint_copy(hints, &sm_p->hints);
++
++    gossip_debug(GOSSIP_CLIENT_DEBUG, "PVFS_imgmt_writestats calling "
++                 "PINT_client_state_machine_post()\n");
++
++    return PINT_client_state_machine_post(
++        smcb,  op_id, user_ptr);
++}
++
++/** Send a no-op request to a specific server and receive response.
++ */
++PVFS_error PVFS_mgmt_writestats(
++    PVFS_fs_id fs_id,
++    PVFS_credentials *credentials,
++    PVFS_BMI_addr_t addr,
++    PVFS_hint hints)
++{
++    PVFS_error ret = -PVFS_EINVAL, error = 0;
++    PVFS_mgmt_op_id op_id;
++
++    gossip_debug(GOSSIP_CLIENT_DEBUG, "PVFS_mgmt_writestats entered\n");
++
++    ret = PVFS_imgmt_writestats(fs_id, credentials, addr, &op_id, hints, NULL);
++    if (ret)
++    {
++        PVFS_perror_gossip("PVFS_imgmt_writestats call", ret);
++        error = ret;
++    }
++    else
++    {
++        ret = PVFS_mgmt_wait(op_id, "writestats", &error);
++        if (ret)
++        {
++            PVFS_perror_gossip("PVFS_mgmt_wait call", ret);
++            error = ret;
++        }
++    }
++
++    PINT_mgmt_release(op_id);
++    return error;
++}
++
++
++
++static PINT_sm_action client_writestats_init(
++        struct PINT_smcb *smcb, job_status_s *js_p)
++{
++	 struct PINT_client_sm *sm_p = PINT_sm_frame(smcb, PINT_FRAME_CURRENT);
++
++	PINT_SERVREQ_WRITESTATS_FILL(sm_p->msgarray_op.msgpair.req, *sm_p->cred_p, sm_p->hints);
++
++    PINT_sm_push_frame(smcb, 0, &sm_p->msgarray_op);
++    js_p->error_code = 0;
++    return SM_ACTION_COMPLETE;
++
++}
++
++static PINT_sm_action client_writestats_cleanup(
++        struct PINT_smcb *smcb, job_status_s *js_p)
++{
++	struct PINT_client_sm *sm_p = PINT_sm_frame(smcb, PINT_FRAME_CURRENT);
++
++    sm_p->error_code = js_p->error_code;
++
++    PINT_SET_OP_COMPLETE;
++    return SM_ACTION_TERMINATE;
++
++}
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/client/sysint/client-state-machine.c orangefs-2.8.7/src/client/sysint/client-state-machine.c
+--- /home/fran/Downloads/orangefs-2.8.7/src/client/sysint/client-state-machine.c	2013-01-02 18:41:46.000000000 -0200
++++ orangefs-2.8.7/src/client/sysint/client-state-machine.c	2015-06-05 13:53:55.934883266 -0300
+@@ -254,6 +254,7 @@ struct PINT_client_op_entry_s PINT_clien
+     {&pvfs2_client_statfs_sm},
+     {&pvfs2_fs_add_sm},
+     {&pvfs2_client_readdirplus_sm},
++    {&pvfs2_client_writestats_sm},
+ };
+ 
+ struct PINT_client_op_entry_s PINT_client_sm_mgmt_table[] =
+@@ -980,6 +981,7 @@ const char *PINT_client_get_name_str(int
+         { PVFS_SYS_IO, "PVFS_SYS_IO" },
+         { PVFS_SYS_FLUSH, "PVFS_SYS_FLUSH" },
+         { PVFS_SYS_READDIRPLUS, "PVFS_SYS_READDIR_PLUS" },
++	{ PVFS_CLIENT_WRITESTATS, "PVFS_CLIENT_WRITESTATS" },
+         { PVFS_MGMT_SETPARAM_LIST, "PVFS_MGMT_SETPARAM_LIST" },
+         { PVFS_MGMT_NOOP, "PVFS_MGMT_NOOP" },
+         { PVFS_SYS_TRUNCATE, "PVFS_SYS_TRUNCATE" },
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/client/sysint/client-state-machine.h orangefs-2.8.7/src/client/sysint/client-state-machine.h
+--- /home/fran/Downloads/orangefs-2.8.7/src/client/sysint/client-state-machine.h	2013-01-02 18:41:46.000000000 -0200
++++ orangefs-2.8.7/src/client/sysint/client-state-machine.h	2015-06-05 13:53:55.934883266 -0300
+@@ -380,6 +380,14 @@ struct PINT_client_mgmt_statfs_list_sm
+     PVFS_sysresp_statfs* resp; /* ignored by mgmt functions */
+ };
+ 
++struct PINT_client_writestats_sm
++{
++	PVFS_fs_id fs_id;
++	PVFS_id_gen_t *addr_array;
++	PVFS_error_details *details;
++    PVFS_sysresp_writestats* resp; /* ignored by mgmt functions */
++};
++
+ struct PINT_client_mgmt_perf_mon_list_sm
+ {
+     PVFS_fs_id fs_id;
+@@ -722,6 +730,7 @@ enum
+     PVFS_SYS_STATFS                = 18,
+     PVFS_SYS_FS_ADD                = 19,
+     PVFS_SYS_READDIRPLUS           = 20,
++    PVFS_CLIENT_WRITESTATS	   = 21,
+     PVFS_MGMT_SETPARAM_LIST        = 70,
+     PVFS_MGMT_NOOP                 = 71,
+     PVFS_MGMT_STATFS_LIST          = 72,
+@@ -740,7 +749,7 @@ enum
+     PVFS_DEV_UNEXPECTED            = 400
+ };
+ 
+-#define PVFS_OP_SYS_MAXVALID  21
++#define PVFS_OP_SYS_MAXVALID  22
+ #define PVFS_OP_SYS_MAXVAL 69
+ #define PVFS_OP_MGMT_MAXVALID 82
+ #define PVFS_OP_MGMT_MAXVAL 199
+@@ -844,6 +853,7 @@ extern struct PINT_state_machine_s pvfs2
+ extern struct PINT_state_machine_s pvfs2_client_del_eattr_sm;
+ extern struct PINT_state_machine_s pvfs2_client_list_eattr_sm;
+ extern struct PINT_state_machine_s pvfs2_client_statfs_sm;
++extern struct PINT_state_machine_s pvfs2_client_writestats_sm;
+ extern struct PINT_state_machine_s pvfs2_fs_add_sm;
+ extern struct PINT_state_machine_s pvfs2_client_mgmt_get_uid_list_sm;
+ 
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/client/sysint/initialize.c orangefs-2.8.7/src/client/sysint/initialize.c
+--- /home/fran/Downloads/orangefs-2.8.7/src/client/sysint/initialize.c	2013-01-02 18:41:46.000000000 -0200
++++ orangefs-2.8.7/src/client/sysint/initialize.c	2015-06-05 13:53:55.938883263 -0300
+@@ -163,7 +163,7 @@ int PVFS_sys_initialize(uint64_t default
+     client_status_flag |= CLIENT_FLOW_INIT;
+ 
+     /* initialize the request scheduler (used mainly for timers) */
+-    ret = PINT_req_sched_initialize();
++    ret = PINT_req_sched_initialize(0);
+     if (ret < 0)
+     {
+         gossip_lerr("Req sched initialize failure.\n");
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/client/sysint/module.mk.in orangefs-2.8.7/src/client/sysint/module.mk.in
+--- /home/fran/Downloads/orangefs-2.8.7/src/client/sysint/module.mk.in	2013-01-02 18:41:46.000000000 -0200
++++ orangefs-2.8.7/src/client/sysint/module.mk.in	2015-06-05 13:53:55.934883266 -0300
+@@ -50,7 +50,8 @@ CLIENT_SMCGEN := \
+ 	$(DIR)/mgmt-remove-dirent.c \
+ 	$(DIR)/mgmt-create-dirent.c \
+ 	$(DIR)/mgmt-get-dirdata-handle.c \
+-        $(DIR)/mgmt-get-uid-list.c
++        $(DIR)/mgmt-get-uid-list.c \
++	$(DIR)/agios-writestats.c
+ 
+ # track generated .c files that need to be removed during dist clean, etc.
+ SMCGEN += $(CLIENT_SMCGEN)
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/io/job/job.c orangefs-2.8.7/src/io/job/job.c
+--- /home/fran/Downloads/orangefs-2.8.7/src/io/job/job.c	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/io/job/job.c	2015-06-05 13:53:55.950883260 -0300
+@@ -1055,7 +1055,8 @@ int job_req_sched_post(enum PVFS_server_
+                        job_aint status_user_tag,
+                        job_status_s * out_status_p,
+                        job_id_t * id,
+-                       job_context_id context_id)
++                       job_context_id context_id,
++		       void *s_op)
+ {
+     /* post a request to the scheduler.  If it completes (or fails)
+      * immediately, then return and fill in the status structure.
+@@ -1082,7 +1083,7 @@ int job_req_sched_post(enum PVFS_server_
+     jd->status_user_tag = status_user_tag;
+ 
+     ret = PINT_req_sched_post(
+-        op, fs_id, handle, access_type, sched_policy, jd, &(jd->u.req_sched.id));
++        op, fs_id, handle, access_type, sched_policy, jd, &(jd->u.req_sched.id), s_op);
+ 
+     if (ret < 0)
+     {
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/io/job/job.h orangefs-2.8.7/src/io/job/job.h
+--- /home/fran/Downloads/orangefs-2.8.7/src/io/job/job.h	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/io/job/job.h	2015-06-05 13:53:55.950883260 -0300
+@@ -191,7 +191,8 @@ int job_req_sched_post(enum PVFS_server_
+ 		       job_aint status_user_tag,
+ 		       job_status_s * out_status_p,
+ 		       job_id_t * id,
+-		       job_context_id context_id);
++		       job_context_id context_id,
++			void *s_op);
+ 
+ /* change the mode */
+ int job_req_sched_change_mode(enum PVFS_server_mode mode,
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/proto/PINT-le-bytefield.c orangefs-2.8.7/src/proto/PINT-le-bytefield.c
+--- /home/fran/Downloads/orangefs-2.8.7/src/proto/PINT-le-bytefield.c	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/proto/PINT-le-bytefield.c	2015-06-05 13:53:55.922883265 -0300
+@@ -210,6 +210,7 @@ static void lebf_initialize(void)
+ 		/** nothing special */
+ 		break;
+ 	    case PVFS_SERV_MGMT_NOOP:
++	    case PVFS_SERV_MGMT_WRITESTATS:
+ 		/** nothing special */
+ 		break;
+ 	    case PVFS_SERV_STATFS:
+@@ -458,6 +459,7 @@ static int lebf_encode_req(
+         case PVFS_SERV_MGMT_NOOP:
+ 	case PVFS_SERV_PROTO_ERROR:
+         case PVFS_SERV_IMM_COPIES:
++	case PVFS_SERV_MGMT_WRITESTATS:
+ 	    /** nothing else */
+ 	    break;
+ 
+@@ -568,6 +570,7 @@ static int lebf_encode_resp(
+         case PVFS_SERV_PROTO_ERROR:
+         case PVFS_SERV_IMM_COPIES:
+         case PVFS_SERV_MGMT_SETPARAM:
++	case PVFS_SERV_MGMT_WRITESTATS:
+             /** nothing else */
+             break;
+ 
+@@ -671,6 +674,7 @@ static int lebf_decode_req(
+ 	case PVFS_SERV_GETCONFIG:
+         case PVFS_SERV_MGMT_NOOP:
+         case PVFS_SERV_IMM_COPIES:
++	case PVFS_SERV_MGMT_WRITESTATS:
+ 	    /** nothing else */
+ 	    break;
+ 
+@@ -772,6 +776,7 @@ static int lebf_decode_resp(
+         case PVFS_SERV_PROTO_ERROR:
+         case PVFS_SERV_IMM_COPIES:
+         case PVFS_SERV_MGMT_SETPARAM:
++	case PVFS_SERV_MGMT_WRITESTATS:
+ 	    /** nothing else */
+ 	    break;
+ 
+@@ -923,6 +928,7 @@ static void lebf_decode_rel(struct PINT_
+ 	    case PVFS_SERV_MGMT_PERF_MON:
+ 	    case PVFS_SERV_MGMT_EVENT_MON:
+             case PVFS_SERV_MGMT_GET_UID:
++	    case PVFS_SERV_MGMT_WRITESTATS:
+ 
+ 	    case PVFS_SERV_DELEATTR:
+             case PVFS_SERV_LISTEATTR:
+@@ -1091,6 +1097,7 @@ static void lebf_decode_rel(struct PINT_
+                 case PVFS_SERV_BATCH_REMOVE:
+                 case PVFS_SERV_IMM_COPIES:
+                 case PVFS_SERV_TREE_REMOVE:
++	 	case PVFS_SERV_MGMT_WRITESTATS:
+                   /*nothing to free */
+                    break;
+                 case PVFS_SERV_INVALID:
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/proto/pvfs2-req-proto.h orangefs-2.8.7/src/proto/pvfs2-req-proto.h
+--- /home/fran/Downloads/orangefs-2.8.7/src/proto/pvfs2-req-proto.h	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/proto/pvfs2-req-proto.h	2015-06-05 13:53:55.922883265 -0300
+@@ -30,7 +30,7 @@
+  * NOTE: Incrementing this will make clients unable to talk to older servers.
+  * Do not change until we have a new version policy.
+  */
+-#define PVFS2_PROTO_MINOR 0
++#define PVFS2_PROTO_MINOR 1
+ 
+ #define PVFS2_PROTO_VERSION ((PVFS2_PROTO_MAJOR*1000)+(PVFS2_PROTO_MINOR))
+ 
+@@ -88,6 +88,7 @@ enum PVFS_server_op
+     PVFS_SERV_TREE_REMOVE = 41,
+     PVFS_SERV_TREE_GET_FILE_SIZE = 42,
+     PVFS_SERV_MGMT_GET_UID = 43,
++    PVFS_SERV_MGMT_WRITESTATS = 44,
+     /* leave this entry last */
+     PVFS_SERV_NUM_OPS
+ };
+@@ -1543,6 +1544,15 @@ do {
+     (__req).hints = (__hints);                     \
+ } while (0)
+ 
++#define PINT_SERVREQ_WRITESTATS_FILL(__req, __creds, __hints)\
++do {                                               \
++    memset(&(__req), 0, sizeof(__req));            \
++    (__req).op = PVFS_SERV_MGMT_WRITESTATS;              \
++    (__req).credentials = (__creds);               \
++    (__req).hints = (__hints);                     \
++} while (0)
++
++
+ 
+ /* mgmt_perf_mon ****************************************************/
+ /* retrieves performance statistics from server */
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/mirror.sm orangefs-2.8.7/src/server/mirror.sm
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/mirror.sm	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/server/mirror.sm	2015-06-05 13:53:55.942883260 -0300
+@@ -312,7 +312,8 @@ static PINT_sm_action initialize_structu
+                             0,
+                             js_p,
+                             &(s_op->scheduled_id),
+-                            server_job_context);
++                            server_job_context,
++			    NULL);
+     return (ret);
+ }/*end action initialize_structures*/
+ 
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/module.mk.in orangefs-2.8.7/src/server/module.mk.in
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/module.mk.in	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/server/module.mk.in	2015-06-05 13:53:55.942883260 -0300
+@@ -48,7 +48,8 @@ ifdef BUILD_SERVER
+ 		$(DIR)/precreate-pool-refiller.c \
+ 		$(DIR)/unstuff.c \
+                 $(DIR)/tree-communicate.c \
+-		$(DIR)/mgmt-get-uid.c
++		$(DIR)/mgmt-get-uid.c \
++		$(DIR)/writestats.c
+ 
+ 	# c files that should be added to server library
+ 	SERVERSRC += \
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/pjmp-machines.sm orangefs-2.8.7/src/server/pjmp-machines.sm
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/pjmp-machines.sm	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/server/pjmp-machines.sm	2015-06-05 13:53:55.942883260 -0300
+@@ -256,7 +256,7 @@ static PINT_sm_action pjmp_remove_work_s
+                             ,0
+                             ,js_p
+                             ,&(s_op->scheduled_id)
+-                            ,server_job_context);
++                            ,server_job_context, NULL);
+    return ret;
+ }/*end pjmp_remove_work_schedule_job*/
+ 
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/prelude.sm orangefs-2.8.7/src/server/prelude.sm
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/prelude.sm	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/server/prelude.sm	2015-06-05 13:53:55.946883259 -0300
+@@ -140,7 +140,7 @@ static PINT_sm_action prelude_req_sched(
+     ret = job_req_sched_post(s_op->op, s_op->target_fs_id, s_op->target_handle,
+                              s_op->access_type, s_op->sched_policy,
+                              smcb, 0, js_p,
+-                             &(s_op->scheduled_id), server_job_context);
++                             &(s_op->scheduled_id), server_job_context, s_op);
+ 
+     /* these are two different counters - one instantaneous, one cumulative */
+     PINT_perf_count(PINT_server_pc, PINT_PERF_REQSCHED, 1, PINT_PERF_ADD);
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/pvfs2-server.c orangefs-2.8.7/src/server/pvfs2-server.c
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/pvfs2-server.c	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/server/pvfs2-server.c	2015-06-05 13:53:55.942883260 -0300
+@@ -1121,7 +1121,7 @@ static int server_initialize_subsystems(
+ 
+     *server_status_flag |= SERVER_JOB_CTX_INIT;
+ 
+-    ret = PINT_req_sched_initialize();
++    ret = PINT_req_sched_initialize(1);
+     if (ret < 0)
+     {
+         PVFS_perror_gossip("Error: PINT_req_sched_intialize", ret);
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/pvfs2-server.h orangefs-2.8.7/src/server/pvfs2-server.h
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/pvfs2-server.h	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/server/pvfs2-server.h	2015-06-05 13:53:55.946883259 -0300
+@@ -581,6 +581,11 @@ struct PINT_server_tree_communicate_op
+     int handle_index;
+ };
+ 
++struct PINT_server_writestats_op  
++{
++	int blah;
++};
++
+ /* This structure is passed into the void *ptr 
+  * within the job interface.  Used to tell us where
+  * to go next in our state machine.
+@@ -676,6 +681,7 @@ typedef struct PINT_server_op
+         struct PINT_server_create_copies_op create_copies;
+         struct PINT_server_mirror_op mirror;
+         struct PINT_server_tree_communicate_op tree_communicate;
++	struct PINT_server_writestats_op  writestats;
+     } u;
+ 
+ } PINT_server_op;
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/pvfs2-server-req.c orangefs-2.8.7/src/server/pvfs2-server-req.c
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/pvfs2-server-req.c	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/server/pvfs2-server-req.c	2015-06-05 13:53:55.942883260 -0300
+@@ -52,6 +52,7 @@ extern struct PINT_server_req_params pvf
+ extern struct PINT_server_req_params pvfs2_tree_remove_params;
+ extern struct PINT_server_req_params pvfs2_tree_get_file_size_params;
+ extern struct PINT_server_req_params pvfs2_uid_mgmt_params;
++extern struct PINT_server_req_params pvfs2_writestats_params;
+ 
+ /* table of incoming request types and associated parameters */
+ struct PINT_server_req_entry PINT_server_req_table[] =
+@@ -100,6 +101,7 @@ struct PINT_server_req_entry PINT_server
+     /* 41 */ {PVFS_SERV_TREE_REMOVE, &pvfs2_tree_remove_params},
+     /* 42 */ {PVFS_SERV_TREE_GET_FILE_SIZE, &pvfs2_tree_get_file_size_params},
+     /* 43 */ {PVFS_SERV_MGMT_GET_UID, &pvfs2_uid_mgmt_params},
++    /* 44 */ {PVFS_SERV_MGMT_WRITESTATS, &pvfs2_writestats_params},
+ };
+ 
+ #define CHECK_OP(_op_) assert(_op_ == PINT_server_req_table[_op_].op_type)
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/request-scheduler/module.mk.in orangefs-2.8.7/src/server/request-scheduler/module.mk.in
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/request-scheduler/module.mk.in	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/server/request-scheduler/module.mk.in	2015-06-05 13:53:55.946883259 -0300
+@@ -4,7 +4,13 @@ DIR := src/server/request-scheduler
+ LIBSRC += \
+  	$(DIR)/request-scheduler.c
+ 
++LIBSRC += \
++	/usr/lib/libagios.so.1.0.1
++
+ ifdef BUILD_SERVER
+ 	SERVERSRC += \
+ 		$(DIR)/request-scheduler.c 
++
++	SERVERSRC += \
++                /usr/lib/libagios.so.1.0.1
+ endif
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/request-scheduler/request-scheduler.c orangefs-2.8.7/src/server/request-scheduler/request-scheduler.c
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/request-scheduler/request-scheduler.c	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/server/request-scheduler/request-scheduler.c	2015-06-05 13:53:55.946883259 -0300
+@@ -49,6 +49,27 @@
+  */
+ #include "src/server/pvfs2-server.h"
+ 
++#define ORANGEFS_AGIOS
++#ifdef ORANGEFS_AGIOS
++#include <agios.h>
++
++#define AGIOS_CONFIGFILE "/tmp/agios.conf"
++
++#define ORANGEFS_STRIPE_SIZE 65536 //TODO should not be hardcoded...
++
++static struct client agios_clnt;
++
++static int agios_is_it_a_server=1;
++
++static short int agios_can_continue=0;
++static pthread_mutex_t request_processed_mutex = PTHREAD_MUTEX_INITIALIZER;
++static pthread_cond_t request_processed_cond = PTHREAD_COND_INITIALIZER;
++
++//static int requests_sent_to_agios=0;
++//static int requests_received_from_agios=0;
++
++#endif
++
+ /** request states */
+ enum req_sched_states
+ {
+@@ -88,6 +109,9 @@ struct req_sched_element
+     enum PINT_server_req_access_type access_type;
+     int mode_change; /* specifies that the element is a mode change */
+     enum PVFS_server_mode mode; /* the mode to change to */
++	long long offset;
++	long long real_offset;
++	long len;
+ };
+ 
+ 
+@@ -99,6 +123,8 @@ static struct qhash_table *req_sched_tab
+  */
+ static QLIST_HEAD(
+     ready_queue);
++static int ready_queue_len=0;
++static pthread_mutex_t ready_queue_mutex=PTHREAD_MUTEX_INITIALIZER;
+ 
+ /* queue of timed operations */
+ static QLIST_HEAD(
+@@ -120,6 +146,7 @@ static int sched_count = 0;
+ /* mode of the scheduler */
+ static enum PVFS_server_mode current_mode = PVFS_SERVER_NORMAL_MODE;
+ 
++
+ /** returns current mode of server
+  */
+ enum PVFS_server_mode PINT_req_sched_get_mode(void)
+@@ -127,15 +154,84 @@ enum PVFS_server_mode PINT_req_sched_get
+     return(current_mode);
+ }
+ 
++void ready_queue_include_request(struct qlist_head *ready_link)
++{
++	pthread_mutex_lock(&ready_queue_mutex);
++	qlist_add_tail(ready_link, &ready_queue);	
++	ready_queue_len++;
++	pthread_mutex_unlock(&ready_queue_mutex);
++}
++void ready_queue_remove_request(struct qlist_head *ready_link)
++{
++	pthread_mutex_lock(&ready_queue_mutex);
++	qlist_del(ready_link);
++	ready_queue_len--;
++	pthread_mutex_unlock(&ready_queue_mutex);
++}
++short int is_ready_queue_empty(void)
++{
++	short int ret=0;
++	pthread_mutex_lock(&ready_queue_mutex);
++	if(qlist_empty(&ready_queue))
++		ret = 1;
++	pthread_mutex_unlock(&ready_queue_mutex);
++	return ret;
++}
++struct req_sched_element *ready_queue_remove_next(void)
++{
++	struct req_sched_element *tmp_element=NULL;
++
++	pthread_mutex_lock(&ready_queue_mutex);
++	if(!qlist_empty(&ready_queue))
++	{
++		tmp_element = qlist_entry((ready_queue.next), struct req_sched_element, ready_link);
++		qlist_del(&(tmp_element->ready_link));
++		ready_queue_len--;
++	}
++	pthread_mutex_unlock(&ready_queue_mutex);
++
++	return tmp_element;
++}
++
+ /* setup and teardown */
+ 
++#ifdef ORANGEFS_AGIOS
++/*callback function called by the scheduler when one request is selected to process*/
++void PINT_req_sched_agios_process(int64_t req_id, pthread_cond_t *req_cond, pthread_mutex_t *req_mutex)
++{
++	struct req_sched_element *element;
++
++	requests_received_from_agios++;
++
++ 	element = id_gen_fast_lookup(req_id); 
++
++	if(element)
++	{
++		assert(element->state == REQ_QUEUED);
++		element->state = REQ_READY_TO_SCHEDULE;
++		ready_queue_include_request(&(element->ready_link));
++
++		//if required, wait until it was processed
++		if(agios_clnt.sync)
++		{
++			pthread_mutex_lock(&request_processed_mutex);
++			while(!agios_can_continue)
++				pthread_cond_wait(&request_processed_cond, &request_processed_mutex);
++			agios_can_continue = 0;
++			pthread_mutex_unlock(&request_processed_mutex);
++		}
++	}	
++//	else
++		//fprintf(stderr, "ORANGEFS PANIC! Could not find request that came back from AGIOS!\n");
++}
++#endif
++
+ /** Initializes the request scheduler.  Must be called before any other
+  *  request scheduler routines.
+  *
+  *  \return 0 on success, -errno on failure
+  */
+-int PINT_req_sched_initialize(
+-    void)
++int PINT_req_sched_initialize(int is_it_a_server)
+ {
+     /* build hash table */
+     req_sched_table = qhash_init(hash_handle_compare, hash_handle, 1021);
+@@ -144,9 +240,33 @@ int PINT_req_sched_initialize(
+ 	return (-ENOMEM);
+     }
+ 
++#ifdef ORANGEFS_AGIOS
++	agios_is_it_a_server=is_it_a_server;	
++	if(is_it_a_server)
++	{
++	    /*initialize agios*/
++		agios_clnt.process_request = PINT_req_sched_agios_process;
++		agios_clnt.process_requests = NULL;
++		if(agios_init(&agios_clnt, AGIOS_CONFIGFILE) != 0)
++		{	
++			fprintf(stderr, "problem initializing agios!\n");
++			return (-ENOMEM);
++		}
++	}
++#endif
++
+     return (0);
+ }
+ 
++void PINT_req_sched_writestats(void)
++{
++#ifdef ORANGEFS_AGIOS
++	agios_print_stats_file("/tmp/agios_statsfile.txt");	
++	agios_reset_stats();
++#endif
++}
++
++
+ /** Free resources held by the timer queue
+  */
+ int PINT_timer_queue_finalize(void)
+@@ -155,6 +275,12 @@ int PINT_timer_queue_finalize(void)
+    struct qlist_head *iterator=NULL;
+    struct req_sched_element *element=NULL;
+ 
++#ifdef ORANGEFS_AGIOS
++	if(agios_is_it_a_server)
++		//stop agios
++		agios_exit();
++#endif
++
+    qlist_for_each_safe(iterator,scratch,&timer_queue)
+    {
+        element = qlist_entry(iterator,struct req_sched_element,list_link);
+@@ -241,6 +367,9 @@ int PINT_req_sched_change_mode(enum PVFS
+     mode_element->state = REQ_QUEUED;
+     mode_element->mode_change = 1;
+     mode_element->mode = mode;
++	mode_element->offset=0;
++	mode_element->real_offset=0;
++	mode_element->len = 0;
+ 
+     /* will this be the front of the queue */
+     if(qlist_empty(&mode_queue))
+@@ -311,7 +440,7 @@ static int PINT_req_sched_schedule_mode_
+ 	next_element = qlist_entry(mode_queue.next, struct req_sched_element,
+ 	    list_link);
+ 	next_element->state = REQ_READY_TO_SCHEDULE;
+-	qlist_add_tail(&next_element->ready_link, &ready_queue);
++	ready_queue_include_request(&(next_element->ready_link));
+     }
+     return 0;
+ }
+@@ -338,7 +467,8 @@ int PINT_req_sched_post(enum PVFS_server
+                         enum PINT_server_req_access_type access_type,
+                         enum PINT_server_sched_policy sched_policy,
+ 			void *in_user_ptr,
+-			req_sched_id * out_id)
++			req_sched_id * out_id,
++			void *s_op)
+ {
+     struct qlist_head *hash_link;
+     int ret = -1;
+@@ -350,6 +480,7 @@ int PINT_req_sched_post(enum PVFS_server
+     struct qlist_head *iterator;
+     int tmp_flag;
+ 
++
+     if(sched_policy == PINT_SERVER_REQ_BYPASS)
+     {
+         if(access_type == PINT_SERVER_REQ_MODIFY && !PVFS_SERV_IS_MGMT_OP(op))
+@@ -363,10 +494,25 @@ int PINT_req_sched_post(enum PVFS_server
+             }
+         }
+ 
+-        /* no special mode; allow request to proceed immediately */
+-        *out_id = 0;
+-        return(1);
++#ifdef ORANGEFS_AGIOS
++	if(!agios_is_it_a_server)
++	{
++#endif
++	        /* no special mode; allow request to proceed immediately */
++        	*out_id = 0;
++	        return(1);
++#ifdef ORANGEFS_AGIOS
++	}
++#endif
+     }
++#ifdef ORANGEFS_AGIOS
++	if((op == PVFS_SERV_MGMT_WRITESTATS) && (agios_is_it_a_server))
++	{
++		PINT_req_sched_writestats();
++		*out_id = 0;
++		return(1);
++	}
++#endif
+ 
+     /* NOTE: handle == 0 is a special case, the request isn't
+      * operating on a particular handle, but we will queue anyway
+@@ -391,6 +537,9 @@ int PINT_req_sched_post(enum PVFS_server
+     tmp_element->list_head = NULL;
+     tmp_element->access_type = access_type;
+     tmp_element->mode_change = 0;
++	tmp_element->offset=0;
++	tmp_element->real_offset=0;
++	tmp_element->len = 0;
+ 
+     if(access_type == PINT_SERVER_REQ_MODIFY && !PVFS_SERV_IS_MGMT_OP(op))
+     {
+@@ -430,6 +579,15 @@ int PINT_req_sched_post(enum PVFS_server
+ 
+     /* at either rate, we now have a pointer to the list head */
+ 
++#ifdef ORANGEFS_AGIOS
++	if((agios_is_it_a_server) && ((op == PVFS_SERV_IO) || (op == PVFS_SERV_SMALL_IO)))
++	{
++		tmp_element->state = REQ_QUEUED;
++		ret = 0;
++	}
++	else
++	{
++#endif
+     /* return 1 if the list is empty before we add this entry */
+     ret = qlist_empty(&(tmp_list->req_list));
+     if (ret == 1)
+@@ -537,7 +695,9 @@ int PINT_req_sched_post(enum PVFS_server
+ 	    ret = 0;
+ 	}
+     }
+-
++#ifdef ORANGEFS_AGIOS
++	}
++#endif
+     /* add this element to the list */
+     tmp_element->list_head = tmp_list;
+     qlist_add_tail(&(tmp_element->list_link), &(tmp_list->req_list));
+@@ -553,6 +713,54 @@ int PINT_req_sched_post(enum PVFS_server
+ 		     llu(handle), tmp_element);
+     }
+     sched_count++;
++
++#ifdef ORANGEFS_AGIOS
++	if((agios_is_it_a_server) && ((op == PVFS_SERV_IO) || (op == PVFS_SERV_SMALL_IO)) && (s_op != NULL))
++	{
++		PVFS_offset offset;
++		PVFS_size size;
++		uint32_t server_nb;
++		int type;
++		char agios_fn[25];
++	
++		/*get filename*/	
++		sprintf(agios_fn, "%llu", llu(handle));
++
++		/*get offset and size*/
++		if(op == PVFS_SERV_IO)
++		{
++			offset = ((PINT_server_op *) s_op)->req->u.io.file_req_offset ;
++			size = ((PINT_server_op *) s_op)->req->u.io.aggregate_size;
++			server_nb = ((PINT_server_op *) s_op)->req->u.io.server_ct;
++		}
++		else
++		{
++			offset = ((PINT_server_op *) s_op)->req->u.small_io.file_req_offset;
++			size = ((PINT_server_op *) s_op)->req->u.small_io.aggregate_size;
++			server_nb = ((PINT_server_op *) s_op)->req->u.small_io.server_ct;
++		}
++		tmp_element->offset = offset;
++		if(server_nb > 0)
++			tmp_element->real_offset = (offset % ORANGEFS_STRIPE_SIZE) + (offset / (ORANGEFS_STRIPE_SIZE * server_nb))*ORANGEFS_STRIPE_SIZE;
++		else
++		{
++			tmp_element->real_offset = offset;
++		}
++		tmp_element->len = size;
++
++		/*get operation type*/
++		if(((PINT_server_op *) s_op)->req->u.io.io_type == PVFS_IO_READ)
++			type = RT_READ;
++		else
++			type = RT_WRITE;
++
++		/*give the request to agios*/
++		//requests_sent_to_agios+=1;
++		agios_add_request(agios_fn, type, tmp_element->real_offset, size, tmp_element->id, &agios_clnt);
++
++	}
++#endif
++
+     return (ret);
+ }
+ 
+@@ -594,6 +802,9 @@ int PINT_req_sched_post_timer(
+     gettimeofday(&tmp_element->tv, NULL);
+     tmp_element->list_head = NULL;
+     tmp_element->mode_change = 0;
++	tmp_element->offset=0;
++	tmp_element->real_offset=0;
++	tmp_element->len = 0;
+ 
+     /* set time to future, based on msecs arg */
+     tmp_element->tv.tv_sec += msecs/1000;
+@@ -643,6 +854,7 @@ int PINT_req_sched_post_timer(
+  *
+  *  \return 0 on success, -errno on failure 
+  */
++/*this could be a problem with AGIOS (remove the req_sched_element structure, but it is still on the agios queue), but i could not find any calls to this function, so i'll just ignore it*/
+ int PINT_req_sched_unpost(
+     req_sched_id in_id,
+     void **returned_user_ptr)
+@@ -666,7 +878,7 @@ int PINT_req_sched_unpost(
+ 
+     if (tmp_element->state == REQ_READY_TO_SCHEDULE)
+     {
+-	qlist_del(&(tmp_element->ready_link));
++	ready_queue_remove_request(&(tmp_element->ready_link));
+ 	next_ready_flag = 1;
+ 	/* fall through on purpose */
+     }
+@@ -690,6 +902,10 @@ int PINT_req_sched_unpost(
+ 	}
+ 	else
+ 	{
++#ifdef ORANGEFS_AGIOS
++	if(!agios_is_it_a_server)
++	{
++#endif
+ 	    /* queue not empty, prepare next request in line for
+ 	     * processing if necessary
+ 	     */
+@@ -706,7 +922,7 @@ int PINT_req_sched_unpost(
+ 		    next_element->state != REQ_SCHEDULED)
+ 		{
+ 		    next_element->state = REQ_READY_TO_SCHEDULE;
+-		    qlist_add_tail(&(next_element->ready_link), &ready_queue);
++		    ready_queue_include_request(&(next_element->ready_link));
+ 		    /* keep going as long as the operations are I/O requests;
+ 		     * we let these all go concurrently
+ 		     */
+@@ -726,12 +942,14 @@ int PINT_req_sched_unpost(
+                                 "allowing concurrent I/O, handle: %llu\n",
+                                 llu(next_element->handle));
+ 			    next_element->state = REQ_READY_TO_SCHEDULE;
+-			    qlist_add_tail(&(next_element->ready_link),
+-					   &ready_queue);
++		    	    ready_queue_include_request(&(next_element->ready_link));
+ 			}
+ 		    }
+ 		}
+ 	    }
++#ifdef ORANGEFS_AGIOS
++	} //if(!agios_is_it_a_server)
++#endif
+ 	}
+ 	sched_count--;
+     }
+@@ -757,6 +975,8 @@ int PINT_req_sched_release(
+     struct req_sched_element *tmp_element = NULL;
+     struct req_sched_list *tmp_list = NULL;
+     struct req_sched_element *next_element = NULL;
++    enum PVFS_server_op op;
++
+ 
+     /* NOTE: for now, this function always returns immediately- no
+      * need to fill in the out_id
+@@ -773,6 +993,20 @@ int PINT_req_sched_release(
+ 
+     /* retrieve the element directly from the id */
+     tmp_element = id_gen_fast_lookup(in_completed_id);
++	op = tmp_element->op;
++
++
++	/*release AGIOS to schedule more*/
++	if((agios_is_it_a_server) && ((tmp_element->op == PVFS_SERV_IO) || (tmp_element->op == PVFS_SERV_SMALL_IO)))
++	{
++		if(agios_clnt.sync)
++		{
++			pthread_mutex_lock(&request_processed_mutex);
++			agios_can_continue=1;
++			pthread_cond_signal(&request_processed_cond);
++			pthread_mutex_unlock(&request_processed_mutex);
++		}
++	}
+ 
+     /* remove it from its handle queue */
+     qlist_del(&(tmp_element->list_link));
+@@ -796,6 +1030,8 @@ int PINT_req_sched_release(
+ 	}
+ 	else
+ 	{
++//AQUI!
++
+ 	    /* something is queued behind this request */
+ 	    /* find the next request, change its state, and add it to
+ 	     * the queue of requests that are ready to be scheduled
+@@ -803,14 +1039,19 @@ int PINT_req_sched_release(
+ 	    next_element = qlist_entry((tmp_list->req_list.next),
+ 				       struct req_sched_element,
+ 				       list_link);
+-	    /* skip it if the top queue item is already ready for
++	    
++            /* skip it if the top queue item is already ready for
+ 	     * scheduling 
+ 	     */
+ 	    if (next_element->state != REQ_READY_TO_SCHEDULE &&
+ 		next_element->state != REQ_SCHEDULED)
+ 	    {
++#ifdef ORANGEFS_AGIOS
++		if((!agios_is_it_a_server) || ((agios_is_it_a_server) && (next_element->op != PVFS_SERV_IO) && (next_element->op != PVFS_SERV_SMALL_IO)))
++                  {
++#endif
+ 		next_element->state = REQ_READY_TO_SCHEDULE;
+-		qlist_add_tail(&(next_element->ready_link), &ready_queue);
++		ready_queue_include_request(&(next_element->ready_link));
+ 
+                 if(next_element->op == PVFS_SERV_IO)
+                 {
+@@ -834,12 +1075,16 @@ int PINT_req_sched_release(
+                                 "handle: %llu\n", llu(next_element->handle));
+                             assert(next_element->state == REQ_QUEUED);
+                             next_element->state = REQ_READY_TO_SCHEDULE;
+-                            qlist_add_tail(
+-                                &(next_element->ready_link), &ready_queue);
++			    ready_queue_include_request(&(next_element->ready_link));
+                         }
+                     }
+                 }
+-                else if(next_element->access_type == PINT_SERVER_REQ_READONLY)
++#ifdef ORANGEFS_AGIOS
++                }
++#else
++                else 
++#endif
++                if(next_element->access_type == PINT_SERVER_REQ_READONLY)
+                 {
+                     /* keep going as long as the operations are read only;
+                      * we let these all go concurrently
+@@ -855,21 +1100,27 @@ int PINT_req_sched_release(
+                         if (next_element &&
+                             (next_element->access_type == PINT_SERVER_REQ_READONLY))
+                         {
++#ifdef ORANGEFS_AGIOS
++			    if((!agios_is_it_a_server) || ((agios_is_it_a_server) && (next_element->op != PVFS_SERV_IO) && (next_element->op != PVFS_SERV_SMALL_IO)))
++                            {
++#endif
+                             gossip_debug(
+                                 GOSSIP_REQ_SCHED_DEBUG,
+                                 "REQ SCHED allowing concurrent read only (release time), "
+                                 "handle: %llu\n", llu(next_element->handle));
+                             assert(next_element->state == REQ_QUEUED);
+                             next_element->state = REQ_READY_TO_SCHEDULE;
+-                            qlist_add_tail(
+-                                &(next_element->ready_link), &ready_queue);
+-                        }
+-                    }
+-                }
+-	    }
+-	}
++			    ready_queue_include_request(&(next_element->ready_link));
++#ifdef ORANGEFS_AGIOS
++                            }
++#endif
++                        } //end if (next_element && (next_element->access_type == PINT_SERVER_REQ_READONLY))
++                    } // end while 
++                } //end else if(next_element->access_type == PINT_SERVER_REQ_READONLY)
++	    } //end if (next_element->state != REQ_READY_TO_SCHEDULE && next_element->state != REQ_SCHEDULED)
++	} //end else
+ 	sched_count--;
+-    }
++    } //end if(tmp_list)
+ 
+     gossip_debug(GOSSIP_REQ_SCHED_DEBUG,
+ 		 "REQ SCHED RELEASING, handle: %llu, queue_element: %p\n",
+@@ -899,6 +1150,7 @@ int PINT_req_sched_test(
+ 
+     *out_count_p = 0;
+ 
++
+     /* retrieve the element directly from the id */
+     tmp_element = id_gen_fast_lookup(in_id);
+ 
+@@ -918,7 +1170,8 @@ int PINT_req_sched_test(
+ 	/* let it roll */
+ 	tmp_element->state = REQ_SCHEDULED;
+ 	/* remove from ready queue */
+-	qlist_del(&(tmp_element->ready_link));
++	ready_queue_remove_request(&(tmp_element->ready_link));
++
+ 	if (returned_user_ptr_p)
+ 	{
+ 	    returned_user_ptr_p[0] = tmp_element->user_ptr;
+@@ -1011,7 +1264,7 @@ int PINT_req_sched_testsome(
+ 	    /* let it roll */
+ 	    tmp_element->state = REQ_SCHEDULED;
+ 	    /* remove from ready queue, leave in hash table queue */
+-	    qlist_del(&(tmp_element->ready_link));
++	    ready_queue_remove_request(&(tmp_element->ready_link));
+ 	    if (returned_user_ptr_array)
+ 	    {
+ 		returned_user_ptr_array[*inout_count_p] = tmp_element->user_ptr;
+@@ -1112,12 +1365,11 @@ int PINT_req_sched_testworld(
+ 	}
+     }
+ 
+-    while (!qlist_empty(&ready_queue) && (*inout_count_p < incount))
++    while ((!is_ready_queue_empty()) && (*inout_count_p < incount))
+     {
+-	tmp_element = qlist_entry((ready_queue.next), struct req_sched_element,
+-				  ready_link);
+-	/* remove from ready queue */
+-	qlist_del(&(tmp_element->ready_link));
++	tmp_element = ready_queue_remove_next();
++	if(!tmp_element)
++		continue;
+ 	out_id_array[*inout_count_p] = tmp_element->id;
+ 	if (returned_user_ptr_array)
+ 	{
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/request-scheduler/request-scheduler.h orangefs-2.8.7/src/server/request-scheduler/request-scheduler.h
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/request-scheduler/request-scheduler.h	2013-01-02 18:41:45.000000000 -0200
++++ orangefs-2.8.7/src/server/request-scheduler/request-scheduler.h	2015-06-05 13:53:55.946883259 -0300
+@@ -36,13 +36,13 @@ enum PINT_server_sched_policy
+ };
+ 
+ /* setup and teardown */
+-int PINT_req_sched_initialize(
+-    void);
++int PINT_req_sched_initialize(int is_it_a_server);
+ 
+ int PINT_req_sched_finalize(
+     void);
+ 
+ int PINT_timer_queue_finalize(void);
++void PINT_req_sched_writestats(void);
+ 
+ 
+ /* retrieving information about incoming requests */
+@@ -53,7 +53,8 @@ int PINT_req_sched_post(enum PVFS_server
+                         enum PINT_server_req_access_type access_type,
+                         enum PINT_server_sched_policy sched_policy,
+ 			void *in_user_ptr,
+-			req_sched_id * out_id);
++			req_sched_id * out_id,
++			void *s_op);
+ 
+ enum PVFS_server_mode PINT_req_sched_get_mode(void);
+ 
+diff -rupN /home/fran/Downloads/orangefs-2.8.7/src/server/writestats.sm orangefs-2.8.7/src/server/writestats.sm
+--- /home/fran/Downloads/orangefs-2.8.7/src/server/writestats.sm	1969-12-31 21:00:00.000000000 -0300
++++ orangefs-2.8.7/src/server/writestats.sm	2015-06-05 13:53:55.942883260 -0300
+@@ -0,0 +1,43 @@
++#include "server-config.h"
++#include "pvfs2-server.h"
++#include "pvfs2-attr.h"
++#include "str-utils.h"
++#include "pint-util.h"
++#include "pvfs2-internal.h"
++
++%%
++
++machine pvfs2_writestats_sm
++{
++	state prelude
++	{
++		jump pvfs2_prelude_sm;
++		default => final_response;
++	}
++	state final_response
++	{
++		jump pvfs2_final_response_sm;
++		default => cleanup;
++	}
++	state cleanup
++	{
++		run writestats_cleanup;
++		default=>terminate;
++	}
++}
++
++%%
++
++static PINT_sm_action writestats_cleanup(
++        struct PINT_smcb *smcb, job_status_s *js_p)
++{
++	return(server_state_machine_complete(smcb));
++}
++
++struct PINT_server_req_params pvfs2_writestats_params =
++{
++	.string_name = "writestats",
++	.perm = PINT_SERVER_CHECK_NONE,
++	.state_machine = &pvfs2_writestats_sm,
++};
++
