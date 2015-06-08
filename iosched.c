@@ -421,6 +421,7 @@ int AIOLI_select_from_list(struct related_list_t *related_list, struct related_l
 	int reqnb = 0;
 	struct request_t *req;
 
+	PRINT_FUNCTION_NAME;
 	agios_list_for_each_entry(req, &related_list->list, related)
 	{
 		increment_sched_factor(req);
@@ -432,6 +433,8 @@ int AIOLI_select_from_list(struct related_list_t *related_list, struct related_l
 		}
 		break;
 	} 
+	if(reqnb > 0)
+		debug("selected a request, reqnb = %d\n", reqnb);
 	
 	return reqnb;
 }
@@ -439,6 +442,7 @@ int AIOLI_select_from_list(struct related_list_t *related_list, struct related_l
 int AIOLI_select_from_file(struct request_file_t *req_file, struct related_list_t **selected_queue, unsigned long long int *selected_timestamp)
 {
 	int reqnb=0;
+	PRINT_FUNCTION_NAME;
 	// First : on related read requests
 	if (!agios_list_empty(&req_file->related_reads.list))
 	{
@@ -465,6 +469,8 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 	int waiting_options=0;
 	struct request_t *req=NULL;
 
+	PRINT_FUNCTION_NAME;
+		
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //try to select requests from all the files
 	{
 		reqfile_l = hashtable_lock(i);
@@ -472,6 +478,7 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 		{
 			agios_list_for_each_entry(req_file, reqfile_l, hashlist)
 			{
+				debug("looking for requests to file %s\n", req_file->file_id);
 				if(req_file->waiting_time > 0)
 				{
 					update_waiting_time_counters(req_file, &smaller_waiting_time, &swt_file );	
@@ -499,6 +506,7 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 	}
 	if(selected_queue) //if we were able to select a queue
 	{
+		debug("released the lock after selecting a request to a queue from file %s, timestamp %d\n", selected_queue->req_file->file_id, selected_timestamp);
 		hashtable_lock(*selected_index);
 		req = agios_list_entry(selected_queue->list.next, struct request_t, related); 
 		if(!checkSelection(req, selected_queue->req_file))  //test to see if we should wait (the function returns NULL when we have to wait)
@@ -598,12 +606,14 @@ void AIOLI(void *clnt)
 				/*removes the request from the hastable*/
 				__hashtable_del_req(req);
 				/*sends it back to the file system*/
-				process_requests(req, (struct client *)clnt, MLF_current_hash);
+				process_requests(req, (struct client *)clnt, selected_hash);
+				debug("processed requests, quantum was %lld",aioli_quantum);
 				/*cleanup step*/
 				MLF_postprocess(req);
 				
 				/*lets see if we expired the quantum*/	
 				remaining = aioli_quantum - get_nanoelapsed(aioli_start);
+				debug("...remaining quantum is %lld", remaining);
 				if(remaining <= 0) /*ran out of quantum*/
 				{		
 					if(aioli_quantum == 0) //it was the first time executing from this queue

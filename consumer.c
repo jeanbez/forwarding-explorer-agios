@@ -97,7 +97,9 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			reqs_index++;
 		}
 		head_req->globalinfo->current_size -= head_req->io_data.len;
+		hashtable_unlock(hash); 
 		clnt->process_requests(reqs, head_req->reqnb);
+		hashtable_lock(hash);
 		dec_many_current_reqnb(hash, head_req->reqnb);
 		free(reqs);
 	}
@@ -107,8 +109,10 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			VERIFY_REQUEST(head_req);
 			debug("request [%d]  - size %ld - going back to the file system", head_req->data, head_req->io_data.len);
 			head_req->globalinfo->current_size -= head_req->io_data.len; 
-		
+			hashtable_unlock(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
 			clnt->process_request(head_req->data);
+			hashtable_lock(hash);
+			fprintf(stderr, "...pegou o lock de volta...");
 			dec_current_reqnb(hash);
 		}
 		else
@@ -118,7 +122,9 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 				VERIFY_REQUEST(req);
 				debug("request [%d] - size %ld - going back to the file system", req->data, req->io_data.len);
 				req->globalinfo->current_size -= req->io_data.len; 
+				hashtable_unlock(hash); 
 				clnt->process_request(req->data);
+				hashtable_lock(hash); 
 			}
 			dec_many_current_reqnb(hash, head_req->reqnb);
 		}
