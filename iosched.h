@@ -38,7 +38,7 @@
 #define SRTF_SCHEDULER 3
 #define AIOLI_SCHEDULER 4
 #define SIMPLE_TIMEORDER_SCHEDULER 5
-
+#define TIME_WINDOW_SCHEDULER 6
 
 int get_algorithm_from_string(const char *alg);
 char *get_algorithm_name_from_index(int index);
