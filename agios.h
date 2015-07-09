@@ -42,6 +42,7 @@
 #define MLF_QUANTUM 65536   	/*the size of the quantum given to requests when using the qt-mlf scheduling algorithm. 	                 	  *must be set to the expected average size of requests to this server*/
 #define AIOLI_QUANTUM 8192
 #endif
+#define TIME_WINDOW_SIZE 1000 // Time window size must be in miliseconds
 #define ANTICIPATORY_VALUE(op) (2*get_access_time(AIOLI_QUANTUM,op)) /*the initial quantum given to the requests (usually twice the necessary time to process a request of size MLF_QUANTUM)*/
 #define MAX_AGGREG_SIZE   16
 #define MAX_AGGREG_SIZE_MLF   200

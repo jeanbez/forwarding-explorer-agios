@@ -215,7 +215,7 @@ void timeline_add_req(struct request_t *req)
 	if (get_selected_alg() == TIME_WINDOW_SCHEDULER) 
 	{
 		// Calculate the request priority
-		tw_priority = req->timestamp / interval * 32768 + req->app_id;
+		tw_priority = req->timestamp / TIME_WINDOW_SIZE * 32768 + req->app_id;
 
 		// Find the position to insert the request
 		agios_list_for_each_entry(tmp, &timeline, related)
