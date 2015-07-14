@@ -14,8 +14,7 @@ module:
 
 library: ${OBJS} 
 #	ar -cr libagios.a ${OBJS}
-#	gcc -shared -W1,-soname,libagios.so.1 -o libagios.so.1.0.1 ${OBJS}
-	gcc -shared -o libagios.so.1.0.1 ${OBJS}
+	gcc -shared -W1,-soname,libagios.so.1 -o libagios.so.1.0.1 ${OBJS}
 
 all: library
 
@@ -26,7 +25,6 @@ ${OBJS}:
 library_install: library
 	sudo rm -rf /usr/lib/libagios.so.1.0.1 /usr/lib/libagios.so
 	sudo cp ./libagios.so.1.0.1 /usr/lib
-	#sudo cp ./agios.h /usr/include/agios.h
 	sudo cp ./agios.include.h /usr/include/agios.h
 	sudo chmod 0755 /usr/lib/libagios.so.1.0.1
 	sudo ln -s /usr/lib/libagios.so.1.0.1 /usr/lib/libagios.so

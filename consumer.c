@@ -112,7 +112,7 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			hashtable_unlock(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
 			clnt->process_request(head_req->data);
 			hashtable_lock(hash);
-			//fprintf(stderr, "...pegou o lock de volta...");
+			fprintf(stderr, "...pegou o lock de volta...");
 			dec_current_reqnb(hash);
 		}
 		else
