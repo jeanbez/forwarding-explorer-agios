@@ -6,8 +6,11 @@
 # Copyright (C) 2014, Francieli Zanon Boito <fzboito@inf.ufrgs.br> 
 
 all:
-	gcc -o throughput_test throughput_test.c ../libagios.so.1.0.1 -lrt -lpthread
-	gcc -o addrequest_test addrequest_test.c ../libagios.so.1.0.1 -lrt -lpthread
+	gcc -o throughput_test throughput_test.c -lagios -lrt -lpthread -lm
+	gcc -o addrequest_test addrequest_test.c -lagios -lrt -lpthread -lm
+
+throughput:
+	gcc -lm -lpthread -lagios -o throughput_test throughput_test.c 
 
 clean:
 	rm -rf throughput_test addrequest_test

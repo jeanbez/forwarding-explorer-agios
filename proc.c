@@ -235,6 +235,7 @@ void *print_stats_start(struct seq_file *s, loff_t *pos)
 void print_stats_start(void)
 #endif
 {
+	fprintf(stderr, "1\n");
 #ifdef AGIOS_KERNEL_MODULE
 	seq_printf(s, 
 #else
@@ -242,7 +243,8 @@ void print_stats_start(void)
 #endif
 		"Selected algorithm: %s\n", get_algorithm_name_from_index(get_selected_alg()));
 	
-
+fprintf(stderr, "2\n");
+fprintf(stderr, "get_current_reqfilenb = %d\n", get_current_reqfilenb());
 	if ((get_current_reqfilenb() == 0)) //with this we are not showing predicted statistics
 #ifdef AGIOS_KERNEL_MODULE
 		return NULL;

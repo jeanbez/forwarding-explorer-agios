@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
-#include "agios.h"
+#include <agios.h>
 
 
 #define REQ_TYPE 0
@@ -119,7 +119,7 @@ int main (int argc, char **argv)
 	/*start AGIOS*/
 	clnt.process_requests = NULL;
 	clnt.process_request = test_process;
-	if(agios_init(&clnt) != 0)
+	if(agios_init(&clnt, "/tmp/agios.conf") != 0)
 	{
 		printf("PANIC! Could not initialize AGIOS!\n");
 		exit(1);
