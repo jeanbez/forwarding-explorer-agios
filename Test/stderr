@@ -1,0 +1,1316 @@
+AGIOS: agios_init
+
+Will AGIOS generate trace files? NO
+Will AGIOS try to select the best scheduling algorithm automatically? NO
+Default scheduling algorithm: MLF
+Will the Prediction Module read information from trace files? YES
+	Will the Prediction Module use this information to predict request aggregations? NO
+	Predicted requests will be considered the same if their arrival times' difference is within 10
+	Will the Prediction Module create simplified traces with the obtained information? YES
+AGIOS' user uses stripe size of 32768
+AGIOS: MLF_init
+
+AGIOS: how_many_tracefiles_there_are(): /tmp/agios_tracefile.1.out is NOT a valid trace file 
+
+
+AGIOS: read_predictions_from_simple_traces
+
+AGIOS: read_predictions_from_simple_traces(): /tmp/agios_simpletracefile.1.out is NOT a valid trace file 
+
+
+AGIOS: prediction_thr(): finished reading from 0 traces in 317128 ns
+
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [0] to file arquivo.-1281373376.out
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1281373376.out
+
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: MLF
+
+AGIOS: agios_add_request
+
+AGIOS: MLF(): got the lock for hash 14
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [0] to file arquivo.-1245713600.out
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1245713600.out
+
+
+AGIOS: __hashtable_add_req(): adding request [0] to file arquivo.-1317016768.out
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1317016768.out
+
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [0]  - size 1000 - going back to the file system
+
+AGIOS: __hashtable_add_req(): adding request [0] to file arquivo.-1264587968.out
+
+AGIOS: process_requests exited
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1264587968.out
+
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 0
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [0] to file arquivo.-1272980672.out
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1272980672.out
+
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [0] to file arquivo.-1325409472.out
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1325409472.out
+
+
+AGIOS: __hashtable_add_req(): adding request [1] to file arquivo.-1317016768.out
+
+AGIOS: __hashtable_add_req(): adding request [0] to file arquivo.-1296041152.out
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1296041152.out
+
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [1] to file arquivo.-1272980672.out
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [1] to file arquivo.-1264587968.out
+
+AGIOS: __hashtable_add_req(): adding request [1] to file arquivo.-1245713600.out
+
+AGIOS: MLF(): freeing the lock for hash 14
+
+AGIOS: __hashtable_add_req(): adding request [0] to file arquivo.-1308624064.out
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1308624064.out
+
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: MLF(): got the lock for hash 39
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 2 requests to the file system!
+
+AGIOS: process_requests(): request [0] - size 1000 - going back to the file system
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [2] to file arquivo.-1272980672.out
+
+AGIOS: __hashtable_add_req(): adding request [0] to file arquivo.-1256195264.out
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [1] to file arquivo.-1296041152.out
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1256195264.out
+
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [2] to file arquivo.-1245713600.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [1] to file arquivo.-1281373376.out
+
+AGIOS: __hashtable_add_req(): adding request [2] to file arquivo.-1264587968.out
+
+AGIOS: __hashtable_add_req(): adding request [1] to file arquivo.-1308624064.out
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [1] to file arquivo.-1325409472.out
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [0] to file arquivo.-1237320896.out
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1237320896.out
+
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [1] to file arquivo.-1256195264.out
+
+AGIOS: __hashtable_add_req(): adding request [2] to file arquivo.-1296041152.out
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [3] to file arquivo.-1264587968.out
+
+AGIOS: __hashtable_add_req(): adding request [3] to file arquivo.-1272980672.out
+
+AGIOS: process_requests(): request [1] - size 1000 - going back to the file system
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [2] to file arquivo.-1281373376.out
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [2] to file arquivo.-1325409472.out
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [3] to file arquivo.-1245713600.out
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [4] to file arquivo.-1264587968.out
+
+AGIOS: __hashtable_add_req(): adding request [2] to file arquivo.-1308624064.out
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests exited
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [1] to file arquivo.-1237320896.out
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [4] to file arquivo.-1272980672.out
+
+AGIOS: stats_aggregation(): last agg = 2, aggs = 1
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [3] to file arquivo.-1308624064.out
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [2] to file arquivo.-1256195264.out
+
+AGIOS: MLF(): freeing the lock for hash 39
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [4] to file arquivo.-1245713600.out
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [3] to file arquivo.-1281373376.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [3] to file arquivo.-1256195264.out
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [2] to file arquivo.-1317016768.out
+
+AGIOS: __hashtable_add_req(): adding request [3] to file arquivo.-1296041152.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [4] to file arquivo.-1308624064.out
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [5] to file arquivo.-1264587968.out
+
+AGIOS: MLF(): got the lock for hash 48
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 3 requests to the file system!
+
+AGIOS: process_requests(): request [0] - size 1000 - going back to the file system
+
+AGIOS: __hashtable_add_req(): adding request [4] to file arquivo.-1281373376.out
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [5] to file arquivo.-1272980672.out
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests(): request [1] - size 1000 - going back to the file system
+
+AGIOS: __hashtable_add_req(): adding request [2] to file arquivo.-1237320896.out
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [3] to file arquivo.-1317016768.out
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [5] to file arquivo.-1245713600.out
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [6] to file arquivo.-1264587968.out
+
+AGIOS: __hashtable_add_req(): adding request [4] to file arquivo.-1256195264.out
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests(): request [2] - size 1000 - going back to the file system
+
+AGIOS: __hashtable_add_req(): adding request [4] to file arquivo.-1296041152.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [5] to file arquivo.-1281373376.out
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [5] to file arquivo.-1256195264.out
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: process_requests exited
+
+AGIOS: __hashtable_add_req(): adding request [5] to file arquivo.-1308624064.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [3] to file arquivo.-1237320896.out
+
+AGIOS: __hashtable_add_req(): adding request [6] to file arquivo.-1272980672.out
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [4] to file arquivo.-1317016768.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: stats_aggregation(): last agg = 3, aggs = 1
+
+AGIOS: __hashtable_add_req(): adding request [6] to file arquivo.-1245713600.out
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [5] to file arquivo.-1296041152.out
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [7] to file arquivo.-1264587968.out
+
+AGIOS: agios_add_request
+
+AGIOS: MLF(): freeing the lock for hash 48
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [6] to file arquivo.-1308624064.out
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: MLF(): got the lock for hash 52
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 7 requests to the file system!
+
+AGIOS: process_requests(): request [0] - size 1000 - going back to the file system
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [7] to file arquivo.-1272980672.out
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [3] to file arquivo.-1325409472.out
+
+AGIOS: __hashtable_add_req(): adding request [6] to file arquivo.-1281373376.out
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [6] to file arquivo.-1256195264.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [5] to file arquivo.-1317016768.out
+
+AGIOS: process_requests(): request [1] - size 1000 - going back to the file system
+
+AGIOS: __hashtable_add_req(): adding request [8] to file arquivo.-1264587968.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [7] to file arquivo.-1308624064.out
+
+AGIOS: __hashtable_add_req(): adding request [6] to file arquivo.-1296041152.out
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests(): request [2] - size 1000 - going back to the file system
+
+AGIOS: __hashtable_add_req(): adding request [4] to file arquivo.-1237320896.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [4] to file arquivo.-1325409472.out
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [6] to file arquivo.-1317016768.out
+
+AGIOS: process_requests(): request [3] - size 1000 - going back to the file system
+
+AGIOS: __hashtable_add_req(): adding request [7] to file arquivo.-1256195264.out
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [7] to file arquivo.-1281373376.out
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [5] to file arquivo.-1237320896.out
+
+AGIOS: process_requests(): request [4] - size 1000 - going back to the file system
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [7] to file arquivo.-1317016768.out
+
+AGIOS: __hashtable_add_req(): adding request [8] to file arquivo.-1308624064.out
+
+AGIOS: __hashtable_add_req(): adding request [9] to file arquivo.-1264587968.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests(): request [5] - size 1000 - going back to the file system
+
+AGIOS: __hashtable_add_req(): adding request [8] to file arquivo.-1272980672.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [8] to file arquivo.-1256195264.out
+
+AGIOS: __hashtable_add_req(): adding request [7] to file arquivo.-1296041152.out
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests(): request [6] - size 1000 - going back to the file system
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [5] to file arquivo.-1325409472.out
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [8] to file arquivo.-1317016768.out
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 7, aggs = 1
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: MLF(): freeing the lock for hash 52
+
+AGIOS: __hashtable_add_req(): adding request [9] to file arquivo.-1272980672.out
+
+AGIOS: __hashtable_add_req(): adding request [8] to file arquivo.-1281373376.out
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [9] to file arquivo.-1308624064.out
+
+AGIOS: MLF(): got the lock for hash 3
+
+AGIOS: __hashtable_add_req(): adding request [7] to file arquivo.-1245713600.out
+
+AGIOS: __hashtable_add_req(): adding request [9] to file arquivo.-1256195264.out
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [6] to file arquivo.-1237320896.out
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 8 requests to the file system!
+
+AGIOS: process_requests(): request [0] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [1] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [2] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [3] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [4] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [5] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [6] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [7] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 8, aggs = 1
+
+AGIOS: MLF(): freeing the lock for hash 3
+
+AGIOS: MLF(): got the lock for hash 5
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 10 requests to the file system!
+
+AGIOS: process_requests(): request [0] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [1] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [2] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [3] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [4] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [5] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [6] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [7] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [8] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [9] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 10, aggs = 1
+
+AGIOS: MLF(): freeing the lock for hash 5
+
+AGIOS: MLF(): got the lock for hash 14
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 7 requests to the file system!
+
+AGIOS: process_requests(): request [0] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [1] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [2] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [3] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [4] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [5] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [6] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 7, aggs = 1
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 10 requests to the file system!
+
+AGIOS: process_requests(): request [0] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [1] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [2] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [3] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [4] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [5] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [6] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [7] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [8] - size 1000 - going back to the file system
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [6] to file arquivo.-1325409472.out
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests(): request [9] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 10, aggs = 1
+
+AGIOS: __hashtable_add_req(): adding request [8] to file arquivo.-1296041152.out
+
+AGIOS: __hashtable_add_req(): adding request [8] to file arquivo.-1245713600.out
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [9] to file arquivo.-1317016768.out
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 8 requests to the file system!
+
+AGIOS: process_requests(): request [1] - size 1000 - going back to the file system
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests(): request [2] - size 1000 - going back to the file system
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [9] to file arquivo.-1296041152.out
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [7] to file arquivo.-1325409472.out
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: process_requests(): request [3] - size 1000 - going back to the file system
+
+AGIOS: __hashtable_add_req(): adding request [9] to file arquivo.-1245713600.out
+
+AGIOS: process_requests(): request [4] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [5] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [6] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [7] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [8] - size 1000 - going back to the file system
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 8, aggs = 1
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: MLF(): freeing the lock for hash 14
+
+AGIOS: __hashtable_add_req(): adding request [9] to file arquivo.-1281373376.out
+
+AGIOS: MLF(): got the lock for hash 32
+
+AGIOS: __hashtable_add_req(): adding request [7] to file arquivo.-1237320896.out
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 10 requests to the file system!
+
+AGIOS: process_requests(): request [0] - size 1000 - going back to the file system
+
+AGIOS: __hashtable_add_req(): adding request [8] to file arquivo.-1325409472.out
+
+AGIOS: process_requests(): request [1] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [2] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [3] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [4] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [5] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [6] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [7] - size 1000 - going back to the file system
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests(): request [8] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [9] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 10, aggs = 1
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [9] to file arquivo.-1325409472.out
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: MLF(): freeing the lock for hash 32
+
+AGIOS: __hashtable_add_req(): adding request [8] to file arquivo.-1237320896.out
+
+AGIOS: MLF(): got the lock for hash 39
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 8 requests to the file system!
+
+AGIOS: process_requests(): request [2] - size 1000 - going back to the file system
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: process_requests(): request [3] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [4] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [5] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [6] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [7] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [8] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [9] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 8, aggs = 2
+
+AGIOS: MLF(): freeing the lock for hash 39
+
+AGIOS: agios_add_request
+
+AGIOS: MLF(): got the lock for hash 48
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 7 requests to the file system!
+
+AGIOS: process_requests(): request [3] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [4] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [5] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [6] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [7] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [8] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [9] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 7, aggs = 2
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: MLF(): freeing the lock for hash 48
+
+AGIOS: __hashtable_add_req(): adding request [9] to file arquivo.-1237320896.out
+
+AGIOS: MLF(): got the lock for hash 52
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 3 requests to the file system!
+
+AGIOS: process_requests(): request [7] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [8] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [9] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 3, aggs = 2
+
+AGIOS: MLF(): freeing the lock for hash 52
+
+AGIOS: MLF(): got the lock for hash 58
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 10 requests to the file system!
+
+AGIOS: process_requests(): request [0] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [1] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [2] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [3] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [4] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [5] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [6] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [7] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [8] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [9] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 10, aggs = 1
+
+AGIOS: MLF(): freeing the lock for hash 58
+
+AGIOS: MLF(): got the lock for hash 3
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 2 requests to the file system!
+
+AGIOS: process_requests(): request [8] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [9] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 2, aggs = 2
+
+AGIOS: MLF(): freeing the lock for hash 3
+
+AGIOS: MLF(): got the lock for hash 14
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 3 requests to the file system!
+
+AGIOS: process_requests(): request [7] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [8] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [9] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 3, aggs = 2
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [9]  - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: MLF(): freeing the lock for hash 14
+
+1
+2
+get_current_reqfilenb = 0
+AGIOS: agios_exit
+
+AGIOS: MLF_exit
+
+AGIOS: stopped for this client. It can already be used by calling agios_init
+

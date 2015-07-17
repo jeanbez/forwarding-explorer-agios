@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
-#include "agios.h"
+#include <agios.h>
 
 #define REQ_TYPE 0
 
@@ -61,7 +61,6 @@ void *test_thr(void *arg)
 		/*start timestamp*/
 		clock_gettime(CLOCK_MONOTONIC, &start_time);
 		/*generate a request*/
-printf("thread %d added request %d at %ld\n", (int)pthread_self(), i, start_time.tv_nsec);
 		agios_add_request(filename, REQ_TYPE, offset, req_size, i, &clnt);
 		/*end timestamp*/
 		clock_gettime(CLOCK_MONOTONIC, &end_time);
@@ -116,7 +115,7 @@ int main (int argc, char **argv)
 	// This function will process the requests
 	clnt.process_request = test_process;
 	
-	if(agios_init(&clnt, "/etc/agios.conf") != 0)
+	if(agios_init(&clnt, "/tmp/agios.conf") != 0)
 	{
 		printf("PANIC! Could not initialize AGIOS!\n");
 		exit(1);

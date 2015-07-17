@@ -67,6 +67,27 @@ int agios_thread_should_stop(void)
 #endif
 }
 
+//unlocks the mutex protecting the data structure where the request is being held.
+//if it is the hashtable, then hash gives the line of the table (because we have one mutex per line)
+//if hash= -1, we are using the timeline (a simple list with only one mutex)
+inline void unlock_structure_mutex(int hash)
+{
+	if(hash >= 0) 
+		hashtable_unlock(hash);
+	else
+		timeline_unlock();
+}
+//locks the mutex protecting the data structure where the request is being held.
+//if it is the hashtable, then hash gives the line of the table (because we have one mutex per line)
+//if hash= -1, we are using the timeline (a simple list with only one mutex)
+inline void lock_structure_mutex(int hash)
+{
+	if(hash >= 0) 
+		hashtable_lock(hash);
+	else
+		timeline_lock();
+}
+
 void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 {
 	struct request_t *req;
@@ -81,7 +102,7 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 	debug("returning %u requests to the file system!", head_req->reqnb);
 	
 
-	if((clnt->process_requests) && (head_req->reqnb > 1))
+	if((clnt->process_requests) && (head_req->reqnb > 1)) //if the user has a function capable of processing a list of requests at once and this is an aggregated request
 	{
 #ifdef ORANGEFS_AGIOS
 		int64_t *reqs = (int64_t *)malloc(sizeof(int64_t)*(head_req->reqnb+1));
@@ -97,9 +118,9 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			reqs_index++;
 		}
 		head_req->globalinfo->current_size -= head_req->io_data.len;
-		hashtable_unlock(hash); 
+		unlock_structure_mutex(hash);
 		clnt->process_requests(reqs, head_req->reqnb);
-		hashtable_lock(hash);
+		lock_structure_mutex(hash);
 		dec_many_current_reqnb(hash, head_req->reqnb);
 		free(reqs);
 	}
@@ -109,9 +130,9 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			VERIFY_REQUEST(head_req);
 			debug("request [%d]  - size %ld - going back to the file system", head_req->data, head_req->io_data.len);
 			head_req->globalinfo->current_size -= head_req->io_data.len; 
-			hashtable_unlock(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
+			unlock_structure_mutex(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
 			clnt->process_request(head_req->data);
-			hashtable_lock(hash);
+			lock_structure_mutex(hash);
 			//fprintf(stderr, "...pegou o lock de volta...");
 			dec_current_reqnb(hash);
 		}
@@ -122,14 +143,17 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 				VERIFY_REQUEST(req);
 				debug("request [%d] - size %ld - going back to the file system", req->data, req->io_data.len);
 				req->globalinfo->current_size -= req->io_data.len; 
-				hashtable_unlock(hash); 
+				unlock_structure_mutex(hash);
 				clnt->process_request(req->data);
-				hashtable_lock(hash); 
+				lock_structure_mutex(hash);
 			}
 			dec_many_current_reqnb(hash, head_req->reqnb);
 		}
 	}
-	if((req_file->related_reads.current_size == 0) && (req_file->related_writes.current_size == 0)) //this file just ran out of reqs
+	//if this was the last request for this file, we remove it from the counter that keeps track of the number of files being accessed right now. If requests are being held at the hashtable, we check that through the related lists. If requests are being held at the timeline, we use the counter
+	if((hash >= 0) && (req_file->related_reads.current_size == 0) && (req_file->related_writes.current_size == 0))
+		dec_current_reqfilenb();
+	else if((hash == -1) && (req_file->timeline_reqnb == 0))
 		dec_current_reqfilenb();
 
 	if(processed_period > 0)

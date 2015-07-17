@@ -202,6 +202,7 @@ void timeline_add_req(struct request_t *req)
 		req->globalinfo = &req_file->related_reads;
 	else
 		req->globalinfo = &req_file->related_writes;
+	req_file->timeline_reqnb++;
 	
 	/*get timestamp*/
 	if (agios_list_empty(&timeline)) {
@@ -279,6 +280,7 @@ struct request_t *timeline_oldest_req(void)
 
 	tmp = agios_list_entry(timeline.next, struct request_t, related);
 	agios_list_del(&tmp->related);
+	tmp->globalinfo->req_file->timeline_reqnb--;
 
 	return tmp;
 }
@@ -421,6 +423,7 @@ static void request_file_init(struct request_file_t *req_file, char *file_id)
 	req_file->first_request_predicted_time=-1;
 	req_file->waiting_time = 0;
 	req_file->wrote_simplified_trace=0;
+	req_file->timeline_reqnb=0;
 
 	request_file_init_related_list(&req_file->related_reads, req_file);
 	request_file_init_related_list(&req_file->related_writes, req_file);
@@ -675,6 +678,7 @@ inline struct request_file_t *find_req_file(struct agios_list_head *hash_list, c
 		else
 			insertion_place = hash_list;
 
+		debug("including a new request_file_t structure for file %s\n", file_id);
 		req_file = request_file_constructor(file_id);
 		if(!req_file)
 		{
@@ -685,13 +689,16 @@ inline struct request_file_t *find_req_file(struct agios_list_head *hash_list, c
 		agios_list_add_tail(&req_file->hashlist, insertion_place);
 	}
 	
-	/*update file counters*/
-#if PREDICT_AGIOS
+	//update the file counter (that keeps track of how many files are being accessed right now
 	if((state == RS_PREDICTED) && (agios_list_empty(&req_file->predicted_reads.list)) && (agios_list_empty(&req_file->predicted_writes.list))) //we are adding a predicted requests, and this file doesnt have any
 		inc_current_predicted_reqfilenb();
-#endif
-	if((state == RS_HASHTABLE) && (agios_list_empty(&req_file->related_reads.list)) && (agios_list_empty(&req_file->related_writes.list))) //we are adding a real requests and this file doesnt have any
-		inc_current_reqfilenb();
+	else if(state == RS_HASHTABLE) //real request
+	{
+		if((scheduler_needs_hashtable) && (agios_list_empty(&req_file->related_reads.list)) && (agios_list_empty(&req_file->related_writes.list))) //request is being included in the hashtable on req_file->related_reads or req_file->related_writes
+			inc_current_reqfilenb();
+		else if ((!scheduler_needs_hashtable) && (req_file->timeline_reqnb  == 0)) //request is being included in the timeline, req_file->timeline_reqnb keeps track of how many requests are for this file
+			inc_current_reqfilenb();
+	}
 
 	return req_file;
 }

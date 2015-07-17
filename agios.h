@@ -212,6 +212,7 @@ struct request_file_t {
 	char *file_id;
 	struct related_list_t related_reads;
 	struct related_list_t related_writes;
+	int timeline_reqnb; //counter for knowing how many requests in the timeline are accessing this file (for scheduling algorithms who do not use hashtable
 	struct agios_list_head hashlist;
 	struct agios_list_head lru_list; /* To handle stateless filesystems */
 

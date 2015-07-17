@@ -1,4 +1,4 @@
-#ccflags-y += -DAGIOS_DEBUG=1
+ccflags-y += -DAGIOS_DEBUG=1
 #ccflags-y += -DAGIOS_KERNEL_MODULE=1
 #ccflags-y += -DORANGEFS_AGIOS=1
 
