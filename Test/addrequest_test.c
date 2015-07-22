@@ -95,7 +95,7 @@ void *test_thr(void *arg)
 			pthread_mutex_unlock(&processed_reqnb_mutex);
 		}
 		pthread_mutex_unlock(&elapsed_mutex);
-	}arquivo.-1237320896.out
+	}
 }
 
 int main (int argc, char **argv)

@@ -1,4 +1,4 @@
-Generating 10 threads. Each one of them will issue 10 requests of 1000 bytes every 0ns
-It took 3825857ns to generate and schedule 100 requests. The thoughput was of 26137.934586 requests/s
+Generating 2 threads. Each one of them will issue 10 requests of 1000 bytes every 0ns
+It took 1993679ns to generate and schedule 20 requests. The thoughput was of 10031.705204 requests/s
 I am going to wait until the prediction module finished reading traces!
 It's done, you can start using the library now!

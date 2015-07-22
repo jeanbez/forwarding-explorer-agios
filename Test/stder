@@ -1,0 +1,541 @@
+AGIOS: agios_init
+
+Error reading agios config file
+file I/O errorAGIOS: how_many_tracefiles_there_are(): (null).1.(null) is NOT a valid trace file 
+
+
+AGIOS: read_predictions_from_simple_traces
+
+AGIOS: prediction_thr(): finished reading from 0 traces in 233500 ns
+
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [0][arquivo.-1246762176.out]
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [0][arquivo.-1238369472.out]
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1238369472.out
+
+
+AGIOS: find_req_file(): including a new request_file_t structure for file arquivo.-1246762176.out
+
+
+AGIOS: agios_add_request
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1238369472.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: agios_add_request
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [1][arquivo.-1238369472.out]
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1246762176.out, related_reads com 1000 e related_writes com 0, min_size is 1000
+
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 2 requests to the file system!
+
+AGIOS: process_requests(): request [0][arquivo.-1238369472.out] - size 1000 - going back to the file system
+
+AGIOS: request_constructor(): type = 0
+offset = 1000
+len = 1000
+
+AGIOS: process_requests(): request [1][arquivo.-1238369472.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 2, aggs = 1
+
+AGIOS: __hashtable_add_req(): adding request [1][arquivo.-1246762176.out]
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 0
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1246762176.out, related_reads com 2000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 2 requests to the file system!
+
+AGIOS: process_requests(): request [0][arquivo.-1246762176.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests(): request [1][arquivo.-1246762176.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: agios_add_request
+
+AGIOS: stats_aggregation(): last agg = 2, aggs = 1
+
+AGIOS: __hashtable_add_req(): adding request [2][arquivo.-1238369472.out]
+
+AGIOS: request_constructor(): type = 0
+offset = 2000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [2][arquivo.-1246762176.out]
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1238369472.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [2][arquivo.-1238369472.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1246762176.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [2][arquivo.-1246762176.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 3000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [3][arquivo.-1238369472.out]
+
+AGIOS: __hashtable_add_req(): adding request [3][arquivo.-1246762176.out]
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1238369472.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [3][arquivo.-1238369472.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1246762176.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [3][arquivo.-1246762176.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: request_constructor(): type = 0
+offset = 4000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [4][arquivo.-1246762176.out]
+
+AGIOS: __hashtable_add_req(): adding request [4][arquivo.-1238369472.out]
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1238369472.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [4][arquivo.-1238369472.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1246762176.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [4][arquivo.-1246762176.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [5][arquivo.-1238369472.out]
+
+AGIOS: request_constructor(): type = 0
+offset = 5000
+len = 1000
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1238369472.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [5][arquivo.-1238369472.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [5][arquivo.-1246762176.out]
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1246762176.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [5][arquivo.-1246762176.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [6][arquivo.-1238369472.out]
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1238369472.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [6][arquivo.-1238369472.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: request_constructor(): type = 0
+offset = 6000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [6][arquivo.-1246762176.out]
+
+AGIOS: agios_add_request
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1246762176.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [6][arquivo.-1246762176.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: __hashtable_add_req(): adding request [7][arquivo.-1238369472.out]
+
+AGIOS: request_constructor(): type = 0
+offset = 7000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [7][arquivo.-1246762176.out]
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1238369472.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [7][arquivo.-1238369472.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1246762176.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: agios_add_request
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [7][arquivo.-1246762176.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 8000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [8][arquivo.-1246762176.out]
+
+AGIOS: __hashtable_add_req(): adding request [8][arquivo.-1238369472.out]
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1238369472.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [8][arquivo.-1238369472.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1246762176.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [8][arquivo.-1246762176.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: agios_add_request
+
+AGIOS: agios_add_request
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: __hashtable_add_req(): adding request [9][arquivo.-1238369472.out]
+
+AGIOS: request_constructor(): type = 0
+offset = 9000
+len = 1000
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1238369472.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [9][arquivo.-1238369472.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+AGIOS: __hashtable_add_req(): adding request [9][arquivo.-1246762176.out]
+
+AGIOS: SJF_get_shortest_job(): file arquivo.-1246762176.out, related_reads com 1000 e related_writes com 0, min_size is 9223372036854775807
+
+
+AGIOS: SJF_get_shortest_job(): selecting from reads
+
+
+AGIOS: SJF_get_shortest_job(): went through all reqfiles, stopping 
+
+
+AGIOS: process_requests
+
+AGIOS: process_requests(): returning 1 requests to the file system!
+
+AGIOS: process_requests(): request [9][arquivo.-1246762176.out] - size 1000 - going back to the file system
+
+AGIOS: process_requests exited
+
+AGIOS: stats_aggregation(): last agg = 1, aggs = 1
+
+1
+2
+get_current_reqfilenb = 0
+AGIOS: agios_exit
+
+AGIOS: stopped for this client. It can already be used by calling agios_init
+
