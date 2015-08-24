@@ -1,6 +1,6 @@
 #ccflags-y += -DAGIOS_DEBUG=1
 #ccflags-y += -DAGIOS_KERNEL_MODULE=1
-#ccflags-y += -DORANGEFS_AGIOS=1
+ccflags-y += -DORANGEFS_AGIOS=1
 
 FILES=mylist.c hash.c proc.c request_cache.c consumer.c iosched.c agios.c predict.c trace.c get_access_times.c common_functions.c agios_config.c access_pattern_detection_tree.c scheduling_algorithm_selection_tree.c
 OBJS=mylist.o hash.o proc.o request_cache.o consumer.o iosched.o agios.o predict.o trace.o get_access_times.o common_functions.o agios_config.o access_pattern_detection_tree.o scheduling_algorithm_selection_tree.o /usr/local/lib/libconfig.so
