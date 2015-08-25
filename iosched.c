@@ -425,16 +425,16 @@ int AIOLI_select_from_list(struct related_list_t *related_list, struct related_l
 	agios_list_for_each_entry(req, &related_list->list, related)
 	{
 		increment_sched_factor(req);
-		if(((req->sched_factor*AIOLI_QUANTUM*related_list->used_quantum_rate)/100) >= req->io_data.len)
+		if(&(req->related) == related_list->list.next) //we only try to select the first request from the queue (to respect offset order), but we don't break the loop because we want all requests to have their sched_factor incremented.
 		{
-			reqnb = req->reqnb;
-			*selected_queue = related_list;
-			*selected_timestamp = req->timestamp;
+			if(req->io_data.len <= req->sched_factor*AIOLI_QUANTUM) //all requests start by a fixed size quantum (AIOLI_QUANTUM), which is increased every step (by increasing the sched_factor). The request can only be processed when its quantum is large enough to fit its size.
+			{
+				reqnb = req->reqnb;
+				*selected_queue = related_list;
+				*selected_timestamp = req->timestamp;
+			}	
 		}
-		break;
 	} 
-	if(reqnb > 0)
-		debug("selected a request, reqnb = %d\n", reqnb);
 	
 	return reqnb;
 }
@@ -465,7 +465,8 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 	int reqnb;
 	struct related_list_t *tmp_selected_queue=NULL;
 	struct related_list_t *selected_queue = NULL;
-	unsigned long long int tmp_timestamp, selected_timestamp=~0;
+	unsigned long long int tmp_timestamp;
+	unsigned long long int selected_timestamp=~0;
 	int waiting_options=0;
 	struct request_t *req=NULL;
 
@@ -478,7 +479,6 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 		{
 			agios_list_for_each_entry(req_file, reqfile_l, hashlist)
 			{
-				debug("looking for requests to file %s\n", req_file->file_id);
 				if(req_file->waiting_time > 0)
 				{
 					update_waiting_time_counters(req_file, &smaller_waiting_time, &swt_file );	
@@ -506,7 +506,6 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 	}
 	if(selected_queue) //if we were able to select a queue
 	{
-		debug("released the lock after selecting a request to a queue from file %s, timestamp %d\n", selected_queue->req_file->file_id, selected_timestamp);
 		hashtable_lock(*selected_index);
 		req = agios_list_entry(selected_queue->list.next, struct request_t, related); 
 		if(!checkSelection(req, selected_queue->req_file))  //test to see if we should wait (the function returns NULL when we have to wait)
@@ -525,39 +524,29 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 }
 
 /*return the next quantum considering how much of the last one was used*/
-inline unsigned long long int adjust_quantum(unsigned long long int elapsed_time, unsigned long long int quantum, long long lastsize, int type, struct related_list_t *globalinfo)
+inline unsigned long long int adjust_quantum(unsigned long long int elapsed_time, unsigned long long int quantum, int type)
 {
 	unsigned long long int requiredqt;
 	unsigned long long int max_bound;
-
-	globalinfo->used_quantum_rate= (elapsed_time*100)/quantum;
+	unsigned long long int used_quantum_rate = (elapsed_time*100)/quantum;
 
 	/*adjust the next quantum considering how much of the last one was really used*/
 	
-	if(globalinfo->used_quantum_rate >= 175) /*we used at least 75% more than what was given*/
+	if(used_quantum_rate >= 175) /*we used at least 75% more than what was given*/
 	{
 		requiredqt = quantum*2;
-		globalinfo->used_quantum_rate *= 2;
 	}
-	else if(globalinfo->used_quantum_rate >= 125) /*we used at least 25% more than what was given*/
+	else if(used_quantum_rate >= 125) /*we used at least 25% more than what was given*/
 	{
 		requiredqt = (quantum*15)/10;
-		globalinfo->used_quantum_rate = (globalinfo->used_quantum_rate*15)/10;
 	}
-	else if(globalinfo->used_quantum_rate >= 75) /*we used at least 75% of the given quantum*/
+	else if(used_quantum_rate >= 75) /*we used at least 75% of the given quantum*/
 	{
 		requiredqt = quantum;
 	}
-	else if(globalinfo->used_quantum_rate > 25) /*we used more than 25% of the given quantum*/
+	else /*we used less than 75% of the given quantum*/
 	{
 		requiredqt = quantum/2;
-		globalinfo->used_quantum_rate = globalinfo->used_quantum_rate/2;
-	}
-	else //if(proportion <= 25)  /*we used so little that we should just reset our quantum system*/
-	{
-		requiredqt = quantum/4;
-		globalinfo->used_quantum_rate = globalinfo->used_quantum_rate/4;
-		
 	}
 		
 	if(requiredqt <= 0)
@@ -589,6 +578,8 @@ void AIOLI(void *clnt)
 		if(AIOLI_selected_queue)
 		{
 			hashtable_lock(selected_hash);
+			//here we assume the list is NOT empty. It makes sense, since the other thread could have obtained the mutex, but only to include more requests, which would not make the list empty. If we ever have more than one thread consuming requests, this needs to be ensured somehow.
+
 			/*we selected a queue, so we process requests from it until the quantum rans out*/
 			aioli_quantum = AIOLI_selected_queue->nextquantum;
 			agios_gettime(&aioli_start);
@@ -596,10 +587,11 @@ void AIOLI(void *clnt)
 			remaining=0;
 			do
 			{
+				//get the first request from this queue (because we need to keep the offset order within each queue
 				agios_list_for_each_entry(req, &(AIOLI_selected_queue->list), related)
 					break;
 
-				if((remaining > 0) && (get_access_time(req->io_data.len, req->type) > remaining)) //we are using leftover quantum, but the next request is not small enough to fit in this space
+				if((remaining > 0) && (get_access_time(req->io_data.len, req->type) > remaining)) //we are using leftover quantum, but the next request is not small enough to fit in this space, so we just stop processing requests from this queue
 					break;
 			
 				type = req->type;
@@ -607,30 +599,30 @@ void AIOLI(void *clnt)
 				__hashtable_del_req(req);
 				/*sends it back to the file system*/
 				process_requests(req, (struct client *)clnt, selected_hash);
-				debug("processed requests, quantum was %lld",aioli_quantum);
 				/*cleanup step*/
 				MLF_postprocess(req);
 				
 				/*lets see if we expired the quantum*/	
 				remaining = aioli_quantum - get_nanoelapsed(aioli_start);
-				debug("...remaining quantum is %lld", remaining);
-				if(remaining <= 0) /*ran out of quantum*/
-				{		
-					if(aioli_quantum == 0) //it was the first time executing from this queue
-					{
-						AIOLI_selected_queue->nextquantum = ANTICIPATORY_VALUE(type);
-					}
-					else
-					{
-						AIOLI_selected_queue->nextquantum = adjust_quantum(aioli_quantum-remaining, aioli_quantum, AIOLI_selected_queue->lastfinaloff - AIOLI_selected_queue->laststartoff, type, AIOLI_selected_queue);
-					}
-				}
-				else //we still have time left
-				{
-					AIOLI_selected_queue->nextquantum = adjust_quantum(aioli_quantum-remaining, aioli_quantum, AIOLI_selected_queue->lastfinaloff - AIOLI_selected_queue->laststartoff, type, AIOLI_selected_queue);
-				}
-
 			} while((!agios_list_empty(&AIOLI_selected_queue->list)) && (remaining > 0));
+			
+			/*here we either ran out of quantum, or of requests. Adjust the next quantum to be given to this queue considering this*/
+			if(remaining <= 0) /*ran out of quantum*/
+			{		
+				if(aioli_quantum == 0) //it was the first time executing from this queue, we don't have information enough to decide the next quantum this file should receive, so let's just give it a default value
+				{
+					AIOLI_selected_queue->nextquantum = ANTICIPATORY_VALUE(type);
+				}
+				else //we had a quantum and it was enough
+				{
+					AIOLI_selected_queue->nextquantum = adjust_quantum(aioli_quantum-remaining, aioli_quantum, type);
+				}
+			}
+			else /*ran out of requests*/
+			{
+				AIOLI_selected_queue->nextquantum = adjust_quantum(aioli_quantum-remaining, aioli_quantum, type);
+			}
+
 
 			hashtable_unlock(selected_hash);
 		}

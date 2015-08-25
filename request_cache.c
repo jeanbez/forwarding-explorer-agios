@@ -349,8 +349,6 @@ struct request_t * request_constructor(char *file_id, int type, long long offset
 
 
 #ifdef AGIOS_DEBUG
-	if(state == RS_HASHTABLE)
-		debug("type = %d\noffset = %lu\nlen = %lu", new->type, (unsigned long)new->io_data.offset, (unsigned long)new->io_data.len);
 	new->sanity = 123456;
 #endif
 	return new;
@@ -693,9 +691,10 @@ static void __hashtable_add_req(struct request_t *req, unsigned long hash_val)
 	struct request_t *tmp;
 	struct agios_list_head *insertion_place;
 
+
 #ifdef AGIOS_DEBUG
 	if(req->state == RS_HASHTABLE)
-		debug("adding request [%d] to file %s", req->data, req->file_id);
+		debug("adding request [%d] to file %s, offset %lld, size %lld", req->data, req->file_id, req->io_data.offset, req->io_data.len);
 #endif
 
 	/*finds the file to add to*/
@@ -755,6 +754,8 @@ static void __hashtable_add_req(struct request_t *req, unsigned long hash_val)
 	{
 		if(!insert_aggregations(req, insertion_place->prev, hash_list))
 			agios_list_add(&req->related, insertion_place->prev);
+		else
+			debug("included in an already existing virtual request");
 			
 	}
 	else
@@ -898,6 +899,9 @@ int agios_add_request(char *file_id, int type, long long offset, long len, int d
 		agios_cond_signal(&consumer.request_added_cond);
 		agios_mutex_unlock(&consumer.request_added_mutex);
 #endif
+
+		if(scheduler_needs_hashtable)
+			debug("current status. hashtable[%d] has %d requests, there are %d requests in the scheduler to %d files.", hash, hashlist_reqcounter[hash], get_current_reqnb(), get_current_reqfilenb());
 		if(scheduler_needs_hashtable)
 			agios_mutex_unlock(&hashlist_locks[hash]);
 		else

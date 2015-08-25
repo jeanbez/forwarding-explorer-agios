@@ -23,7 +23,7 @@ ${OBJS}:
 	gcc -fPIC -Wall -L/usr/lib/ -L/usr/local/lib/ ${ccflags-y} -c ${FILES} -lm -lpthread -lrt -lconfig
 
 library_install: library
-	sudo rm -rf /usr/lib/libagios.so.1.0.1 /usr/lib/libagios.so
+	sudo rm -rf /usr/lib/libagios.so.1 /usr/lib/libagios.so
 	sudo cp ./libagios.so.1 /usr/lib
 	sudo cp ./agios.include.h /usr/include/agios.h
 	sudo chmod 0755 /usr/lib/libagios.so.1

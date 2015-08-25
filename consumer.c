@@ -99,7 +99,6 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 
 	if(config_get_trace())
 		agios_trace_process_requests(head_req);
-	debug("returning %u requests to the file system!", head_req->reqnb);
 	
 
 	if((clnt->process_requests) && (head_req->reqnb > 1)) //if the user has a function capable of processing a list of requests at once and this is an aggregated request
@@ -113,7 +112,7 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 		agios_list_for_each_entry(req, &head_req->reqs_list, aggregation_element)
 		{
 			VERIFY_REQUEST(req);
-			debug("request [%d] - size %ld - going back to the file system", req->data, req->io_data.len);
+			debug("request [%d] - size %ld, offset %lld, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
 			reqs[reqs_index]=req->data;
 			reqs_index++;
 		}
@@ -128,12 +127,11 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 		if(head_req->reqnb == 1)
 		{
 			VERIFY_REQUEST(head_req);
-			debug("request [%d]  - size %ld - going back to the file system", head_req->data, head_req->io_data.len);
+			debug("request [%d]  - size %ld, offset %lld, file %s - going back to the file system", head_req->data, head_req->io_data.len, head_req->io_data.offset, head_req->file_id);
 			head_req->globalinfo->current_size -= head_req->io_data.len; 
 			unlock_structure_mutex(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
 			clnt->process_request(head_req->data);
 			lock_structure_mutex(hash);
-			fprintf(stderr, "...pegou o lock de volta...");
 			dec_current_reqnb(hash);
 		}
 		else
@@ -141,7 +139,7 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			agios_list_for_each_entry(req, &head_req->reqs_list, aggregation_element)
 			{	
 				VERIFY_REQUEST(req);
-				debug("request [%d] - size %ld - going back to the file system", req->data, req->io_data.len);
+				debug("request [%d] - size %ld, offset %lld, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
 				req->globalinfo->current_size -= req->io_data.len; 
 				unlock_structure_mutex(hash); 
 				clnt->process_request(req->data);
@@ -165,7 +163,9 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			refresh_predictions(); //it's time to recalculate the alpha factor and review all predicted requests aggregation
 		}
 	}
-
+	
+	if(hash >= 0)
+		debug("current status. hashtable[%d] has %d requests, there are %d requests in the scheduler to %d files.", hash, get_hashlist_reqcounter(hash), get_current_reqnb(), get_current_reqfilenb());
 	PRINT_FUNCTION_EXIT;
 }
 
