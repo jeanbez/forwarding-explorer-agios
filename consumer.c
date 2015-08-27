@@ -88,6 +88,15 @@ inline void lock_structure_mutex(int hash)
 		timeline_lock();
 }
 
+inline void update_filenb_counter(int hash, struct request_file_t *req_file)
+{
+	//if this was the last request for this file, we remove it from the counter that keeps track of the number of files being accessed right now. If requests are being held at the hashtable, we check that through the related lists. If requests are being held at the timeline, we use the counter
+	if((hash >= 0) && (req_file->related_reads.current_size == 0) && (req_file->related_writes.current_size == 0))
+		dec_current_reqfilenb();
+	else if((hash == -1) && (req_file->timeline_reqnb == 0))
+		dec_current_reqfilenb();
+}
+
 void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 {
 	struct request_t *req;
@@ -99,7 +108,6 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 
 	if(config_get_trace())
 		agios_trace_process_requests(head_req);
-	
 
 	if((clnt->process_requests) && (head_req->reqnb > 1)) //if the user has a function capable of processing a list of requests at once and this is an aggregated request
 	{
@@ -115,12 +123,14 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			debug("request [%d] - size %ld, offset %lld, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
 			reqs[reqs_index]=req->data;
 			reqs_index++;
+			req->globalinfo->current_size -= req->io_data.len;
 		}
-		head_req->globalinfo->current_size -= head_req->io_data.len;
+		//we have to update the counters before releasing the lock to process requests, otherwise the lock may be obtained by another thread to add a new request and end up in weird behaviors.
+		update_filenb_counter(hash, req_file);
+		dec_many_current_reqnb(hash, head_req->reqnb);
 		unlock_structure_mutex(hash);
 		clnt->process_requests(reqs, head_req->reqnb);
 		lock_structure_mutex(hash);
-		dec_many_current_reqnb(hash, head_req->reqnb);
 		free(reqs);
 	}
 	else{
@@ -129,10 +139,11 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			VERIFY_REQUEST(head_req);
 			debug("request [%d]  - size %ld, offset %lld, file %s - going back to the file system", head_req->data, head_req->io_data.len, head_req->io_data.offset, head_req->file_id);
 			head_req->globalinfo->current_size -= head_req->io_data.len; 
+			update_filenb_counter(hash, req_file);
+			dec_current_reqnb(hash);
 			unlock_structure_mutex(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
 			clnt->process_request(head_req->data);
 			lock_structure_mutex(hash);
-			dec_current_reqnb(hash);
 		}
 		else
 		{
@@ -141,18 +152,14 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 				VERIFY_REQUEST(req);
 				debug("request [%d] - size %ld, offset %lld, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
 				req->globalinfo->current_size -= req->io_data.len; 
+				update_filenb_counter(hash, req_file);
+				dec_current_reqnb(hash);
 				unlock_structure_mutex(hash); 
 				clnt->process_request(req->data);
 				lock_structure_mutex(hash); 
 			}
-			dec_many_current_reqnb(hash, head_req->reqnb);
 		}
 	}
-	//if this was the last request for this file, we remove it from the counter that keeps track of the number of files being accessed right now. If requests are being held at the hashtable, we check that through the related lists. If requests are being held at the timeline, we use the counter
-	if((hash >= 0) && (req_file->related_reads.current_size == 0) && (req_file->related_writes.current_size == 0))
-		dec_current_reqfilenb();
-	else if((hash == -1) && (req_file->timeline_reqnb == 0))
-		dec_current_reqfilenb();
 
 	if(processed_period > 0)
 	{

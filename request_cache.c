@@ -594,7 +594,7 @@ inline int insert_aggregations(struct request_t *req, struct agios_list_head *in
 	if(insertion_place != list_head)
 	{
 		prev_req = agios_list_entry(insertion_place, struct request_t, related);
-		if(CHECK_AGGREGATE(prev_req, req) && (prev_req->reqnb < max_aggregation_size)) //TODO  also check if it is worthy it considering the required times? does it make sense, since requests are already here anyway, and that's why we have max_aggregation_size anyway...
+		if(CHECK_AGGREGATE(prev_req, req) && (prev_req->reqnb < max_aggregation_size)) //TODO  also check if it is worth it considering the required times? does it make sense, since requests are already here anyway, and that's why we have max_aggregation_size anyway...
 		{
 			include_in_aggregation(req,&prev_req);
 			insertion_place = &(prev_req->related);

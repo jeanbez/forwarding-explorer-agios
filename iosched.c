@@ -422,6 +422,7 @@ int AIOLI_select_from_list(struct related_list_t *related_list, struct related_l
 	struct request_t *req;
 
 	PRINT_FUNCTION_NAME;
+
 	agios_list_for_each_entry(req, &related_list->list, related)
 	{
 		increment_sched_factor(req);
