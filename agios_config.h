@@ -47,6 +47,7 @@ inline void config_set_simple_trace_file_prefix(const char *value);
 inline char * config_get_simple_trace_file_prefix(void);
 inline void config_set_write_simplified_traces(short int value);
 inline short int config_get_write_simplified_traces(void);
+inline char *config_get_access_times_file(void);
 
 
 //user info

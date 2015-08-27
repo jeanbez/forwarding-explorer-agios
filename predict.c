@@ -33,7 +33,7 @@
 #include "request_cache.h"
 #include "iosched.h"
 #include "trace.h"
-#include "get_access_times.h"
+#include "estimate_access_times.h"
 #include "hash.h"
 #include "common_functions.h"
 #include "proc.h"

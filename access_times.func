@@ -1,0 +1,11 @@
+2
+8	64
+sequential write	566.8405	6784.471
+random write	238.2483	1173.456
+sequential read	145.6056	1018.143
+random read	187.2437	-201.8793
+64	128
+sequential write	571.2364	-740.0433
+random write	234.6933	41.99119
+sequential read	218.3765	-6295.179
+random read	113.1743	2235.442

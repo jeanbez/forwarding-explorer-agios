@@ -46,7 +46,7 @@ unsigned long long int get_average(int index, unsigned long int size, int operat
 }
 
 /*obtain the measured access time from the table in access_times.h. If not measured for this size, takes the average between the two closest neighbours*/
-unsigned long long int get_access_time(unsigned long int size, int operation)
+unsigned long long int get_access_time_old(unsigned long int size, int operation)
 {
 	int index;
 
@@ -77,7 +77,7 @@ unsigned long long int get_access_time(unsigned long int size, int operation)
 	}	
 }
 /*get the sequential to random throughput ratio for this operation and this request size from the table in access_times_ratio.h.*/
-float get_access_ratio(long long size, int operation)
+float get_access_ratio_old(long long size, int operation)
 {
 	int index;
 

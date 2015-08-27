@@ -29,6 +29,7 @@
 #include "common_functions.h"
 #include "proc.h"
 #include "agios_config.h"
+#include "estimate_access_times.h"
 
 #ifdef AGIOS_KERNEL_MODULE
 #include <linux/module.h>
@@ -157,6 +158,8 @@ int agios_init(struct client *clnt, char *config_file)
 	if((ret = read_configuration_file(config_file)) != 0)
 		return ret;
 
+	//read the access times file
+	read_access_times_functions(config_get_access_times_file());
 
 	/*init the memory structures*/
 	if ((ret = request_cache_init()))

@@ -43,7 +43,7 @@
 #include "hash.h"
 #include "trace.h"
 #include "predict.h"
-#include "get_access_times.h"
+#include "estimate_access_times.h"
 #include "request_cache.h"
 #include "consumer.h"
 #include "agios_config.h"
@@ -443,7 +443,7 @@ int AIOLI_select_from_list(struct related_list_t *related_list, struct related_l
 int AIOLI_select_from_file(struct request_file_t *req_file, struct related_list_t **selected_queue, unsigned long long int *selected_timestamp)
 {
 	int reqnb=0;
-	PRINT_FUNCTION_NAME;
+//	PRINT_FUNCTION_NAME;
 	// First : on related read requests
 	if (!agios_list_empty(&req_file->related_reads.list))
 	{
@@ -471,7 +471,7 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 	int waiting_options=0;
 	struct request_t *req=NULL;
 
-	PRINT_FUNCTION_NAME;
+//	PRINT_FUNCTION_NAME;
 		
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //try to select requests from all the files
 	{

@@ -43,6 +43,7 @@ static char *config_simple_trace_file_prefix=NULL;
 static int config_prediction_time_error = 10;
 static int config_prediction_recalculate_alpha_period = -1;
 static short int config_write_simplified_traces=0;
+static char *config_access_times_file=NULL;
 
 inline void config_set_trace(short int value)
 {
@@ -159,6 +160,15 @@ inline short int config_get_write_simplified_traces(void)
 {
 	return config_write_simplified_traces;
 }
+inline void config_set_access_times_file(const char *value)
+{
+	config_access_times_file = (char *)malloc(sizeof(char)*(strlen(value)+1));
+	strcpy(config_access_times_file, value);
+}
+inline char *config_get_access_times_file()
+{
+	return config_access_times_file;
+}
 
 //-------------------------------------------------------------------------------------------------------
 //USER INFO
@@ -232,6 +242,8 @@ inline short int read_configuration_file(char *config_file)
 	config_set_prediction_recalculate_alpha_period(ret);
 	config_lookup_int(&agios_config, "library_options.predict_write_simplified_traces", &ret);
 	config_set_write_simplified_traces(ret);
+	config_lookup_string(&agios_config, "library_options.access_times_func_file", &ret_str);
+	config_set_access_times_file(ret_str);
 	
 	
 
@@ -300,6 +312,7 @@ void config_print(void)
 		agios_just_print("\tPredicted requests will be considered the same if their arrival times' difference is within %d\n", config_prediction_time_error);
 		config_print_flag(config_write_simplified_traces, "\tWill the Prediction Module create simplified traces with the obtained information? ");
 	}
+	agios_just_print("File with access time functions: %s\n", config_access_times_file);
 	agios_just_print("AGIOS' user uses stripe size of %d\n", config_stripe_size);	
 }
 

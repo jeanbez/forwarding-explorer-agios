@@ -1,4 +1,4 @@
-/* File:	agios.c
+/* File:	estimate_access_times.h
  * Created: 	2012 
  * License:	GPL version 3
  * Author:
@@ -8,9 +8,8 @@
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides an interface to obtain measured read/write processing
  *		time for different request sizes. It also provides the sequential
- *		to random throughput ratio. These values are provided to AGIOS 
- *		through the access_times.h and access_times_ratios.h files.
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
+ *		to random throughput ratio. 
+ *		Further information is available at http://agios.bitbucket.org/
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
@@ -21,11 +20,10 @@
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-#ifndef _GET_ACCESS_TIMES_H_
-#define _GET_ACCESS_TIMES_H_
+#ifndef _ESTIMATE_ACCESS_TIMES_H_
+#define _ESTIMATE_ACCESS_TIMES_H_
 
-
-unsigned long long int get_access_time_old(unsigned long int size, int operation);
-float get_access_ratio_old(long long size, int operation);
-
+void read_access_times_functions(char *filename);
+unsigned long long int get_access_time(unsigned long int size, int operation);
+float get_access_ratio(unsigned long int size, int operation);
 #endif
