@@ -55,7 +55,7 @@
 
 #define AGIOS_CONFIGFILE "/tmp/agios.conf"
 
-#define ORANGEFS_STRIPE_SIZE 65536 //TODO should not be hardcoded...
+#define ORANGEFS_STRIPE_SIZE 65536 //TODO this should not be hardcoded! Find a way of knowing the files' stripe size here.
 
 static struct client agios_clnt;
 
@@ -205,6 +205,7 @@ void PINT_req_sched_agios_process(int64_t req_id)
 	struct req_sched_element *element;
 
 	requests_received_from_agios++;
+//	fprintf(stderr, "PINT_req_sched_agios_process - request no %d to come back from AGIOS\n", requests_received_from_agios);
 
  	element = id_gen_fast_lookup(req_id); 
 
@@ -534,6 +535,7 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 	}
 	else
 		fprintf(stderr, "ops!");*/
+//	printf("req chegando na PINT_req_sched_post. op = %d\n", op);
 
     if(sched_policy == PINT_SERVER_REQ_BYPASS)
     {
@@ -772,8 +774,8 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 	if((agios_is_it_a_server) && ((op == PVFS_SERV_IO) || (op == PVFS_SERV_SMALL_IO)) && (s_op != NULL))
 	{
 		PVFS_offset offset;
-		PVFS_size size;
-		uint32_t server_nb;
+		PVFS_size size, aux_size;
+		uint32_t server_nb, this_server, aux_server;
 		int type;
 		char agios_fn[25];
 	
@@ -786,22 +788,52 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 			offset = ((PINT_server_op *) s_op)->req->u.io.file_req_offset ;
 			size = ((PINT_server_op *) s_op)->req->u.io.aggregate_size;
 			server_nb = ((PINT_server_op *) s_op)->req->u.io.server_ct;
+			this_server= ((PINT_server_op *) s_op)->req->u.io.server_nr;
 		}
 		else
 		{
 			offset = ((PINT_server_op *) s_op)->req->u.small_io.file_req_offset;
 			size = ((PINT_server_op *) s_op)->req->u.small_io.aggregate_size;
 			server_nb = ((PINT_server_op *) s_op)->req->u.small_io.server_ct;
+			this_server = ((PINT_server_op *) s_op)->req->u.small_io.server_nr;
 		}
 		tmp_element->offset = offset;
 		if(server_nb > 0)
 			tmp_element->real_offset = (offset % ORANGEFS_STRIPE_SIZE) + (offset / (ORANGEFS_STRIPE_SIZE * server_nb))*ORANGEFS_STRIPE_SIZE;
 		else
 		{
-		//	fprintf(stderr, "ops, server_nb eh zero!\n");
 			tmp_element->real_offset = offset;
 		}
-		tmp_element->len = size;
+		if(size <= ORANGEFS_STRIPE_SIZE) //if the request was smaller than the stripe size, it has arrived with the right size here
+			tmp_element->len = size;
+		else //if the request was larger, than the size includes the portions requested from the other servers
+		{
+			if((size % ORANGEFS_STRIPE_SIZE) == 0) //simplest case: multiple from the stripe size
+				tmp_element->len = size/server_nb;
+			else
+			{
+				tmp_element->len=0;
+				aux_server = 0;
+				aux_size=0;
+				do {
+					if((size - aux_size) >= ORANGEFS_STRIPE_SIZE)
+					{
+						if(aux_server == this_server)
+							tmp_element->len += ORANGEFS_STRIPE_SIZE;
+					}
+					else
+					{
+						if(aux_server == this_server)
+							tmp_element->len += size - aux_size;
+					}
+					aux_size += ORANGEFS_STRIPE_SIZE;
+					aux_server++;
+					if(aux_server >= server_nb)
+						aux_server = 0;
+				} while (aux_size < size);
+				
+			}
+		}
 
 		/*get operation type*/
 		if(((PINT_server_op *) s_op)->req->u.io.io_type == PVFS_IO_READ)
@@ -812,7 +844,7 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 		/*give the request to agios*/
 		requests_sent_to_agios+=1;
 //		fprintf(stderr, "this is the request no %d to go to AGIOS\n", requests_sent_to_agios);
-		agios_add_request(agios_fn, type, tmp_element->real_offset, size, tmp_element->id, &agios_clnt);
+		agios_add_request(agios_fn, type, tmp_element->real_offset, tmp_element->len, tmp_element->id, &agios_clnt);
 
 	}
 #endif
@@ -1271,15 +1303,18 @@ int PINT_req_sched_test(
 			 "REQ SCHED TIMER SCHEDULING, queue_element: %p\n",
 			 tmp_element);
 	    free(tmp_element);
+//	fprintf(stderr, "ORANGEFS PINT_req_sched_test leaving\n");
 	    return (1);
 	}
 	else
 	{
+//	fprintf(stderr, "ORANGEFS PINT_req_sched_test leaving\n");
 	    return(0);
 	}
     }
     else
     {
+//	fprintf(stderr, "ORANGEFS PINT_req_sched_test leaving\n");
         /* should not hit this point */
 	return (-EINVAL);
     }
@@ -1300,6 +1335,7 @@ int PINT_req_sched_testsome(
     struct timeval tv;
 
     *inout_count_p = 0;
+//	fprintf(stderr, "ORANGEFS PINT_req_sched_testsome start\n");
 
     /* if there are any pending timer events, go ahead and get the 
      * current time so that we are ready if we run across one
@@ -1308,6 +1344,7 @@ int PINT_req_sched_testsome(
     {
 	gettimeofday(&tv, NULL);
     }
+//	fprintf(stderr, "ORANGEFS PINT_req_sched_testsome is going to schedule %d requests\n",incount);
 
     for (i = 0; i < incount; i++)
     {
@@ -1327,6 +1364,7 @@ int PINT_req_sched_testsome(
 	}
 	else if (tmp_element->state == REQ_READY_TO_SCHEDULE)
 	{
+	//	fprintf(stderr, "ORANGEFS PINT_req_sched_testsome scheduling request no %d \n", i);
 	    /* let it roll */
 	    tmp_element->state = REQ_SCHEDULED;
 	    /* remove from ready queue, leave in hash table queue */
@@ -1370,9 +1408,11 @@ int PINT_req_sched_testsome(
 	}
 	else
 	{
+	//	fprintf(stderr, "ORANGEFS PINT_req_sched_testsome leaving\n");
 	    return (-EINVAL);
 	}
     }
+	//	fprintf(stderr, "ORANGEFS PINT_req_sched_testsome leaving\n");
     if (*inout_count_p > 0)
 	return (1);
     else
@@ -1457,6 +1497,7 @@ int PINT_req_sched_testworld(
 		     llu(tmp_element->handle), tmp_element);
         PINT_req_sched_do_change_mode(tmp_element);
     }
+	//	fprintf(stderr, "ORANGEFS PINT_req_sched_testworld leaving\n");
     if (*inout_count_p > 0)
 	return (1);
     else
