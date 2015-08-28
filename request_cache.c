@@ -610,10 +610,10 @@ inline int insert_aggregations(struct request_t *req, struct agios_list_head *in
 			}
 		}
 	}
-	if((!aggregated) && (insertion_place->next != list_head)) /*it we could not aggregated with the previous one, or there is no previous one, and this request is not to be the last of the queue, lets try with the next one*/
+	if((!aggregated) && (insertion_place->next != list_head)) /*if we could not aggregated with the previous one, or there is no previous one, and this request is not to be the last of the queue, lets try with the next one*/
 	{
 		next_req = agios_list_entry(insertion_place->next, struct request_t, related);
-		if(CHECK_AGGREGATE(req, next_req) && (next_req->reqnb + prev_req->reqnb <= max_aggregation_size)) 
+		if(CHECK_AGGREGATE(req, next_req) && (next_req->reqnb < max_aggregation_size)) 
 		{
 			include_in_aggregation(req, &next_req);
 			aggregated=1;
