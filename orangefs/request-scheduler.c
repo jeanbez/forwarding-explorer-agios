@@ -38,6 +38,7 @@
 #include "gossip.h"
 #include "id-generator.h"
 #include "pvfs2-internal.h"
+#include "pvfs2-dist-simple-stripe.h"
 
 /* we need the server header because it defines the operations that
  * we use to determine whether to schedule or queue.  
@@ -55,8 +56,7 @@
 
 #define AGIOS_CONFIGFILE "/tmp/agios.conf"
 
-#define ORANGEFS_STRIPE_SIZE 65536 //TODO this should not be hardcoded! Find a way of knowing the files' stripe size here.
-
+static PVFS_size last_stripe_size = 65536; //it should not be hardcoded. However, if the information does not come with the requests, what should we do? 
 static struct client agios_clnt;
 
 static int agios_is_it_a_server=1;
@@ -774,7 +774,7 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 	if((agios_is_it_a_server) && ((op == PVFS_SERV_IO) || (op == PVFS_SERV_SMALL_IO)) && (s_op != NULL))
 	{
 		PVFS_offset offset;
-		PVFS_size size, aux_size;
+		PVFS_size size, aux_size, stripe_size=-1;
 		uint32_t server_nb, this_server, aux_server;
 		int type;
 		char agios_fn[25];
@@ -789,6 +789,11 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 			size = ((PINT_server_op *) s_op)->req->u.io.aggregate_size;
 			server_nb = ((PINT_server_op *) s_op)->req->u.io.server_ct;
 			this_server= ((PINT_server_op *) s_op)->req->u.io.server_nr;
+			if(((PINT_server_op *) s_op)->req->u.io.io_dist)
+			{
+				if(((PINT_server_op *) s_op)->req->u.io.io_dist->params)
+					stripe_size = ( (PVFS_simple_stripe_params*) (((PINT_server_op *) s_op)->req->u.io.io_dist->params))->strip_size;
+			}
 		}
 		else
 		{
@@ -796,43 +801,50 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 			size = ((PINT_server_op *) s_op)->req->u.small_io.aggregate_size;
 			server_nb = ((PINT_server_op *) s_op)->req->u.small_io.server_ct;
 			this_server = ((PINT_server_op *) s_op)->req->u.small_io.server_nr;
+			if(((PINT_server_op *) s_op)->req->u.small_io.dist)
+                        {
+                                if(((PINT_server_op *) s_op)->req->u.small_io.dist->params)
+                                        stripe_size = ( (PVFS_simple_stripe_params*) (((PINT_server_op *) s_op)->req->u.small_io.dist->params))->strip_size;
+                        }
+
 		}
+		if(stripe_size == -1) //the information did not come with the request! what should we do?? TODO
+			stripe_size = last_stripe_size;
+		else
+			last_stripe_size = stripe_size;
+
+		//get the offset in the local file (offset from the request is about the global view of the file)
 		tmp_element->offset = offset;
 		if(server_nb > 0)
-			tmp_element->real_offset = (offset % ORANGEFS_STRIPE_SIZE) + (offset / (ORANGEFS_STRIPE_SIZE * server_nb))*ORANGEFS_STRIPE_SIZE;
+			tmp_element->real_offset = (offset % stripe_size) + (offset / (stripe_size * server_nb))*stripe_size;
 		else
 		{
 			tmp_element->real_offset = offset;
 		}
-		if(size <= ORANGEFS_STRIPE_SIZE) //if the request was smaller than the stripe size, it has arrived with the right size here
+		//get the actual size (aggregated_size which comes with the request corresponds to the whole amount asked for the client, including to other servers)
+		if(size <= stripe_size) //if the request was smaller than the stripe size, it has arrived with the right size here
 			tmp_element->len = size;
 		else //if the request was larger, than the size includes the portions requested from the other servers
 		{
-			if((size % ORANGEFS_STRIPE_SIZE) == 0) //simplest case: multiple from the stripe size
-				tmp_element->len = size/server_nb;
-			else
-			{
-				tmp_element->len=0;
-				aux_server = 0;
-				aux_size=0;
-				do {
-					if((size - aux_size) >= ORANGEFS_STRIPE_SIZE)
-					{
-						if(aux_server == this_server)
-							tmp_element->len += ORANGEFS_STRIPE_SIZE;
-					}
-					else
-					{
-						if(aux_server == this_server)
-							tmp_element->len += size - aux_size;
-					}
-					aux_size += ORANGEFS_STRIPE_SIZE;
-					aux_server++;
-					if(aux_server >= server_nb)
-						aux_server = 0;
-				} while (aux_size < size);
-				
-			}
+			tmp_element->len=0;
+			aux_server = 0;
+			aux_size=0;
+			do {
+				if((size - aux_size) >= stripe_size)
+				{
+					if(aux_server == this_server)
+						tmp_element->len += stripe_size;
+				}
+				else
+				{
+					if(aux_server == this_server)
+						tmp_element->len += size - aux_size;
+				}
+				aux_size += stripe_size;
+				aux_server++;
+				if(aux_server >= server_nb)
+					aux_server = 0;
+			} while (aux_size < size);
 		}
 
 		/*get operation type*/
