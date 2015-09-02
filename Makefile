@@ -32,7 +32,7 @@ library_install: library
 
 clean: 
 	rm -rf *.a
-	rm -rf *.so.1.0.1
+	rm -rf *.so.1
 	rm -rf *.o
 	rm -rf *.mod.c *.ko Module.symvers modules.order
 	rm -rf .*.o.cmd .*.ko.cmd
