@@ -233,6 +233,7 @@ void *print_stats_start(struct seq_file *s, loff_t *pos)
 void print_stats_start(void)
 #endif
 {
+	fprintf(stderr, "1\n");
 #ifdef AGIOS_KERNEL_MODULE
 	seq_printf(s, 
 #else

@@ -41,6 +41,7 @@
 #define AIOLI_QUANTUM 8192
 #endif
 #define MLF_QUANTUM 65536   	/*the size of the quantum given to requests when using the qt-mlf scheduling algorithm. 	                 	  *must be set to the expected average size of requests to this server*/
+#define TIME_WINDOW_SIZE 1000 // Time window size must be in miliseconds
 #define ANTICIPATORY_VALUE(op) (2*get_access_time(AIOLI_QUANTUM,op)) /*the initial quantum given to the requests (usually twice the necessary time to process a request of size MLF_QUANTUM)*/
 #define MAX_AGGREG_SIZE   16
 #define MAX_AGGREG_SIZE_MLF   200
@@ -246,6 +247,9 @@ struct request_t { //TODO rethink data types, we probably do not need to have lo
 	unsigned long long int jiffies_64; //arrival time 
 	int type; //read or write
 	struct io_data io_data; //offset and datasize
+	
+	int tw_app_id;
+	int tw_priority;
 
 	user_data_type data;  /*passed by AGIOS' user (for knowing which request is this one)*/
 

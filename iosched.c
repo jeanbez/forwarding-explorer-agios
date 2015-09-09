@@ -126,6 +126,16 @@ void simple_timeorder(void *clnt)
 
 /**************************************
  *
+ * Time Window scheduling algorithm
+ *
+ **************************************/
+void time_window(void *clnt)
+{
+	timeorder(clnt); // The difference between them in in the inclusion of requests, the processing is the same
+}
+
+/**************************************
+ *
  * MLF scheduling algorithm
  *
  **************************************/
@@ -874,8 +884,6 @@ void SRTF(void *clnt)
 	}
 	
 }
-	
-
 
 /**************************************
  *
@@ -949,7 +957,7 @@ void register_static_io_schedulers(void)
 		{
 			.init = NULL,
 			.exit = NULL,
-			.schedule = &timeorder,
+			.schedule = &timeorder, // Timeorder with aggregation
 			.max_aggreg_size = MAX_AGGREG_SIZE,
 			.sync=0,
 			.needs_hashtable=0,
@@ -989,12 +997,22 @@ void register_static_io_schedulers(void)
 		{
 			.init = NULL,
 			.exit = NULL,
-			.schedule = &simple_timeorder,
+			.schedule = &simple_timeorder, // Timeorder
 			.max_aggreg_size = 1,
 			.sync=0,
 			.needs_hashtable=0,
 			.name = "TO",
 			.index = 5,
+		},
+		{
+			.init = NULL,
+			.exit = NULL,
+			.schedule = &time_window,
+			.max_aggreg_size = 1,
+			.sync=0,
+			.needs_hashtable=0, // Não ocupa o hash table, coloca as requisições em uma lista
+			.name = "TW",
+			.index = 6,
 		}
 	};
 	int i = 0;

@@ -19,7 +19,6 @@ library: ${OBJS}
 all: library
 
 ${OBJS}:
-#	cp time_benchmark/access_times.h . 
 	gcc -fPIC -Wall -L/usr/lib/ -L/usr/local/lib/ ${ccflags-y} -c ${FILES} -lm -lpthread -lrt -lconfig
 
 library_install: library

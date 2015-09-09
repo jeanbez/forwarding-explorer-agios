@@ -187,6 +187,7 @@ void timeline_add_req(struct request_t *req)
 	struct request_file_t *req_file;
 	struct request_t *tmp;
 	int aggregated=0;
+	int tw_priority;
 
 	PRINT_FUNCTION_NAME;
 	VERIFY_REQUEST(req);
@@ -212,8 +213,29 @@ void timeline_add_req(struct request_t *req)
 							related))->timestamp + 1;
 	}	
 
+	if (get_selected_alg() == TIME_WINDOW_SCHEDULER) 
+	{
+		// Calculate the request priority
+		tw_priority = req->timestamp / TIME_WINDOW_SIZE * 32768 + req->tw_app_id;
+
+		// Find the position to insert the request
+		agios_list_for_each_entry(tmp, &timeline, related)
+		{
+			if (tmp->tw_priority > tw_priority) {
+				agios_list_add(&req->related, &tmp->related);
+				
+				return;
+			}
+		}
+
+		// If it was not inserted, insert the request in the proper position
+		agios_list_add_tail(&req->related, &timeline);
+
+		return;
+	} 
+
 	/*try to aggregate it*/
-	if(get_selected_alg() != SIMPLE_TIMEORDER_SCHEDULER)
+	if(get_selected_alg() != SIMPLE_TIMEORDER_SCHEDULER && get_selected_alg() != TIME_WINDOW_SCHEDULER)
 	{	
 		agios_list_for_each_entry(tmp, &timeline, related)
 		{
@@ -231,6 +253,7 @@ void timeline_add_req(struct request_t *req)
 			}
 		}  
 	}
+
 	if(!aggregated) //if not aggregated, add it
 		agios_list_add_tail(&req->related, &timeline); //we use the related list structure so we can reuse several (like include_in_aggregation) functions from the hashtable implementation
 
@@ -652,7 +675,6 @@ inline struct request_file_t *find_req_file(struct agios_list_head *hash_list, c
 			insertion_place = &(req_file->hashlist);
 		else
 			insertion_place = hash_list;
-	
 		debug("including a new request_file_t structure for file %s\n", file_id);
 		req_file = request_file_constructor(file_id);
 		if(!req_file)
@@ -862,7 +884,7 @@ void hashtable_unlock(int index)
 #ifdef ORANGEFS_AGIOS
 int agios_add_request(char *file_id, int type, long long offset, long len, int64_t data, struct client *clnt)
 #else
-int agios_add_request(char *file_id, int type, long long offset, long len, int data, struct client *clnt)
+int agios_add_request(char *file_id, int type, long long offset, long len, int data, struct client *clnt) //, int app_id
 #endif
 {
 	struct request_t *req;
