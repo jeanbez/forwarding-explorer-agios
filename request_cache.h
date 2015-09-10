@@ -28,6 +28,9 @@
 
 struct request_t;
 
+
+inline void include_in_aggregation(struct request_t *req, struct request_t **agg_req);
+
 void timeline_add_req(struct request_t *req);
 
 /*

@@ -426,7 +426,7 @@ static int AIOLI_init()
 	return 1;
 }
 
-int AIOLI_select_from_list(struct related_list_t *related_list, struct related_list_t **selected_queue, unsigned long long int *selected_timestamp)
+int AIOLI_select_from_list(struct related_list_t *related_list, struct related_list_t **selected_queue, unsigned int *selected_timestamp)
 {
 	int reqnb = 0;
 	struct request_t *req;
@@ -450,7 +450,7 @@ int AIOLI_select_from_list(struct related_list_t *related_list, struct related_l
 	return reqnb;
 }
 
-int AIOLI_select_from_file(struct request_file_t *req_file, struct related_list_t **selected_queue, unsigned long long int *selected_timestamp)
+int AIOLI_select_from_file(struct request_file_t *req_file, struct related_list_t **selected_queue, unsigned int *selected_timestamp)
 {
 	int reqnb=0;
 //	PRINT_FUNCTION_NAME;
@@ -476,8 +476,8 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 	int reqnb;
 	struct related_list_t *tmp_selected_queue=NULL;
 	struct related_list_t *selected_queue = NULL;
-	unsigned long long int tmp_timestamp;
-	unsigned long long int selected_timestamp=~0;
+	unsigned int tmp_timestamp;
+	unsigned int selected_timestamp=~0;
 	int waiting_options=0;
 	struct request_t *req=NULL;
 
@@ -1013,6 +1013,16 @@ void register_static_io_schedulers(void)
 			.needs_hashtable=0, // Não ocupa o hash table, coloca as requisições em uma lista
 			.name = "TW",
 			.index = 6,
+		},
+		{
+			.init = NULL,
+			.exit = NULL,
+			.schedule = NULL,
+			.max_aggreg_size = 1,
+			.sync = 0,
+			.needs_hashtable= 0,
+			.name = "NOOP"
+			.index = 7,
 		}
 	};
 	int i = 0;

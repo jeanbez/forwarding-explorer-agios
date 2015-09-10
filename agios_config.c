@@ -268,6 +268,12 @@ inline short int read_configuration_file(char *config_file)
 
 	config_print();
 
+	//make copies for performance reasons
+	//TODO if we ever decide to make any of these decisions dynamic (changing them during execution), we will need to update the copies
+	set_hashtable_trace_predict(config_trace_predict);
+	set_request_cache_predict_request_aggregation(config_predict_request_aggregation);
+	set_request_cache_trace(config_trace_agios);
+
 	return 0;
 }
 

@@ -61,14 +61,7 @@ int start_consumer(struct client *clnt)
 {
 	int ret;
 
-#ifdef AGIOS_KERNEL_MODULE
-	init_completion(&consumer.exited);
-	init_completion(&consumer.request_added);
-#else
-	agios_cond_init(&consumer.request_added_cond);
-	agios_mutex_init(&consumer.request_added_mutex);
-#endif
-
+	consumer_init();
 #ifdef AGIOS_KERNEL_MODULE
 	consumer.task = NULL;
 #else

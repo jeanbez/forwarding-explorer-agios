@@ -38,6 +38,45 @@
 #include <linux/kthread.h>
 #endif
 
+
+//so we can let the AGIOS thread know we have new requests (so it can schedule them)
+#ifdef AGIOS_KERNEL_MODULE
+static struct completion request_added;
+#else
+static pthread_cond_t request_added_cond;
+static pthread_mutex_t request_added_mutex;
+#endif
+//signal new requests
+void consumer_signal_new_reqs(void)
+{
+#ifdef AGIOS_KERNEL_MODULE
+	complete(&request_added);
+#else
+	agios_mutex_lock(&request_added_mutex);
+	agios_cond_signal(&request_added_cond);
+	agios_mutex_unlock(&request_added_mutex);
+#endif
+	
+}
+
+
+#ifdef AGIOS_KERNEL_MODULE
+static struct completion exited;
+#endif
+
+void consumer_init()
+{
+#ifdef AGIOS_KERNEL_MODULE
+	init_completion(&exited);
+	init_completion(&request_added);
+#else
+	agios_cond_init(&request_added_cond);
+	agios_mutex_init(&request_added_mutex);
+#endif
+	
+}
+
+
 static int processed_reqnb=0;
 static int processed_period = -1;
 
@@ -123,9 +162,10 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			debug("request [%d] - size %ld, offset %lld, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
 			reqs[reqs_index]=req->data;
 			reqs_index++;
-			req->globalinfo->current_size -= req->io_data.len;
+			req->globalinfo->current_size -= req->io_data.len; //when we aggregate overlapping requests, we don't adjust the related list current_size, since it is simply the sum of all requests sizes. For this reason, we have to subtract all requests from it individually when processing a virtual request.
 		}
 		//we have to update the counters before releasing the lock to process requests, otherwise the lock may be obtained by another thread to add a new request and end up in weird behaviors.
+		head_req->globalinfo->req_file->timeline_reqnb-=head_req->reqnb;
 		update_filenb_counter(hash, req_file);
 		dec_many_current_reqnb(hash, head_req->reqnb);
 		unlock_structure_mutex(hash);
@@ -139,6 +179,7 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 			VERIFY_REQUEST(head_req);
 			debug("request [%d]  - size %ld, offset %lld, file %s - going back to the file system", head_req->data, head_req->io_data.len, head_req->io_data.offset, head_req->file_id);
 			head_req->globalinfo->current_size -= head_req->io_data.len; 
+			head_req->globalinfo->req_file->timeline_reqnb--;
 			update_filenb_counter(hash, req_file);
 			dec_current_reqnb(hash);
 			unlock_structure_mutex(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
@@ -152,6 +193,7 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 				VERIFY_REQUEST(req);
 				debug("request [%d] - size %ld, offset %lld, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
 				req->globalinfo->current_size -= req->io_data.len; 
+				req->globalinfo->req_file->timeline_reqnb--;
 				update_filenb_counter(hash, req_file);
 				dec_current_reqnb(hash);
 				unlock_structure_mutex(hash); 
@@ -167,7 +209,7 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 		if(processed_reqnb > processed_period)
 		{
 			processed_reqnb = 0;
-			refresh_predictions(); //it's time to recalculate the alpha factor and review all predicted requests aggregation
+			refresh_predictions(); //it's time to recalculate the alpha factor and review all predicted requests aggregatio
 		}
 	}
 	
@@ -215,7 +257,8 @@ void * agios_thread(void *arg)
 		if(!(stop = agios_thread_should_stop())) {
 			if(get_current_reqnb() > 0)
 			{
-				consumer->io_scheduler->schedule(consumer->client);
+				if(consumer->io_scheduler->schedule) //NOOP algorithm does not have schedule function
+					consumer->io_scheduler->schedule(consumer->client);
 			}
 		}
         } while (!stop);

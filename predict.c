@@ -205,11 +205,6 @@ inline int request_time_is_close_enough(unsigned long long int time1, unsigned l
 //TODO should we have a mutex for predict_timeline?
 void predict_timeline_add_req(struct request_t *req) 
 {
-	if (agios_list_empty(&predict_timeline))
-		req->timestamp = 0;
-	else 
-		req->timestamp = ((struct request_t *)agios_list_entry(predict_timeline.prev, struct request_t, timeline))->timestamp + 1;
-
 	agios_list_add_tail(&req->timeline, &predict_timeline);
 }
 /*searches for the already existing predicted request inside a related list. MUST hold hashtable lock*/

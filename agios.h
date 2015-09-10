@@ -128,18 +128,7 @@ struct consumer_t {
 	int task;
 #endif
 
-	/* This is completed when new request is added to dispatch_queue
-	 * for a file that consumer is waiting for (deceptive idleness). */
-#ifdef AGIOS_KERNEL_MODULE
-	struct completion request_added;
-#else
-	pthread_cond_t request_added_cond;
-	pthread_mutex_t request_added_mutex;
-#endif
 
-#ifdef AGIOS_KERNEL_MODULE
-	struct completion exited;
-#endif
 	
 	/* IO scheduler used by this consumer. */
 	struct io_scheduler_instance_t *io_scheduler;
@@ -262,7 +251,8 @@ struct request_t { //TODO rethink data types, we probably do not need to have lo
 	short unsigned int already_waited; /*used by the prediction module when using predicted aggregations to device about waiting times. we do not need to keep it waiting forever, so we just do it once (only the real version - not the predicted - is marked)*/
 
 	/*request's position inside data structures*/
-	unsigned long long int timestamp; //position in timeline (used for predicted requests and regular requests with scheduler that use timeline)
+	unsigned int timestamp; //just the arrival order at the scheduler
+
 	struct agios_list_head related; //for including in hashtable or timeline  (see the list implementation)
 	
 	struct related_list_t *globalinfo; //pointer for the related list inside the file (list of reads, writes, predicted reads or predicted writes)
