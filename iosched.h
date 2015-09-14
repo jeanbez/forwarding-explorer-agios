@@ -41,9 +41,6 @@
 #define TIME_WINDOW_SCHEDULER 6
 #define NOOP_SCHEDULER 7
 
-int get_algorithm_from_string(const char *alg);
-char *get_algorithm_name_from_index(int index);
-
 /*
  * Structure describing I/O scheduler operations.
  */
@@ -78,13 +75,29 @@ struct io_scheduler_instance_t {
 
 };
 
-/* Prototypes */
+//so configuration options can be updated
+inline void set_iosched_predict_request_aggregation(short int value);
+inline void set_iosched_trace(short int value);
+
+//so other parts can get statistics
+inline unsigned long long int get_time_spent_waiting(void);
+inline unsigned long long int get_waiting_time_overlapped(void);
+
+//functions to I/O scheduling algorithm management (setting schedulers, initializing, etc)
+int get_algorithm_from_string(const char *alg);
+char *get_algorithm_name_from_index(int index);
 void register_static_io_schedulers(void);
 struct io_scheduler_instance_t *find_io_scheduler(int index);
 int initialize_scheduler(int index, void *consumer);
 
-inline unsigned long long int get_time_spent_waiting(void);
-inline unsigned long long int get_waiting_time_overlapped(void);
+//generic functions to be used by multiple scheduling algorithms
+void generic_post_process(struct request_t *req);
+void generic_init();
+void waiting_algorithms_postprocess(struct request_t *req);
+inline void increment_sched_factor(struct request_t *req);
+inline struct request_t *checkSelection(struct request_t *req, struct request_file_t *req_file);
+void agios_wait(unsigned long long int  timeout, char *file);
+void update_waiting_time_counters(struct request_file_t *req_file, unsigned long long int *smaller_waiting_time, struct request_file_t **swt_file );
 
 
 /*TODO maybe we could tolerate some useless space between the two aggregated requests, since it is possible that, because of block sizes, this useless portion will be requested anyway*/

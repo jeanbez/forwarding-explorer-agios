@@ -112,10 +112,10 @@ void hashtable_cleanup(void)
  * Locking:
  * 	Must be holding hashlist_locks[hash_val]
  */
-static void __hashtable_add_req(struct request_t *req, unsigned long hash_val)
+static void __hashtable_add_req(struct request_t *req, unsigned long hash_val, struct request_file_t *given_req_file)
 {
 	struct agios_list_head *hash_list = &hashlist[hash_val];
-	struct request_file_t *req_file;
+	struct request_file_t *req_file = given_req_file;
 	struct request_t *tmp;
 	struct agios_list_head *insertion_place;
 
@@ -126,14 +126,17 @@ static void __hashtable_add_req(struct request_t *req, unsigned long hash_val)
 #endif
 
 	/*finds the file to add to*/
-	req_file = find_req_file(hash_list, req->file_id, req->state);
-	
-	/*if it is the first request to this file (first actual request, anyway, it could have predicted requests only), we have to store the arrival time*/
-	if(req->state != RS_PREDICTED)
+	if(!req_file) //if a given file was given, we are migrating from timeline to hashtable. In this case, no need to create new request_file_t structures or to update any statistics
 	{
-		/*see if this is the first request to the file*/
-		if(req_file->first_request_time == 0)
-			req_file->first_request_time = req->jiffies_64;
+		req_file = find_req_file(hash_list, req->file_id, req->state);
+	
+		/*if it is the first request to this file (first actual request, anyway, it could have predicted requests only), we have to store the arrival time*/
+		if(req->state != RS_PREDICTED)
+		{
+			/*see if this is the first request to the file*/
+			if(req_file->first_request_time == 0)
+				req_file->first_request_time = req->jiffies_64;
+		}
 	}
 
 	/*
@@ -203,17 +206,20 @@ static void __hashtable_add_req(struct request_t *req, unsigned long hash_val)
  *	Must NOT hold hastlist_locks[hash_val]
  *	it will lock it, but will not unlock it before returning, so be sure to unlock it at some point
  */
-unsigned long hashtable_add_req(struct request_t *req)
+unsigned long hashtable_add_req(struct request_t *req, struct request_file_t *given_req_file)
 {
 	unsigned long hash_val;
 
-	VERIFY_REQUEST(req);
-	
 	hash_val = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES;	
+	
+	if(!given_req_file) //if a request_file_t structure was given, it's not a new request but we are migrating from timeline to hashtable. In this case, we don't need locks
+	{
+		VERIFY_REQUEST(req);
+	
+		agios_mutex_lock(&hashlist_locks[hash_val]);
+	}
 
-	agios_mutex_lock(&hashlist_locks[hash_val]);
-
-	__hashtable_add_req(req, hash_val);
+	__hashtable_add_req(req, hash_val, given_req_file);
 
 	return hash_val;
 }

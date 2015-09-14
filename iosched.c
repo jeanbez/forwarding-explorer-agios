@@ -56,10 +56,29 @@
 #include "SJF.h"
 #include "TW.h"
 #include "AIOLI.h"
+#include "NOOP.h"
 
 
 static AGIOS_LIST_HEAD(io_schedulers); //the list of scheduling algorithms (with their parameters)
 
+/**********************************************************************************************************************/
+/*	LOCAL COPIES OF CONFIGURATION FILE PARAMETERS	*/
+/**********************************************************************************************************************/
+//these parameters are obtained from the configuration file at the beginning of the execution. We keep copies for performance reasons
+static short int predict_request_aggregation=0;
+static short int trace=0;
+inline void set_iosched_predict_request_aggregation(short int value)
+{
+	predict_request_aggregation=value;
+}
+inline void set_iosched_trace(short int value)
+{
+	trace = value;
+}
+
+/**********************************************************************************************************************/
+/*	STATISTICS	*/
+/**********************************************************************************************************************/
 /*for calculating alpha during execution, which represents the ability to overlap waiting time with processing other requests*/
 static unsigned long long int time_spent_waiting=0;
 static unsigned long long int waiting_time_overlapped=0;
@@ -71,8 +90,11 @@ inline unsigned long long int get_time_spent_waiting(void)
 inline unsigned long long int get_waiting_time_overlapped(void)
 {
 	return waiting_time_overlapped;
-}
 
+}
+/**********************************************************************************************************************/
+/*	GENERIC HELPING FUNCTIONS USED BY MULTIPLE I/O SCHEDULING ALGORITHMS	*/
+/**********************************************************************************************************************/
 /*cleans up request_t structures after processing requests*/
 void generic_post_process(struct request_t *req)
 {
@@ -140,7 +162,7 @@ inline struct request_t *checkSelection(struct request_t *req, struct request_fi
 		{
 			req_file->waiting_time = WAIT_SHIFT_CONST;
 			stats_shift_phenomenon(req->globalinfo);
-			if(config_get_trace())
+			if(trace)
 			 	agios_trace_shift(WAIT_SHIFT_CONST, req->file_id);	
 		}
 		/*set to 0 to avoid starvation*/
@@ -154,14 +176,14 @@ inline struct request_t *checkSelection(struct request_t *req, struct request_fi
 		req->globalinfo->lastaggregation = 0;
 		req_file->waiting_time = WAIT_AGGREG_CONST;
 		stats_better_aggregation(req->globalinfo);
-		if(config_get_trace())
+		if(trace)
 			agios_trace_better(req->file_id);
 	}
 	/*3. we predicted that a better aggregation could be done to this request*/
-	else if((config_get_predict_request_aggregation()) && ((req_file->waiting_time = agios_predict_should_we_wait(req)) > 0))
+	else if((predict_request_aggregation) && ((req_file->waiting_time = agios_predict_should_we_wait(req)) > 0))
 	{
 		stats_predicted_better_aggregation(req->globalinfo);
-		if(config_get_trace())
+		if(trace)
 			agios_trace_predicted_better_aggregation(req_file->waiting_time, req->file_id);
 	} 
 
@@ -176,14 +198,14 @@ inline struct request_t *checkSelection(struct request_t *req, struct request_fi
 }
 
 /*sleeps for timeout ns*/
-static void agios_wait(unsigned long long int  timeout, char *file)
+void agios_wait(unsigned long long int  timeout, char *file)
 {
 #ifndef AGIOS_KERNEL_MODULE
 	struct timespec timeout_tspec;
 #endif
 
 
-	if(config_get_trace())
+	if(trace)
 		agios_trace_wait(timeout,file);
 	
 	debug("going to sleep for %llu\n", timeout);
@@ -234,6 +256,9 @@ void generic_init()
 }
 
 
+/**********************************************************************************************************************/
+/*	FUNCTIONS TO I/O SCHEDULING ALGORITHMS MANAGEMENT (INITIALIZATION, SETTING, ETC)	*/
+/**********************************************************************************************************************/
 //updates the consumer structure with the current scheduler indicated by index. If this scheduler needs an initialization function, calls it
 //TODO if we call MLF_init or AIOLI_init (generic_init) they will set waiting time statistics to 0. When dynamically changing scheduling algorithms, do we really want this? 
 int initialize_scheduler(int index, void *consumer) {
@@ -366,7 +391,7 @@ void register_static_io_schedulers(void)
 		{
 			.init = NULL,
 			.exit = NULL,
-			.schedule = NULL,
+			.schedule = &NOOP,
 			.max_aggreg_size = 1,
 			.sync = 0,
 			.needs_hashtable= 0,

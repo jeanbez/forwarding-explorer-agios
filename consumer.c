@@ -257,8 +257,7 @@ void * agios_thread(void *arg)
 		if(!(stop = agios_thread_should_stop())) {
 			if(get_current_reqnb() > 0)
 			{
-				if(consumer->io_scheduler->schedule) //NOOP algorithm does not have schedule function
-					consumer->io_scheduler->schedule(consumer->client);
+				consumer->io_scheduler->schedule(consumer->client);
 			}
 		}
         } while (!stop);

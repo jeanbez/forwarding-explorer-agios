@@ -80,6 +80,11 @@ inline struct agios_list_head *get_timeline(void)
 
 void timeline_add_req(struct request_t *req, int max_aggregation_size, int selected_alg, struct request_file_t *given_req_file)
 {
+	__timeline_add_req(req, max_aggregation_size, selected_alg, given_req_file, &timeline);
+}
+
+void __timeline_add_req(struct request_t *req, int max_aggregation_size, int selected_alg, struct request_file_t *given_req_file, struct agios_list_head *this_timeline)
+{
 	struct request_file_t *req_file = given_req_file;
 	struct request_t *tmp;
 	int aggregated=0;
@@ -113,7 +118,7 @@ void timeline_add_req(struct request_t *req, int max_aggregation_size, int selec
 		tw_priority = req->timestamp / TIME_WINDOW_SIZE * 32768 + req->tw_app_id;
 
 		// Find the position to insert the request
-		agios_list_for_each_entry(tmp, &timeline, related)
+		agios_list_for_each_entry(tmp, this_timeline, related)
 		{
 			if (tmp->tw_priority > tw_priority) {
 				agios_list_add(&req->related, &tmp->related);
@@ -123,7 +128,7 @@ void timeline_add_req(struct request_t *req, int max_aggregation_size, int selec
 		}
 
 		// If it was not inserted, insert the request in the proper position
-		agios_list_add_tail(&req->related, &timeline);
+		agios_list_add_tail(&req->related, this_timeline);
 
 		return;
 	} 
@@ -131,7 +136,7 @@ void timeline_add_req(struct request_t *req, int max_aggregation_size, int selec
 	//the TO-agg scheduling algorithm searches the queue for contiguous requests. If it finds any, then aggregate them.	
 	if(selected_alg == TIMEORDER_SCHEDULER)
 	{	
-		agios_list_for_each_entry(tmp, &timeline, related)
+		agios_list_for_each_entry(tmp, this_timeline, related)
 		{
 			if(tmp->globalinfo == req->globalinfo) //same type and to the same file
 			{
@@ -149,8 +154,43 @@ void timeline_add_req(struct request_t *req, int max_aggregation_size, int selec
 	}
 
 	if(!aggregated) //if not aggregated, possibly because this is the simple timeorder algorithm
-		agios_list_add_tail(&req->related, &timeline); //we use the related list structure so we can reuse several (like include_in_aggregation) functions from the hashtable implementation
+		agios_list_add_tail(&req->related, this_timeline); //we use the related list structure so we can reuse several (like include_in_aggregation) functions from the hashtable implementation
 
+}
+
+/* this function is called when migrating between two scheduling algorithms when both use timeline and one of them is the TIME_WINDOW. In this case, it is necessary to redo the timeline so requests will be processed in the new relevant order */
+void reorder_timeline(int new_alg, int new_max_aggregation_size)
+{
+	struct agios_list_head *new_timeline;
+	struct request_t *req, *aux_req=NULL;
+
+	//initialize new timeline structure
+	new_timeline = (struct agios_list_head *)agios_alloc(sizeof(struct agios_list_head));
+	new_timeline->prev = new_timeline;
+	new_timeline->next = new_timeline;
+
+	//get all requests from the previous timeline and include in the new one
+	agios_list_for_each_entry(req, timeline, related)
+	{
+		if(aux_req)
+		{
+			agios_list_del(&aux_req->related);
+			__timeline_add_req(aux_req, new_max_aggregation_size, new_alg, aux_req->globalinfo->req_file, new_timeline);	
+		}
+		aux_req = req;
+	}	
+	if(aux_req)
+	{
+		agios_list_del(&aux_req->related);
+		__timeline_add_req(aux_req, new_max_aggregation_size, new_alg, aux_req->globalinfo->req_file, new_timeline);	
+	}
+
+	//redefine the pointers
+	new_timeline->prev->next = &timeline;
+	new_timeline->next->prev = &timeline;
+	timeline.next = new_timeline->next;
+	timeline.prev = new_timeline->prev;
+	free(new_timeline);
 }
 
 /*

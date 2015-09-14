@@ -160,19 +160,19 @@ inline void set_needs_hashtable(short int value)
 }
 //change the current scheduling algorithm and update local parameters
 //here we assume the scheduling thread is NOT running, so it won't mess with the structures
-void change_selected_alg(int new_alg, short int new_needs_hashtable, short int new_max_aggregation_size)
+void change_selected_alg(int new_alg, short int new_needs_hashtable, int new_max_aggregation_size)
 {	
 	//TODO what about predict??
 	agios_mutex_lock(&algorithm_migration_mutex);
 
-	//we won't migrate data structures, we just need to process all requests already in the scheduler
+	//if we are moving to NOOP, we won't migrate data structures, we just need to process all requests already in the scheduler
 	if(new_alg == NOOP_SCHEDULER)
 	{
-		//TODO
+		//we are not going to process all requests from here because this would take a long time. The scheduler thread will take care of that, we just need to set the parameters
+		set_noop_needs_hashtable(scheduler_needs_hashtable);
 	}
-
 	//first situation: both algorithms use hashtable
-	if(scheduler_needs_hashtable && new_needs_hashtable)
+	else if(scheduler_needs_hashtable && new_needs_hashtable)
 	{
 		//the only problem here is if we decreased the maximum aggregation
 		//For now we chose to do nothing. If we no longer tolerate aggregations of a certain size, we are not spliting already performed aggregations since this would not benefit us at all. We could revisit this topic at the future
@@ -185,7 +185,7 @@ void change_selected_alg(int new_alg, short int new_needs_hashtable, short int n
 	//third situation: from timeline to hashtable
 	else if (!scheduler_needs_hashtable && new_needs_hashtable)
 	{
-		//TODO
+		migrate_from_timeline_to_hashtable(new_alg);
 	}
 	//fouth situation, both algorithms use timeline
 	else 
@@ -193,7 +193,7 @@ void change_selected_alg(int new_alg, short int new_needs_hashtable, short int n
 		//now it depends on the algorithms. If we are going between the two timeorders, we don't have to do anything, since we have decided we will not split already performed aggregations. However, if we are going to or from the time window algorithm, we will need to reorder the whole list.
 		if((selected_alg == TIME_WINDOW_SCHEDULER) || (new_alg == TIME_WINDOW_SCHEDULER))
 		{
-			//TODO
+			reorder_timeline(new_alg, new_max_aggregation_size);
 		}
 	}
 
@@ -207,7 +207,7 @@ void change_selected_alg(int new_alg, short int new_needs_hashtable, short int n
 /*	FUNCTIONS TO CHANGE THE CURRENT DATA STRUCTURE BETWEEN HASHTABLE AND TIMELINE	*/
 /**********************************************************************************************************************/
 //re
-void put_all_requests_in_timeline(struct agios_list_head *related_list, int new_alg, struct request_file_t *req_file, hash)
+void put_all_requests_in_timeline(struct agios_list_head *related_list, int new_alg, struct request_file_t *req_file, unsigned long hash)
 {
 	struct request_t *req, *aux_req=NULL;
 	
@@ -219,7 +219,7 @@ void put_all_requests_in_timeline(struct agios_list_head *related_list, int new_
 			timeline_add_req(aux_req, 1, new_alg, req_file); //we give 1 as max aggregation size because it is not necessary to try to aggregate requests, as they are already aggregated. We could have a difference in max_aggregation_size, but we have decided to make this change soft, i.e., it will affect new requests only 
 		}
 		aux_req = req;
-		dec_hashlist_reqcounter();
+		dec_hashlist_reqcounter(hash);
 	}
 	if(aux_req)
 	{
@@ -227,8 +227,18 @@ void put_all_requests_in_timeline(struct agios_list_head *related_list, int new_
 		timeline_add_req(aux_req, 1, new_alg, req_file);
 	}
 }
+void put_req_in_hashtable(struct request_t *req)
+{
+	unsigned long hash;
+
+	agios_list_del(&req->related);
+	hash = hashtable_add_req(req, req->globalinfo->req_file);
+	inc_hashlist_reqcounter(hash);
+	
+}
 void put_req_file_in_timeline(struct request_file_t *req_file, struct agios_list_head *timeline_files)
 {
+	//TODO when using predict, we will continue to use the request_file_t structures in the hashtable, so maybe we cannot remove them, but just copy the used parts
 	struct agios_list_head *insertion_place;
 	struct request_file_t *other_req_file;
 
@@ -243,6 +253,44 @@ void put_req_file_in_timeline(struct request_file_t *req_file, struct agios_list
 		}
 	//add it to timeline_files
 	agios_list_add_tail(&req_file->hashlist, insertion_place);
+}
+void put_req_file_in_hashtable(struct request_file_t *req_file)
+{
+	//TODO when using predict, we will have request_file_t structures at the hashtable already. So when copying, we need to check if it already exists and then merge them
+	unsigned long hash;
+	struct agios_list_head *hash_list;
+	struct agios_list_head *insertion_place;
+	struct request_file_t *tmp_req_file;
+
+	//remove from current location
+	agios_list_del(&req_file->hashlist);
+
+	hash = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES;
+	hash_list = get_hashlist(hash)
+	
+	//find the position to put new req_file structure
+	insertion_place = hash_list;
+	agios_list_for_each_entry(tmp_req_file, hash_list, hashlist)
+	{
+		if(strcmp(req_file->file_id, tmp_req_file->file_id) >= 0)
+		{
+			insertion_place = &tmp_req_file->hashlist;
+			break;
+		}
+	}
+	agios_list_add_tail(&req_file->hashlist, insertion_place);
+}
+void put_all_req_file_in_hashtable(struct agios_list_head *timeline_files)
+{
+	struct request_file_t *req_file, *aux_req_file=NULL;
+	agios_list_for_each_entry(req_file, timeline_files, hashlist)
+	{
+		if(aux_req_file)
+			put_req_file_in_hashtable(aux_req_file);
+		aux_req_file = req_file;
+	}
+	if(aux_req_file)
+		put_req_file_in_hashtable(aux_req_file);
 }
 //gets all requests from hashtable and move them to the timeline. Also move all request_file_t structures to the timeline_files list. No need to hold mutexes, but NO OTHER THREAD may be using any of these data structures.
 void migrate_from_hashtable_to_timeline(int new_alg)
@@ -274,6 +322,30 @@ void migrate_from_hashtable_to_timeline(int new_alg)
 		if(aux_req_file)
 			put_req_file_in_timeline(aux_req_file, timeline_files);
 	}
+}
+//gets al requests from timeline and move them to the hashtable. Also move all request_file_t structures to the hashtable to we keep statistics. No need to hold mutexes, but NO OTHER THREAD may be using any of these data structures
+void migrate_from_timeline_to_hashtable(int new_alg)
+{
+	struct agios_list_head *timeline, *timeline_files;
+	struct request_t *req, *aux_req=NULL;
+
+	timeline = get_timeline()
+	timeline_files = get_timeline_files();
+
+	//move all request_file_t structures to the hashtable so they will already be there when we move the requests
+	put_all_req_file_in_hashtable(timeline_files);
+
+	//move all requests
+	agios_list_for_each_entry(req, timeline, related)
+	{
+		if(aux_req)
+		{
+			put_req_in_hashtable(aux_req);	
+		}
+		aux_req = req;
+	}
+	if(aux_req)
+		put_req_in_hashtable(aux_req);	
 }
 
 
@@ -657,7 +729,7 @@ int agios_add_request(char *file_id, int type, long long offset, long len, int d
 	if (req) {
 		if(scheduler_needs_hashtable)
 		{
-			hash = hashtable_add_req(req);
+			hash = hashtable_add_req(req, NULL);
 			inc_hashlist_reqcounter(hash); //had to remove it from inside __hashtable_add_req because that function is also used for prediction requests. we do not want to count them as requests for the scheduling algorithms
 			if(predict_request_aggregation)
 				prediction_newreq(req);
