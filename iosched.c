@@ -3,11 +3,13 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
+ * Collaborators:
+ *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
- *		It provides the implementation for the five scheduling algorithms. 
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
+ *		It provides the interface to the scheduling algorithms. 
+ *		Further information is available at http://agios.bitbucket.org/
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
@@ -48,6 +50,16 @@
 #include "consumer.h"
 #include "agios_config.h"
 
+#include "TO.h"
+#include "MLF.h"
+#include "SRTF.h"
+#include "SJF.h"
+#include "TW.h"
+#include "AIOLI.h"
+
+
+static AGIOS_LIST_HEAD(io_schedulers); //the list of scheduling algorithms (with their parameters)
+
 /*for calculating alpha during execution, which represents the ability to overlap waiting time with processing other requests*/
 static unsigned long long int time_spent_waiting=0;
 static unsigned long long int waiting_time_overlapped=0;
@@ -61,15 +73,7 @@ inline unsigned long long int get_waiting_time_overlapped(void)
 	return waiting_time_overlapped;
 }
 
-/*for MLF scheduler*/
-static int MLF_current_hash=0;
-static int *MLF_lock_tries=NULL;
-/*for aIOLi*/
-static unsigned long long int aioli_quantum; 
-static struct timespec aioli_start;
-
-
-/*cleans up request_t structures after procesisng requests*/
+/*cleans up request_t structures after processing requests*/
 void generic_post_process(struct request_t *req)
 {
 	struct request_t *sub_req, *aux_req=NULL;
@@ -99,48 +103,21 @@ void generic_post_process(struct request_t *req)
 		}
 	}
 }
-/* **** ***************** **** *
- * Simple 'Time order' scheduler
- * **** ***************** **** */
-void timeorder(void *clnt)
+/* post process function for scheduling algorithms which use waiting times (AIOLI and MLF)*/
+void waiting_algorithms_postprocess(struct request_t *req)
 {
-	struct request_t *req;	
-	
-	while(get_current_reqnb() > 0)
+	req->globalinfo->lastfinaloff = req->io_data.offset + req->io_data.len;	
+	/*try to detect the shift phenomenon*/
+	if((req->io_data.offset < req->globalinfo->laststartoff) && (!req->globalinfo->predictedoff))
 	{
-		timeline_lock();
-		req = timeline_oldest_req();
-		if(req)
-		{
-			process_requests(req, (struct client *)clnt, -1); //we give -1 as the hash so the process_requests function will realize we are taking requests from the timeline, not from the hashtable	
-			generic_post_process(req);
-		}
-		timeline_unlock();
-	}
+		req->globalinfo->predictedoff = req->globalinfo->lastfinaloff; 
+	}	
+	req->globalinfo->laststartoff = req->io_data.offset;
+
+	generic_post_process(req);
 }
 
-void simple_timeorder(void *clnt)
-{
-	timeorder(clnt); //the difference between them is in the inclusion of requests, the processing is the same
-}
-
-/**************************************
- *
- * Time Window scheduling algorithm
- *
- **************************************/
-void time_window(void *clnt)
-{
-	timeorder(clnt); // The difference between them in in the inclusion of requests, the processing is the same
-}
-
-/**************************************
- *
- * MLF scheduling algorithm
- *
- **************************************/
-
-
+//this function is used by MLF and by AIOLI. These two schedulers use a sched_factor that increases as request stays in the scheduler queues.
 inline void increment_sched_factor(struct request_t *req)
 {
 	if(req->sched_factor == 0)
@@ -149,31 +126,7 @@ inline void increment_sched_factor(struct request_t *req)
 		req->sched_factor = req->sched_factor << 1;
 }
 
-/*selects a request from a queue (and applies MLF on this queue)*/
-struct request_t *applyMLFonlist(struct related_list_t *reqlist)
-{
-	int found=0;
-	struct request_t *req, *selectedreq=NULL;
-
-	agios_list_for_each_entry(req, &(reqlist->list), related)
-	{
-		/*first, increment the sched_factor. This must be done to ALL requests, every time*/
-		increment_sched_factor(req);
-		if(!found)
-		{
-			/*see if the request's quantum is large enough to allow its execution*/
-			if((req->sched_factor*MLF_QUANTUM) >= req->io_data.len)
-			{
-				selectedreq = req; 
-				found = 1; /*we select the first possible request because we want to process them by offset order, and the list is ordered by offset. However, we do not stop the for loop here because we still have to increment the sched_factor of all requests (which is equivalent to increase their quanta)*/
-			}
-		}
-	}
-	
-	return selectedreq;
-}
-
-/*see if we should wait before executing this request*/
+/*used by MLF and AIOLI. After selecting a virtual request for processing, checks if it should be processed right away or if it's better to wait for a while*/
 inline struct request_t *checkSelection(struct request_t *req, struct request_file_t *req_file)
 {
 	struct request_t *retrn = req;
@@ -222,38 +175,6 @@ inline struct request_t *checkSelection(struct request_t *req, struct request_fi
 	return retrn;
 }
 
-/*selects a request from the queues associated with the file req_file*/
-inline struct request_t *MLF_select_request(struct request_file_t *req_file)
-{
-	struct request_t *req=NULL;
-
-	if(!agios_list_empty(&req_file->related_reads.list))
-	{
-		req = applyMLFonlist(&(req_file->related_reads)); 
-	}
-	if((!req) && (!agios_list_empty(&req_file->related_writes.list)))
-	{
-		req = applyMLFonlist(&(req_file->related_writes));
-	}
-	if(req)
-		req = checkSelection(req, req_file);
-	return req;
-	//TODO consistency
-}
-
-/*cleans up after processing a request*/
-void MLF_postprocess(struct request_t *req)
-{
-	req->globalinfo->lastfinaloff = req->io_data.offset + req->io_data.len;	
-	/*try to detect the shift phenomenon*/
-	if((req->io_data.offset < req->globalinfo->laststartoff) && (!req->globalinfo->predictedoff))
-	{
-		req->globalinfo->predictedoff = req->globalinfo->lastfinaloff; 
-	}	
-	req->globalinfo->laststartoff = req->io_data.offset;
-
-	generic_post_process(req);
-}
 /*sleeps for timeout ns*/
 static void agios_wait(unsigned long long int  timeout, char *file)
 {
@@ -281,6 +202,7 @@ static void agios_wait(unsigned long long int  timeout, char *file)
 #endif
 }
 
+//used by AIOLI and MLF, the algorithms which employ waiting times. Since we try not to wait (when waiting on one file, we go on processing requests to other files), every time we try to get requests from a file we need to update its waiting time to see if it is still waiting or not
 void update_waiting_time_counters(struct request_file_t *req_file, unsigned long long int *smaller_waiting_time, struct request_file_t **swt_file )
 {
 	unsigned long long int elapsed;
@@ -304,594 +226,16 @@ void update_waiting_time_counters(struct request_file_t *req_file, unsigned long
 	
 }
 
-/*main function for the MLF scheduler. Selects requests, processes and then cleans up them. Returns only after consuming all requests*/
-void MLF(void *clnt)
-{	
-	struct request_t *req;
-	struct agios_list_head *reqfile_l;
-	struct request_file_t *req_file;
-	unsigned long long int smaller_waiting_time=~0;	
-	struct request_file_t *swt_file=NULL;
-	int starting_hash = MLF_current_hash;
-	int processed_requests = 0;
-
-	PRINT_FUNCTION_NAME;
-
-	/*search through all the files for requests to process*/
-	while(get_current_reqnb() > 0)
-	{
-		/*try to lock the line of the hashtable*/
-		reqfile_l = hashtable_trylock(MLF_current_hash);
-		if(!reqfile_l) /*could not get the lock*/
-		{
-			if(MLF_lock_tries[MLF_current_hash] >= MAX_MLF_LOCK_TRIES)
-				/*we already tried the max number of times, now we will wait until the lock is free*/
-				reqfile_l = hashtable_lock(MLF_current_hash);
-			else 
-				MLF_lock_tries[MLF_current_hash]++;
-		}
-			
-			
-		if(reqfile_l) //if we got the lock
-		{
-			MLF_lock_tries[MLF_current_hash]=0;
-
-			if(get_hashlist_reqcounter(MLF_current_hash) > 0) //see if we have requests for this line of the hashtable
-			{
-				debug("got the lock for hash %d", MLF_current_hash);
-
-		                agios_list_for_each_entry(req_file, reqfile_l, hashlist)
-				{
-					/*do a MLF step to this file, potentially selecting a request to be processed*/
-					/*but before we need to see if we are waiting new requests to this file*/
-					if(req_file->waiting_time > 0)
-					{
-						update_waiting_time_counters(req_file, &smaller_waiting_time, &swt_file );
-					}
-
-					req = MLF_select_request(req_file);
-					if((req) && (req_file->waiting_time <= 0))
-					{
-						/*removes the request from the hastable*/
-						__hashtable_del_req(req);
-						/*sends it back to the file system*/
-						process_requests(req, (struct client *)clnt, MLF_current_hash);
-						processed_requests++;
-						/*cleanup step*/
-						MLF_postprocess(req);
-					}
-					else if(req_file->waiting_time > 0)
-						debug("this file is waiting for now, so no processing");
-				}
-				debug("freeing the lock for hash %d", MLF_current_hash);
-			}
-			hashtable_unlock(MLF_current_hash);
-		}	
-		MLF_current_hash++;
-		if(MLF_current_hash >= AGIOS_HASH_ENTRIES)
-			MLF_current_hash = 0;
-		if(MLF_current_hash == starting_hash) /*it means we already went through all the file structures*/
-		{
-			if((processed_requests == 0) && (swt_file))
-			{
-				/*if we can not process because every file is waiting for something, we have no choice but to sleep a little (the other choice would be to continue active waiting...)*/
-				debug("could not avoid it, will have to wait %llu", smaller_waiting_time);
-				agios_wait(smaller_waiting_time, swt_file->file_id);	
-				swt_file->waiting_time = 0;
-				swt_file = NULL;
-				smaller_waiting_time = ~0;
-			}	
-			processed_requests=0; /*restart the counting*/
-		} 
-	}
-}
-
-static int MLF_init()
-{
-	int i;
-
-	PRINT_FUNCTION_NAME;
-
-	time_spent_waiting=0;
-	waiting_time_overlapped=0;
-	MLF_lock_tries = agios_alloc(sizeof(int)*(AGIOS_HASH_ENTRIES+1));
-	if(!MLF_lock_tries)
-	{
-		agios_print("AGIOS: cannot allocate memory for MLF structures\n");
-		return 0;
-	}
-	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
-		MLF_lock_tries[i]=0;
-	
-	return 1;
-}
-
-static void MLF_exit()
-{
-	PRINT_FUNCTION_NAME;
-	agios_free(MLF_lock_tries);
-}
-
-/**************************************
- *
- * aIOLi scheduling algorithm
- *
- **************************************/
-static int AIOLI_init()
+//used by AIOLI and MLF to init the waiting time statistics
+void generic_init()
 {
 	time_spent_waiting=0;
-	waiting_time_overlapped=0;
-	aioli_quantum = 0;
-	agios_gettime(&aioli_start);
-	return 1;
-}
-
-int AIOLI_select_from_list(struct related_list_t *related_list, struct related_list_t **selected_queue, unsigned int *selected_timestamp)
-{
-	int reqnb = 0;
-	struct request_t *req;
-
-	PRINT_FUNCTION_NAME;
-
-	agios_list_for_each_entry(req, &related_list->list, related)
-	{
-		increment_sched_factor(req);
-		if(&(req->related) == related_list->list.next) //we only try to select the first request from the queue (to respect offset order), but we don't break the loop because we want all requests to have their sched_factor incremented.
-		{
-			if(req->io_data.len <= req->sched_factor*AIOLI_QUANTUM) //all requests start by a fixed size quantum (AIOLI_QUANTUM), which is increased every step (by increasing the sched_factor). The request can only be processed when its quantum is large enough to fit its size.
-			{
-				reqnb = req->reqnb;
-				*selected_queue = related_list;
-				*selected_timestamp = req->timestamp;
-			}	
-		}
-	} 
-	
-	return reqnb;
-}
-
-int AIOLI_select_from_file(struct request_file_t *req_file, struct related_list_t **selected_queue, unsigned int *selected_timestamp)
-{
-	int reqnb=0;
-//	PRINT_FUNCTION_NAME;
-	// First : on related read requests
-	if (!agios_list_empty(&req_file->related_reads.list))
-	{
-		reqnb = AIOLI_select_from_list(&req_file->related_reads, selected_queue, selected_timestamp);
-	}
-	if((reqnb == 0) && (!agios_list_empty(&req_file->related_writes.list)))
-	{
-		reqnb = AIOLI_select_from_list(&req_file->related_writes, selected_queue, selected_timestamp);
-	}
-	return reqnb;
-}
-
-struct related_list_t *AIOLI_select_queue(int *selected_index)
-{
-	int i;
-	struct agios_list_head *reqfile_l;
-	struct request_file_t *req_file;
-	unsigned long long int smaller_waiting_time=~0;	
-	struct request_file_t *swt_file=NULL;
-	int reqnb;
-	struct related_list_t *tmp_selected_queue=NULL;
-	struct related_list_t *selected_queue = NULL;
-	unsigned int tmp_timestamp;
-	unsigned int selected_timestamp=~0;
-	int waiting_options=0;
-	struct request_t *req=NULL;
-
-//	PRINT_FUNCTION_NAME;
-		
-	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //try to select requests from all the files
-	{
-		reqfile_l = hashtable_lock(i);
-		if(!agios_list_empty(reqfile_l))
-		{
-			agios_list_for_each_entry(req_file, reqfile_l, hashlist)
-			{
-				if(req_file->waiting_time > 0)
-				{
-					update_waiting_time_counters(req_file, &smaller_waiting_time, &swt_file );	
-					if(req_file->waiting_time > 0)
-						waiting_options++;
-				}
-				if(req_file->waiting_time <= 0)	
-				{
-					tmp_selected_queue=NULL;
-					reqnb = AIOLI_select_from_file(req_file, &tmp_selected_queue, &tmp_timestamp );
-					if(reqnb > 0)
-					{
-						if(tmp_timestamp < selected_timestamp) //FIFO between the different files
-						{
-							selected_timestamp = tmp_timestamp;
-							selected_queue = tmp_selected_queue;
-							*selected_index = i;
-						}
-					}	
-				}
-				
-			}
-		}
-		hashtable_unlock(i);
-	}
-	if(selected_queue) //if we were able to select a queue
-	{
-		hashtable_lock(*selected_index);
-		req = agios_list_entry(selected_queue->list.next, struct request_t, related); 
-		if(!checkSelection(req, selected_queue->req_file))  //test to see if we should wait (the function returns NULL when we have to wait)
-		{
-			selected_queue = NULL;
-		}
-		hashtable_unlock(*selected_index);
-	}
-	else if(waiting_options) // we could not select a queue, because all the files are waiting. So we should wait
-	{
-		debug("could not avoid it, will have to wait %llu", smaller_waiting_time);
-		agios_wait(smaller_waiting_time, swt_file->file_id);	
-		swt_file->waiting_time = 0;
-	}
-	return selected_queue;
-}
-
-/*return the next quantum considering how much of the last one was used*/
-inline unsigned long long int adjust_quantum(unsigned long long int elapsed_time, unsigned long long int quantum, int type)
-{
-	unsigned long long int requiredqt;
-	unsigned long long int max_bound;
-	unsigned long long int used_quantum_rate = (elapsed_time*100)/quantum;
-
-	/*adjust the next quantum considering how much of the last one was really used*/
-	
-	if(used_quantum_rate >= 175) /*we used at least 75% more than what was given*/
-	{
-		requiredqt = quantum*2;
-	}
-	else if(used_quantum_rate >= 125) /*we used at least 25% more than what was given*/
-	{
-		requiredqt = (quantum*15)/10;
-	}
-	else if(used_quantum_rate >= 75) /*we used at least 75% of the given quantum*/
-	{
-		requiredqt = quantum;
-	}
-	else /*we used less than 75% of the given quantum*/
-	{
-		requiredqt = quantum/2;
-	}
-		
-	if(requiredqt <= 0)
-		requiredqt = ANTICIPATORY_VALUE(type);
-	else	
-	{
-		max_bound = (get_access_time(AIOLI_QUANTUM,type)*MAX_AGGREG_SIZE);
-		if(requiredqt > max_bound)
-			requiredqt = max_bound;
-	}
-
-	return requiredqt;
+	waiting_time_overlapped = 0;
 }
 
 
-void AIOLI(void *clnt)
-{
-	struct related_list_t *AIOLI_selected_queue=NULL;
-	int selected_hash = 0;
-	struct request_t *req;
-	long long int remaining=0;
-	int type;
-
-	PRINT_FUNCTION_NAME;
-	while(get_current_reqnb() > 0)
-	{
-		/*1. select a request*/
-		AIOLI_selected_queue = AIOLI_select_queue(&selected_hash);
-		if(AIOLI_selected_queue)
-		{
-			hashtable_lock(selected_hash);
-			//here we assume the list is NOT empty. It makes sense, since the other thread could have obtained the mutex, but only to include more requests, which would not make the list empty. If we ever have more than one thread consuming requests, this needs to be ensured somehow.
-
-			/*we selected a queue, so we process requests from it until the quantum rans out*/
-			aioli_quantum = AIOLI_selected_queue->nextquantum;
-			agios_gettime(&aioli_start);
-
-			remaining=0;
-			do
-			{
-				//get the first request from this queue (because we need to keep the offset order within each queue
-				agios_list_for_each_entry(req, &(AIOLI_selected_queue->list), related)
-					break;
-
-				if((remaining > 0) && (get_access_time(req->io_data.len, req->type) > remaining)) //we are using leftover quantum, but the next request is not small enough to fit in this space, so we just stop processing requests from this queue
-					break;
-			
-				type = req->type;
-				/*removes the request from the hastable*/
-				__hashtable_del_req(req);
-				/*sends it back to the file system*/
-				process_requests(req, (struct client *)clnt, selected_hash);
-				/*cleanup step*/
-				MLF_postprocess(req);
-				
-				/*lets see if we expired the quantum*/	
-				remaining = aioli_quantum - get_nanoelapsed(aioli_start);
-			} while((!agios_list_empty(&AIOLI_selected_queue->list)) && (remaining > 0));
-			
-			/*here we either ran out of quantum, or of requests. Adjust the next quantum to be given to this queue considering this*/
-			if(remaining <= 0) /*ran out of quantum*/
-			{		
-				if(aioli_quantum == 0) //it was the first time executing from this queue, we don't have information enough to decide the next quantum this file should receive, so let's just give it a default value
-				{
-					AIOLI_selected_queue->nextquantum = ANTICIPATORY_VALUE(type);
-				}
-				else //we had a quantum and it was enough
-				{
-					AIOLI_selected_queue->nextquantum = adjust_quantum(aioli_quantum-remaining, aioli_quantum, type);
-				}
-			}
-			else /*ran out of requests*/
-			{
-				AIOLI_selected_queue->nextquantum = adjust_quantum(aioli_quantum-remaining, aioli_quantum, type);
-			}
-
-
-			hashtable_unlock(selected_hash);
-		}
-	}
-}
-
-
-
-/**************************************
- *
- * SJF scheduling algorithm
- *
- **************************************/
-inline int SJF_check_queue(struct related_list_t *related_list, long long min_size)
-{
-	if(related_list->current_size <= 0) //we dont have requests, cannot select this queue
-		return 0; 
-	else
-	{
-		if(related_list->current_size < min_size)
-			return 1;
-		else
-			return 0;
-	}
-}
-
-struct related_list_t *SJF_get_shortest_job(int *current_hash)
-{
-	int i;
-	struct agios_list_head *reqfile_l;
-	long long min_size = LLONG_MAX;
-	struct related_list_t *chosen_queue=NULL;
-	int chosen_hash=0;
-	struct request_file_t *req_file;
-	int evaluated_reqfiles=0;
-	int reqfilenb = get_current_reqfilenb();
-	
-	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
-	{
-		reqfile_l = hashtable_lock(i);
-		
-		agios_list_for_each_entry(req_file, reqfile_l, hashlist)
-		{
-			if((!agios_list_empty(&req_file->related_writes.list)) || (!agios_list_empty(&req_file->related_reads.list)))
-			{	 
-				debug("file %s, related_reads com %lld e related_writes com %lld, min_size is %lld\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size, min_size);
-				if((req_file->related_reads.current_size < 0) || (req_file->related_writes.current_size < 0))
-				{
-					printf("PANIC! current_size for file %s is %lld and %lld\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size);
-					exit(-1);			
-				}
-				evaluated_reqfiles++; //we count only files that have requests (others could have predicted requests but no actual ones)
-				if((req_file->related_reads.current_size > 0) && (req_file->related_reads.current_size < min_size))
-				{
-					debug("selecting from reads\n");
-					min_size = req_file->related_reads.current_size;
-					chosen_queue = &req_file->related_reads;
-					chosen_hash = i;
-				}
-				if((req_file->related_writes.current_size > 0) && (req_file->related_writes.current_size < min_size)) //TODO shouldn't it be else if?
-				{
-					debug("selecting from writes\n");
-					min_size = req_file->related_writes.current_size;
-					chosen_queue = &req_file->related_writes;
-					chosen_hash = i;
-				}
-			}
-		}
-		hashtable_unlock(i);
-		if(evaluated_reqfiles >= reqfilenb)
-		{
-			debug("went through all reqfiles, stopping \n");
-			break;
-		}
-
-	}
-	if(!chosen_queue)
-	{
-		printf("PANIC! There are requests to be processed, but SJF cant pick a queue...\n");
-		exit(-1);
-	}
-
-	*current_hash = chosen_hash;
-	return chosen_queue;
-}
-void SJF_postprocess(struct request_t *req)
-{
-	generic_post_process(req);
-}
-
-/*main function for the SJF scheduler. Selects requests, processes and then cleans up them. Returns only after consuming all requests*/
-void SJF(void *clnt)
-{	
-	int SJF_current_hash=0;
-	struct related_list_t *SJF_current_queue;
-	struct request_t *req;
-
-
-
-	while(get_current_reqnb() > 0)
-	{
-		/*1. find the shortest queue*/
-		SJF_current_queue = SJF_get_shortest_job(&SJF_current_hash);
-
-		if(SJF_current_queue)
-		{
-	
-			hashtable_lock(SJF_current_hash);
-
-			/*2. select its first request and process it*/	
-			if(!agios_list_empty(&SJF_current_queue->list))
-			{
-				req = agios_list_entry(SJF_current_queue->list.next, struct request_t, related);
-				if(req)
-				{
-					/*removes the request from the hastable*/
-					__hashtable_del_req(req);
-					/*sends it back to the file system*/
-					process_requests(req, (struct client *)clnt, SJF_current_hash);
-					/*cleanup step*/
-					SJF_postprocess(req);
-				}
-			}
-			else
-			{
-				printf("PANIC! We selected a queue, but couldnt get the request from it\n");
-				exit(-1);
-			}
-
-			hashtable_unlock(SJF_current_hash);
-		}
-	}
-}
-
-
-/**************************************
- *
- * SRTF scheduling algorithm
- *
- **************************************/
-int SRTF_check_queue(struct related_list_t *related_list, struct related_list_t *predicted_list, long long *min_size)
-{
-	if(related_list->current_size <= 0) //we dont have requests in this queue, it cannot be selected
-		return 0;
-	else
-	{
-		if((predicted_list->current_size == 0) || (predicted_list->current_size < related_list->current_size))
-			predicted_list->current_size = related_list->current_size*2; //if we dont have predictions (or they were wrong), we assume we have half of the requests //WARNING: we can never use current_size of a predicted list to see if it is empty
-		if((predicted_list->current_size - related_list->current_size) < *min_size)
-			*min_size = predicted_list->current_size - related_list->current_size;
-		return 1;			
-	}
-}
-
-struct related_list_t *SRTF_select_a_queue(int *current_hash)
-{
-	int i;
-	struct agios_list_head *reqfile_l;
-	long long min_size = LLONG_MAX;
-	struct related_list_t *chosen_queue=NULL;
-	struct request_file_t *req_file;
-	int evaluated_reqfiles=0;
-	int chosen_hash=0;
-	int reqfilenb = get_current_reqfilenb();
-	
-	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
-	{
-		reqfile_l = hashtable_lock(i);
-		
-		agios_list_for_each_entry(req_file, reqfile_l, hashlist)
-		{
-			if((!agios_list_empty(&req_file->related_writes.list)) || (!agios_list_empty(&req_file->related_reads.list)))
-			{	 
-				debug("file %s, related_reads com %lld e related_writes com %lld, min_size is %lld\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size, min_size);
-				if((req_file->related_reads.current_size < 0) || (req_file->related_writes.current_size < 0))
-				{
-					printf("PANIC! current_size for file %s is %lld and %lld\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size);
-					exit(-1);			
-				}
-				evaluated_reqfiles++;
-
-				if(SRTF_check_queue(&req_file->related_reads, &req_file->predicted_reads, &min_size))
-				{
-					debug("selecting from reads\n");
-					chosen_queue = &req_file->related_reads;
-					chosen_hash = i;
-				}
-				if(SRTF_check_queue(&req_file->related_writes, &req_file->predicted_writes, &min_size))
-				{
-					debug("selecting from writes\n");
-					chosen_queue = &req_file->related_writes;
-					chosen_hash = i;
-				}
-			}
-		}
-		hashtable_unlock(i);
-		if(evaluated_reqfiles >= reqfilenb)
-		{
-			debug("went through all reqfiles, stopping \n");
-			break;
-		}
-
-	}
-	*current_hash = chosen_hash;
-	return chosen_queue;
-}
-
-void SRTF(void *clnt)
-{
-	int SRTF_current_hash=0;
-	struct related_list_t *SRTF_current_queue;
-	struct request_t *req;
-
-
-
-	while(get_current_reqnb() > 0)
-	{
-		/*1. find the shortest queue*/
-		SRTF_current_queue = SRTF_select_a_queue(&SRTF_current_hash);
-
-		if(SRTF_current_queue)
-		{
-	
-			hashtable_lock(SRTF_current_hash);
-
-			/*2. select its first request and process it*/	
-			if(!agios_list_empty(&SRTF_current_queue->list))
-			{
-				req = agios_list_entry(SRTF_current_queue->list.next, struct request_t, related);
-				if(req)
-				{
-					/*removes the request from the hastable*/
-					__hashtable_del_req(req);
-					/*sends it back to the file system*/
-					process_requests(req, (struct client *)clnt, SRTF_current_hash);
-					/*cleanup step*/
-					generic_post_process(req);
-				}
-			}
-			else
-			{
-				printf("PANIC! We selected a queue, but couldnt get the request from it\n");
-				exit(-1);
-			}
-
-			hashtable_unlock(SRTF_current_hash);
-		}
-	}
-	
-}
-
-/**************************************
- *
- * I/O schedulers manager
- *
- **************************************/
-
-// Return 1 if it succeeded
+//updates the consumer structure with the current scheduler indicated by index. If this scheduler needs an initialization function, calls it
+//TODO if we call MLF_init or AIOLI_init (generic_init) they will set waiting time statistics to 0. When dynamically changing scheduling algorithms, do we really want this? 
 int initialize_scheduler(int index, void *consumer) {
 	int ret=1;
 	
@@ -905,8 +249,6 @@ int initialize_scheduler(int index, void *consumer) {
 
 	return ret;
 }
-
-static AGIOS_LIST_HEAD(io_schedulers);
 
 struct io_scheduler_instance_t *find_io_scheduler(int index)
 {
@@ -951,6 +293,7 @@ void register_static_io_schedulers(void)
 			.max_aggreg_size = MAX_AGGREG_SIZE_MLF,
 			.sync=0,
 			.needs_hashtable=1,
+			.can_be_dynamically_selected=1,
 			.name = "MLF",
 			.index = 0,
 		},
@@ -961,6 +304,7 @@ void register_static_io_schedulers(void)
 			.max_aggreg_size = MAX_AGGREG_SIZE,
 			.sync=0,
 			.needs_hashtable=0,
+			.can_be_dynamically_selected=1,
 			.name = "TO-agg",
 			.index = 1,
 		},
@@ -971,6 +315,7 @@ void register_static_io_schedulers(void)
 			.max_aggreg_size = MAX_AGGREG_SIZE,
 			.sync=0,
 			.needs_hashtable=1,
+			.can_be_dynamically_selected=1,
 			.name = "SJF",
 			.index = 2,
 		},
@@ -981,6 +326,7 @@ void register_static_io_schedulers(void)
 			.max_aggreg_size = MAX_AGGREG_SIZE,
 			.sync=0,
 			.needs_hashtable=1,
+			.can_be_dynamically_selected=0,
 			.name = "SRTF",
 			.index = 3,
 		},
@@ -991,6 +337,7 @@ void register_static_io_schedulers(void)
 			.max_aggreg_size = MAX_AGGREG_SIZE,
 			.sync=1,
 			.needs_hashtable=1,
+			.can_be_dynamically_selected=1,
 			.name = "aIOLi",
 			.index = 4,
 		},
@@ -1001,6 +348,7 @@ void register_static_io_schedulers(void)
 			.max_aggreg_size = 1,
 			.sync=0,
 			.needs_hashtable=0,
+			.can_be_dynamically_selected=1,
 			.name = "TO",
 			.index = 5,
 		},
@@ -1011,6 +359,7 @@ void register_static_io_schedulers(void)
 			.max_aggreg_size = 1,
 			.sync=0,
 			.needs_hashtable=0, // Não ocupa o hash table, coloca as requisições em uma lista
+			.can_be_dynamically_selected=0,
 			.name = "TW",
 			.index = 6,
 		},
@@ -1021,6 +370,7 @@ void register_static_io_schedulers(void)
 			.max_aggreg_size = 1,
 			.sync = 0,
 			.needs_hashtable= 0,
+			.can_be_dynamically_selected=1,
 			.name = "NOOP"
 			.index = 7,
 		}
@@ -1038,7 +388,7 @@ int get_algorithm_from_string(const char *alg)
 	char *this_alg = malloc(sizeof(char)*strlen(alg));
 
 	if(strcmp(alg, "no_AGIOS") == 0)
-		strcpy(this_alg, "TO"); //TODO there are some situations where even using TO is bad for performance and the best idea would really be to not use AGIOS at all. We could signal the user about this.
+		strcpy(this_alg, "NOOP"); 
 	else
 		strcpy(this_alg, alg);
 	

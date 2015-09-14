@@ -1,4 +1,4 @@
-/* File:	iosched.c
+/* File:	iosched.h
  * Created: 	2012 
  * License:	GPL version 3
  * Author:
@@ -72,6 +72,7 @@ struct io_scheduler_instance_t {
 	short int sync; //should we sync after each request (wait until the client finished processing it)
 	short int needs_hashtable; //if 0, then timeline is used for requests
 	int max_aggreg_size; //maximum number of requests to be aggregated at once
+	short int can_be_dynamically_selected; //some algorithms need special conditions (like available trace files or application ids) or are still experimental, so we may not want them to be selected by the dynamic selectors
 	char name[20];
 	int index;
 
@@ -81,7 +82,6 @@ struct io_scheduler_instance_t {
 void register_static_io_schedulers(void);
 struct io_scheduler_instance_t *find_io_scheduler(int index);
 int initialize_scheduler(int index, void *consumer);
-void setFS_BANDWIDTH(unsigned long value);
 
 inline unsigned long long int get_time_spent_waiting(void);
 inline unsigned long long int get_waiting_time_overlapped(void);
