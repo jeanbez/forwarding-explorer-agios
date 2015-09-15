@@ -44,13 +44,26 @@
 #include <string.h>
 #endif
 
-
-static unsigned int total_reqnb;
-static struct timespec last_req;
-static unsigned long long int global_req_time;
+/***********************************************************************************************************
+ * GLOBAL ACCESS PATTERN STATISTICS *
+ ***********************************************************************************************************/
+//TODO could we have multiple threads accessing the statistics at the same time? So should we protect them?
+static unsigned int total_reqnb; //we have a similar counter in consumer.c, but this one can be reset, that one is fixed
+//to measure time between requests
+static struct timespec last_req; 
+static unsigned long long int global_req_time; 
 static unsigned long long int global_min_req_time;
 static unsigned long long int global_max_req_time;
+//to measure request size
+static unsigned long int global_req_size;
+static unsigned long int global_min_req_size; //TODO do we need long?
+static unsigned long int global_max_req_size;
 
+
+
+/***********************************************************************************************************
+ * LOCAL COPIES OF PARAMETERS *
+ ***********************************************************************************************************/
 static short int proc_needs_hashtable=1;
 
 inline void proc_set_needs_hashtable(short int value)
@@ -59,6 +72,9 @@ inline void proc_set_needs_hashtable(short int value)
 }
 
 
+/***********************************************************************************************************
+ * STATISTICS FILE *
+ ***********************************************************************************************************/
 /*the user-level library uses a file, while the kernel module implementation uses the proc file system interface*/
 #ifndef AGIOS_KERNEL_MODULE
 static FILE *stats_file;  
@@ -73,20 +89,24 @@ static struct file_operations hashtable_proc_ops;
 static int hash_position;
 
 
+/***********************************************************************************************************
+ * FUNCTIONS TO UPDATE STATISTICS UPON EVENTS *
+ ***********************************************************************************************************/
 /*update the stats after the arrival of a new request
  * must hold the hashtable mutex 
- * (is called by the hashtable_add_req function in the request_cache.c file)
  */
 void proc_stats_newreq(struct request_t *req)
 {
 	unsigned long long int elapsedtime=0;
+	long int this_distance;
 
 	if(req->state == RS_PREDICTED)
 	{
-		req->globalinfo->proceedreq_nb++;
+		req->globalinfo->proceedreq_nb++; //we use the related_list structure counter to keep track of predicted requests 
 	}
-	else //is req->state is RS_HASHTABLE
+	else //if req->state is RS_HASHTABLE
 	{
+		//update global statistics on time between requests
 		total_reqnb++;
 		if(total_reqnb > 1)
 		{
@@ -98,16 +118,15 @@ void proc_stats_newreq(struct request_t *req)
 				global_min_req_time = elapsedtime;
 		}
 		get_llu2timespec(req->jiffies_64, &last_req);
-	
-	}
-	req->globalinfo->stats.total_req_size+=req->io_data.len;
-	if(req->io_data.len > req->globalinfo->stats.max_req_size)
-		req->globalinfo->stats.max_req_size = req->io_data.len;
-	if(req->io_data.len < req->globalinfo->stats.min_req_size)
-		req->globalinfo->stats.min_req_size = req->io_data.len;
-	
-	if(req->state == RS_HASHTABLE)
-	{
+		
+		//update global statistics on request size
+		global_req_size += req->io_data.len;
+		if(req->io_data.len > global_max_req_size)
+			global_max_req_size = req->io_data.len;
+		if(req->io_data.len < global_min_req_size)
+			global_min_req_size = req->io_data.len;
+		
+		//update local statistics on time between requests
 		if(req->globalinfo->stats.total_request_time == 0)
 			req->globalinfo->stats.total_request_time = 1;
 		else
@@ -125,7 +144,31 @@ void proc_stats_newreq(struct request_t *req)
 				req->globalinfo->stats.min_request_time = elapsedtime;
 		}
 		get_llu2timespec(req->jiffies_64, &req->globalinfo->stats.last_req_time);
+		
+		//update local statistics on average offset distance between consecutive requests
+		//TODO is it the same thing done by predict when including requests? should we join these codes?
+		if(req->globalinfo->last_received_finaloffset > 0)
+		{
+			if(req->globalinfo->avg_distance == -1)
+				req->globalinfo->avg_distance = 0;
+			this_distance = req->io_data.offset - req->globalinfo->last_received_finaloffset;
+			if(this_distance < 0)
+				this_distance *= -1;
+			this_distance = this_distance/ req->io_data.len; //should we use the last request's size instead of this one?
+			req->globalinfo->avg_distance += this_distance;
+			req->globalinfo->avg_distance_count++;
+		}
+		req->globalinfo->last_received_finaloffset = req->io_data.offset + req->io_data.len;
+	
+	
 	}
+	//update local statistics on request size
+	req->globalinfo->stats.total_req_size+=req->io_data.len;
+	if(req->io_data.len > req->globalinfo->stats.max_req_size)
+		req->globalinfo->stats.max_req_size = req->io_data.len;
+	if(req->io_data.len < req->globalinfo->stats.min_req_size)
+		req->globalinfo->stats.min_req_size = req->io_data.len;
+
 	
 }
 
@@ -136,6 +179,9 @@ void reset_reqstats()
 	global_req_time = 0;
 	global_min_req_time = ~0;
 	global_max_req_time = 0;
+	global_req_size = 0;
+	global_min_req_size = ~0;
+	global_max_req_size=0;
 }
 
 /*updates the stats after an aggregation*/

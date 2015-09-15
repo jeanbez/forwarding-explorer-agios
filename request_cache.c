@@ -425,7 +425,7 @@ struct request_t * request_constructor(char *file_id, int type, long long offset
 //even when requests are kept in timeline (not in these queues), we still have the structures to keep track of statistics
 //this function initializes a related_list structure
 void request_file_init_related_list(struct related_list_t *related_list, struct request_file_t *req_file)
-{
+{//TODO update this with changes made to agios.h
 	init_agios_list_head(&related_list->list);
 
 	related_list->laststartoff = 0;

@@ -214,6 +214,12 @@ inline long config_get_max_trace_buffer_size(void)
 	return config_max_trace_buffer_size;
 }
 
+void config_gossip_algorithm_parameters(int alg)
+{
+//TODO
+	proc_set_needs_hashtable(consumer.io_scheduler->needs_hashtable);
+}
+
 //----------------------------------------------------------------------------------------------------------
 /*returns 0 in case of success*/
 inline short int read_configuration_file(char *config_file)

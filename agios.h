@@ -105,8 +105,6 @@ struct client {
 	void (*process_requests)(int *i, int reqnb);
 #endif
 
-	short int sync; //this parameter is decided by AGIOS, after choosing the scheduling algorithm. 
-
 	/*
 	 * aIOLi calls this to check if device holding file is idle.
 	 * Should be supported by FS client
@@ -117,28 +115,38 @@ struct client {
 struct related_list_t {
 	struct agios_list_head list ;
 
-	long long used_quantum_rate;
-
-	long long laststartoff ;
-									//	we mean 'virtual request'). 
-	long long lastfinaloff ;
-
-	long long predictedoff ;
-									//	proceed, we compute a predicted offset for the next request
-									//	During the next round, if the new request has an offset 
-									//	greater than the predict one, a waiting time period is apply.
-									//	This approach should fix inefficient shift phenomenon.
-									//	Please refer to agios.imag.fr for more informations about 
-									//	this problems.
-	
-	unsigned int lastaggregation ;	// Number of request contained in the last request.
-	int proceedreq_nb;		// Number of read or write request proceed since the open 
-									// of the file
-	
-	unsigned long nextquantum; // For QT purpose only
-	long long current_size;
-	
 	struct request_file_t *req_file;
+
+	//for shift phenomenon detection
+	long long laststartoff ;
+	long long lastfinaloff ;
+	long long predictedoff ;
+
+	//for AIOLI
+	unsigned long nextquantum; 
+
+	//for SJF, SRTF and some statistics
+	long long current_size; //sum of all its requests' sizes (even if they overlap)
+
+	//statistics (and to decide on waiting times)	
+	unsigned int lastaggregation ;	// Number of request contained in the last processed virtual request.
+	int proceedreq_nb;		// Number of processed requests since last reset
+	
+	//statistics on request size
+	unsigned long int total_req_size;
+	unsigned int min_req_size;
+	unsigned int max_req_size;
+
+	//statistics on time between requests
+	unsigned long long int max_request_time;
+	unsigned long long int total_request_time;
+	unsigned long long int min_request_time;
+	struct timespec last_req_time;
+
+	//statistics on average offset difference between consecutive requests
+	long long last_received_finaloffset; //TODO do we need to use long long?
+
+	
 
 	long double avg_distance;
 	int avg_distance_count;
@@ -155,13 +163,6 @@ struct related_list_t {
 		unsigned int 	better_aggregation;
 		unsigned int 	predicted_better_aggregation;
 
-		unsigned long long int total_req_size;
-		unsigned int min_req_size;
-		unsigned int max_req_size;
-		unsigned long long int max_request_time;
-		unsigned long long int total_request_time;
-		unsigned long long int min_request_time;
-		struct timespec last_req_time;
 
 	} stats;
 };

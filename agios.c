@@ -46,15 +46,8 @@ extern int agios_thread_stop;
 extern pthread_mutex_t agios_thread_stop_mutex;
 #endif
 
-struct consumer_t consumer; //the scheduling thread and its parameters
-
-static int selected_alg = -1;
-
-inline int get_selected_alg()
-{
-	return selected_alg;
-}
-
+//start the scheduling thread
+//returns 1 in case of success
 int start_consumer(struct client *clnt)
 {
 	int ret;
@@ -65,38 +58,17 @@ int start_consumer(struct client *clnt)
 	consumer_init(clnt, 1);
 #endif
 
-	selected_alg = config_get_default_algorithm();
-	if(config_get_select_algorithm())
+	ret = agios_start_thread(agios_pthread, agios_thread, "agios_thread", NULL);
+		
+        if(ret != 0)
 	{
-		/*select the scheduling algorithm automatically. First we need to wait for the prediction module to start*/
-		/*ask the prediction module to make this choice*/
-		
-	}
-
-	ret = initialize_scheduler(selected_alg, &consumer); 
-
-	//get scheduling algorithm's parameters
-	set_max_aggregation_size(consumer.io_scheduler->max_aggreg_size);
-	set_needs_hashtable(consumer.io_scheduler->needs_hashtable);
-	clnt->sync = consumer.io_scheduler->sync;
-	proc_set_needs_hashtable(consumer.io_scheduler->needs_hashtable);
-	
-	if (ret == 1) {
-		agios_list_add_tail(&consumer.list, &consumers);
-
-		ret = agios_start_thread(agios_pthread, agios_thread, "agios_thread", (void *) &consumer);
-		
-                if(ret != 0)
-		{
 #ifndef AGIOS_KERNEL_MODULE
-			consumer.task = 0;
+		consumer_set_task(0);
 #endif
-                        agios_print("Unable to start a thread to agios!\n");
-		}
-                else
-                        ret = 1;
-
+                agios_print("Unable to start a thread to agios!\n");
 	}
+	else
+		ret = 1;
 
 	return ret;
 }

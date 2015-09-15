@@ -86,6 +86,14 @@ static pthread_mutex_t request_added_mutex;
 #ifdef AGIOS_KERNEL_MODULE
 static struct completion exited;
 #endif
+#ifdef AGIOS_KERNEL_MODULE
+void consumer_set_task(struct task_struct *value)
+#else
+void consumer_set_task(int value)
+#endif
+{
+	task = value;
+}
 //signal new requests
 void consumer_signal_new_reqs(void)
 {
