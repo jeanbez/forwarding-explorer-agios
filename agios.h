@@ -114,32 +114,6 @@ struct client {
 	int (*is_dev_idle)(void);   //never used
 };
 
-/*
- * We have one consumer thread running for each block device managed by
- * aIOLi, ex. if you have two hard drive then two consumer threads should
- * be running or if you have data stripping then you need one thread per
- * each device.
- * In general we call all those devices "io device".
- */
-struct consumer_t {
-#ifdef AGIOS_KERNEL_MODULE
-	struct task_struct	*task;
-#else
-	int task;
-#endif
-
-
-	
-	/* IO scheduler used by this consumer. */
-	struct io_scheduler_instance_t *io_scheduler;
-
-	struct client		*client;
-
-	int io_device_id;
-
-	struct agios_list_head	list;
-};
-
 struct related_list_t {
 	struct agios_list_head list ;
 

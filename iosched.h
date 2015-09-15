@@ -40,6 +40,10 @@
 #define SIMPLE_TIMEORDER_SCHEDULER 5
 #define TIME_WINDOW_SCHEDULER 6
 #define NOOP_SCHEDULER 7
+#define DYN_TREE_SCHEDULER 8
+
+struct request_t;
+struct request_file_t;
 
 /*
  * Structure describing I/O scheduler operations.
@@ -52,7 +56,7 @@ struct io_scheduler_instance_t {
 	 * Called when new consumer thread using this scheduler is started.
 	 * Intended to allow I/O scheduler to initialized it's private data.
 	 */
-	int (*init)(void);	
+	int (*init)(void); //must return 1 in success	
 
 	/*
 	 * Called when scheduler is no longer use by some thread, but remember
@@ -65,11 +69,15 @@ struct io_scheduler_instance_t {
 	 */
 	void (*schedule)(void *clnt);
 
+	//function provided by dynamic schedulers. It returns the next algorithm to be used
+	int (*select_algorithm)(void);
+
 	/*parameters*/
 	short int sync; //should we sync after each request (wait until the client finished processing it)
 	short int needs_hashtable; //if 0, then timeline is used for requests
 	int max_aggreg_size; //maximum number of requests to be aggregated at once
 	short int can_be_dynamically_selected; //some algorithms need special conditions (like available trace files or application ids) or are still experimental, so we may not want them to be selected by the dynamic selectors
+	short int is_dynamic;
 	char name[20];
 	int index;
 

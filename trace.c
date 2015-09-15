@@ -3,6 +3,8 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
+ * Collaborators:
+ *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
@@ -42,9 +44,22 @@ static int agios_tracefile_buffer_size=0; //occupancy of the buffer. Used to con
 static char *aux_buf = NULL; //this smaller buffer is used by the functions to write a line at a time to the main buffer. We keep it global to avoid having to allocate it multiple times (it is allocated during initialization)
 static int aux_buf_size = 300*sizeof(char); //hard coded
 
-/*configuration options. Obtained at initialization for performance reasons*/
+/*these parameters are obtained from the configuration file. We keep local copies for performance reasons (to avoid calling functions to get them)*/
 static short int agios_config_trace_full=0;
 static long int agios_config_max_trace_buffer_size = 1*1024*1024;
+static short int trace_predict=0;
+void set_trace_agios_config_trace_full(short int value)
+{
+	agios_config_trace_full=value;
+}
+void set_trace_agios_config_max_trace_buffer_size(long int value)
+{
+	agios_config_max_trace_buffer_size=value;
+}
+void set_trace_config_trace_predict(short int value)
+{
+	trace_predict=value;	
+}
 
 //must have trace lock
 void agios_tracefile_flush_buffer()
@@ -155,7 +170,7 @@ void agios_trace_add_request(struct request_t *req)
 //a predicted request was added to the queues
 void agios_trace_predict_addreq(struct request_t *req)
 {
-	if(!config_get_trace_predict())
+	if(!trace_predict)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -236,7 +251,7 @@ void agios_trace_print_predicted_aggregations(struct request_file_t *req_file)
 {
 	int size;
 
-	if(!config_get_trace_predict())
+	if(!trace_predict)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -299,9 +314,6 @@ int agios_trace_init()
 	}
 	else
 		ret =  -1;
-
-	agios_config_max_trace_buffer_size = config_get_max_trace_buffer_size();
-	agios_config_trace_full = config_get_trace_full(); //TODO if we were to change the configuration options during execution, we would need to update this. It is like this for performance reasons
 
 	if(!aux_buf)
 	{

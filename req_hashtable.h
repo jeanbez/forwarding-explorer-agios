@@ -22,6 +22,31 @@
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
+#ifndef _REQ_HASHTABLE_H_
+#define _REQ_HASHTABLE_H_
+
+/*to set local copies of configuration file parameters*/
+inline void set_hashtable_trace_predict(short int value);
+
+/*to access internal counters*/
 inline void dec_hashlist_reqcounter(int hash);
 inline void dec_many_hashlist_reqcounter(int hash, int value);
 inline int get_hashlist_reqcounter(int hash);
+inline void inc_hashlist_reqcounter(int hash);
+
+/*init and exit functions*/
+int hashtable_init(void);
+void hashtable_cleanup(void);
+
+/* to requests management */
+void __hashtable_add_req(struct request_t *req, unsigned long hash_val, struct request_file_t *given_req_file);
+unsigned long hashtable_add_req(struct request_t *req, struct request_file_t *given_req_file);
+inline void __hashtable_del_req(struct request_t *req);
+void hashtable_del_req(struct request_t *req);
+
+/*to access the hashtable from outside*/
+struct agios_list_head *hashtable_lock(int index);
+struct agios_list_head *hashtable_trylock(int index);
+struct agios_list_head *get_hashlist(int index);
+void hashtable_unlock(int index);
+#endif

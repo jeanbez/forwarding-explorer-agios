@@ -250,28 +250,24 @@ void update_waiting_time_counters(struct request_file_t *req_file, unsigned long
 
 //used by AIOLI and MLF to init the waiting time statistics
 void generic_init()
-{
-	time_spent_waiting=0;
-	waiting_time_overlapped = 0;
+{ //I've removed the initialization of the waiting time statistics from here because we don't want them to be reseted every time we change the scehduling algorithm
 }
 
 
 /**********************************************************************************************************************/
 /*	FUNCTIONS TO I/O SCHEDULING ALGORITHMS MANAGEMENT (INITIALIZATION, SETTING, ETC)	*/
 /**********************************************************************************************************************/
-//updates the consumer structure with the current scheduler indicated by index. If this scheduler needs an initialization function, calls it
-//TODO if we call MLF_init or AIOLI_init (generic_init) they will set waiting time statistics to 0. When dynamically changing scheduling algorithms, do we really want this? 
-int initialize_scheduler(int index, void *consumer) {
-	int ret=1;
+//finds and returns the current scheduler indicated by index. If this scheduler needs an initialization function, calls it
+struct io_scheduler_instance_t *initialize_scheduler(int index) {
+	struct io_scheduler_instance_t *ret = find_io_scheduler(index);
 	
-	
-	((struct consumer_t *)consumer)->io_scheduler = find_io_scheduler(index);
-	
-	if (!(((struct consumer_t *)consumer)->io_scheduler))
-		ret = -EINVAL;
-	else if (((struct consumer_t *)consumer)->io_scheduler->init)
-			ret = ((struct consumer_t *)consumer)->io_scheduler->init();
-
+	if(ret)
+	{
+		int this_ret = ret->init();
+		if(this_ret != 1)
+			return NULL
+	}
+		
 	return ret;
 }
 
@@ -315,10 +311,12 @@ void register_static_io_schedulers(void)
 			.init = MLF_init,
 			.exit = MLF_exit,
 			.schedule = &MLF,
+			.select_algorithm = NULL,
 			.max_aggreg_size = MAX_AGGREG_SIZE_MLF,
 			.sync=0,
 			.needs_hashtable=1,
 			.can_be_dynamically_selected=1,
+			.is_dynamic = 0,
 			.name = "MLF",
 			.index = 0,
 		},
@@ -326,10 +324,12 @@ void register_static_io_schedulers(void)
 			.init = NULL,
 			.exit = NULL,
 			.schedule = &timeorder, // Timeorder with aggregation
+			.select_algorithm = NULL,
 			.max_aggreg_size = MAX_AGGREG_SIZE,
 			.sync=0,
 			.needs_hashtable=0,
 			.can_be_dynamically_selected=1,
+			.is_dynamic = 0,
 			.name = "TO-agg",
 			.index = 1,
 		},
@@ -337,10 +337,12 @@ void register_static_io_schedulers(void)
 			.init = NULL,
 			.exit = NULL,
 			.schedule = &SJF,
+			.select_algorithm = NULL,
 			.max_aggreg_size = MAX_AGGREG_SIZE,
 			.sync=0,
 			.needs_hashtable=1,
 			.can_be_dynamically_selected=1,
+			.is_dynamic = 0,
 			.name = "SJF",
 			.index = 2,
 		},
@@ -348,10 +350,12 @@ void register_static_io_schedulers(void)
 			.init = NULL,
 			.exit = NULL,
 			.schedule = &SRTF,
+			.select_algorithm = NULL,
 			.max_aggreg_size = MAX_AGGREG_SIZE,
 			.sync=0,
 			.needs_hashtable=1,
 			.can_be_dynamically_selected=0,
+			.is_dynamic = 0,
 			.name = "SRTF",
 			.index = 3,
 		},
@@ -359,10 +363,12 @@ void register_static_io_schedulers(void)
 			.init = AIOLI_init,
 			.exit = NULL,
 			.schedule = &AIOLI,
+			.select_algorithm = NULL,
 			.max_aggreg_size = MAX_AGGREG_SIZE,
 			.sync=1,
 			.needs_hashtable=1,
 			.can_be_dynamically_selected=1,
+			.is_dynamic = 0,
 			.name = "aIOLi",
 			.index = 4,
 		},
@@ -370,10 +376,12 @@ void register_static_io_schedulers(void)
 			.init = NULL,
 			.exit = NULL,
 			.schedule = &simple_timeorder, // Timeorder
+			.select_algorithm = NULL,
 			.max_aggreg_size = 1,
 			.sync=0,
 			.needs_hashtable=0,
 			.can_be_dynamically_selected=1,
+			.is_dynamic = 0,
 			.name = "TO",
 			.index = 5,
 		},
@@ -381,10 +389,12 @@ void register_static_io_schedulers(void)
 			.init = NULL,
 			.exit = NULL,
 			.schedule = &time_window,
+			.select_algorithm = NULL,
 			.max_aggreg_size = 1,
 			.sync=0,
 			.needs_hashtable=0, // Não ocupa o hash table, coloca as requisições em uma lista
 			.can_be_dynamically_selected=0,
+			.is_dynamic = 0,
 			.name = "TW",
 			.index = 6,
 		},
@@ -392,18 +402,36 @@ void register_static_io_schedulers(void)
 			.init = NULL,
 			.exit = NULL,
 			.schedule = &NOOP,
+			.select_algorithm = NULL,
 			.max_aggreg_size = 1,
 			.sync = 0,
 			.needs_hashtable= 0,
 			.can_be_dynamically_selected=1,
-			.name = "NOOP"
+			.is_dynamic = 0,
+			.name = "NOOP",
 			.index = 7,
+		},
+		{
+			.init = &DYN_TREE_init,
+			.exit = NULL,
+			.schedule = NULL,
+			.select_algorithm = &DYN_TREE_select_next_algorithm,
+			.max_aggreg_size = 1,
+			.sync = 0,
+			.needs_hashtable = 0,
+			.can_be_dynamically_selected = 0,
+			.is_dynamic = 1,
+			.name = "DYN_TREE",
+			.index = 8,
 		}
 	};
 	int i = 0;
 
 	for (i = 0; i < sizeof(scheds) / sizeof(scheds[0]); ++i)
 		register_io_scheduler(&scheds[i]);
+
+	time_spent_waiting=0;
+	waiting_time_overlapped = 0;
 }
 
 int get_algorithm_from_string(const char *alg)

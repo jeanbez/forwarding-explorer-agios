@@ -25,7 +25,7 @@
 #ifndef _MLF_H_
 #define _MLF_H_
 
-static int MLF_init();
-static void MLF_exit();
+int MLF_init();
+void MLF_exit();
 void MLF(void *clnt);
 #endif

@@ -115,10 +115,11 @@ void SRTF(void *clnt)
 	int SRTF_current_hash=0;
 	struct related_list_t *SRTF_current_queue;
 	struct request_t *req;
+	short int update_time=0;
 
 
 
-	while(get_current_reqnb() > 0)
+	while((get_current_reqnb() > 0) && (update_time == 0))
 	{
 		/*1. find the shortest queue*/
 		SRTF_current_queue = SRTF_select_a_queue(&SRTF_current_hash);
@@ -137,7 +138,7 @@ void SRTF(void *clnt)
 					/*removes the request from the hastable*/
 					__hashtable_del_req(req);
 					/*sends it back to the file system*/
-					process_requests(req, (struct client *)clnt, SRTF_current_hash);
+					update_time = process_requests(req, (struct client *)clnt, SRTF_current_hash);
 					/*cleanup step*/
 					generic_post_process(req);
 				}

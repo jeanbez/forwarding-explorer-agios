@@ -25,6 +25,6 @@
 #ifndef _AIOLI_H_
 #define _AIOLI_H_
 
-static int AIOLI_init();
+int AIOLI_init();
 void AIOLI(void *clnt);
 #endif

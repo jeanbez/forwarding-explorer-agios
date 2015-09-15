@@ -25,12 +25,16 @@
 
 #ifdef AGIOS_KERNEL_MODULE
 int agios_thread(void *arg);
+void consumer_init(struct client *clnt_value, struct task_struct *task_value);
 #else
 void * agios_thread(void *arg);
+void consumer_init(struct client *clnt_value, int task_value);
 #endif
+inline void set_consumer_tracing(short int value);
 
+void consumer_signal_new_reqs(void);
 
 void stop_the_agios_thread(void);
-void process_requests(struct request_t *head_req, struct client *clnt, int hash);
+short int process_requests(struct request_t *head_req, struct client *clnt, int hash); //returns a flag pointing if some refresh period has expired (scheduling algorithm should exit so we can check it and perform the necessary actions)
 
 #endif

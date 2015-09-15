@@ -112,7 +112,7 @@ void hashtable_cleanup(void)
  * Locking:
  * 	Must be holding hashlist_locks[hash_val]
  */
-static void __hashtable_add_req(struct request_t *req, unsigned long hash_val, struct request_file_t *given_req_file)
+void __hashtable_add_req(struct request_t *req, unsigned long hash_val, struct request_file_t *given_req_file)
 {
 	struct agios_list_head *hash_list = &hashlist[hash_val];
 	struct request_file_t *req_file = given_req_file;

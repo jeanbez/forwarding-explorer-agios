@@ -126,10 +126,11 @@ void SJF(void *clnt)
 	int SJF_current_hash=0;
 	struct related_list_t *SJF_current_queue;
 	struct request_t *req;
+	short int update_time=0;
 
 
 
-	while(get_current_reqnb() > 0)
+	while((get_current_reqnb() > 0) && (update_time == 0))
 	{
 		/*1. find the shortest queue*/
 		SJF_current_queue = SJF_get_shortest_job(&SJF_current_hash);
@@ -148,7 +149,7 @@ void SJF(void *clnt)
 					/*removes the request from the hastable*/
 					__hashtable_del_req(req);
 					/*sends it back to the file system*/
-					process_requests(req, (struct client *)clnt, SJF_current_hash);
+					update_time = process_requests(req, (struct client *)clnt, SJF_current_hash);
 					/*cleanup step*/
 					SJF_postprocess(req);
 				}

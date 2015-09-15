@@ -21,9 +21,12 @@
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
+#include <stdlib.h>
 #include "agios.h"
 #include "req_timeline.h"
 #include "mylist.h"
+#include "common_functions.h"
+#include "request_cache.h"
 
 
 
@@ -170,7 +173,7 @@ void reorder_timeline(int new_alg, int new_max_aggregation_size)
 	new_timeline->next = new_timeline;
 
 	//get all requests from the previous timeline and include in the new one
-	agios_list_for_each_entry(req, timeline, related)
+	agios_list_for_each_entry(req, &timeline, related)
 	{
 		if(aux_req)
 		{

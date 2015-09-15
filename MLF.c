@@ -48,7 +48,7 @@ static int MLF_current_hash=0;
 static int *MLF_lock_tries=NULL;
 
 
-static int MLF_init()
+int MLF_init()
 {
 	int i;
 
@@ -67,7 +67,7 @@ static int MLF_init()
 	return 1;
 }
 
-static void MLF_exit()
+void MLF_exit()
 {
 	PRINT_FUNCTION_NAME;
 	agios_free(MLF_lock_tries);
@@ -126,11 +126,12 @@ void MLF(void *clnt)
 	struct request_file_t *swt_file=NULL;
 	int starting_hash = MLF_current_hash;
 	int processed_requests = 0;
+	short int update_time=0;
 
 	PRINT_FUNCTION_NAME;
 
 	/*search through all the files for requests to process*/
-	while(get_current_reqnb() > 0)
+	while((get_current_reqnb() > 0) && (update_time == 0))
 	{
 		/*try to lock the line of the hashtable*/
 		reqfile_l = hashtable_trylock(MLF_current_hash);
@@ -167,10 +168,12 @@ void MLF(void *clnt)
 						/*removes the request from the hastable*/
 						__hashtable_del_req(req);
 						/*sends it back to the file system*/
-						process_requests(req, (struct client *)clnt, MLF_current_hash);
+						update_time = process_requests(req, (struct client *)clnt, MLF_current_hash);
 						processed_requests++;
 						/*cleanup step*/
 						waiting_algorithms_postprocess(req);
+						if(update_time)
+							break; //get out of the agios_list_for_each_entry loop
 					}
 					else if(req_file->waiting_time > 0)
 						debug("this file is waiting for now, so no processing");
@@ -179,21 +182,24 @@ void MLF(void *clnt)
 			}
 			hashtable_unlock(MLF_current_hash);
 		}	
-		MLF_current_hash++;
-		if(MLF_current_hash >= AGIOS_HASH_ENTRIES)
-			MLF_current_hash = 0;
-		if(MLF_current_hash == starting_hash) /*it means we already went through all the file structures*/
+		if(update_time == 0) //if update time is 1, we've left the loop without going through all reqfiles, we should not increase the current hash yet
 		{
-			if((processed_requests == 0) && (swt_file))
+			MLF_current_hash++;
+			if(MLF_current_hash >= AGIOS_HASH_ENTRIES)
+				MLF_current_hash = 0;
+			if(MLF_current_hash == starting_hash) /*it means we already went through all the file structures*/
 			{
-				/*if we can not process because every file is waiting for something, we have no choice but to sleep a little (the other choice would be to continue active waiting...)*/
-				debug("could not avoid it, will have to wait %llu", smaller_waiting_time);
-				agios_wait(smaller_waiting_time, swt_file->file_id);	
-				swt_file->waiting_time = 0;
-				swt_file = NULL;
-				smaller_waiting_time = ~0;
-			}	
-			processed_requests=0; /*restart the counting*/
-		} 
+				if((processed_requests == 0) && (swt_file))
+				{
+					/*if we can not process because every file is waiting for something, we have no choice but to sleep a little (the other choice would be to continue active waiting...)*/
+					debug("could not avoid it, will have to wait %llu", smaller_waiting_time);
+					agios_wait(smaller_waiting_time, swt_file->file_id);	
+					swt_file->waiting_time = 0;
+					swt_file = NULL;
+					smaller_waiting_time = ~0;
+				}	
+				processed_requests=0; /*restart the counting*/
+			} 
+		}
 	}
 }

@@ -31,6 +31,8 @@
 #include "request_cache.h"
 #include "predict.h"
 #include "agios_config.h"
+#include "req_hashtable.h"
+#include "req_timeline.h"
 
 #ifdef AGIOS_KERNEL_MODULE
 #include <linux/string.h>

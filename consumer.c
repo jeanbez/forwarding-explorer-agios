@@ -3,6 +3,8 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
+ * Collaborators:
+ *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
@@ -31,6 +33,8 @@
 #include "common_functions.h"
 #include "agios_config.h"
 #include "predict.h"
+#include "req_hashtable.h"
+#include "req_timeline.h"
 
 #ifndef AGIOS_KERNEL_MODULE
 #include <pthread.h>
@@ -38,13 +42,49 @@
 #include <linux/kthread.h>
 #endif
 
+/***********************************************************************************************************
+ * COUNTER FOR PROCESSED REQUESTS 	   *
+ * we need to protect it because when using the NOOP scheduler the thread adding requests will also call *
+ * process_requests, which updates this counter								 *
+ ***********************************************************************************************************/
+static long long int processed_reqnb;  //it counts user requests, not virtual requests
+static pthread_mutex_t processed_reqnb_mutex = PTHREAD_MUTEX_INITIALIZER;
+static short int processed_reqnb_mutex_is_locked=0;
+inline void lock_processed_reqnb_mutex()
+{
+	if(current_alg != NOOP_SCHEDULER)
+	{
+		agios_mutex_lock(&processed_reqnb_mutex);
+		processed_reqnb_mutex_is_locked=1;
+	}
+}
+inline void unlock_processed_reqnb_mutex()
+{
+	if(processed_reqnb_mutex_is_locked) //it could be possible that the scheduling algorithm changed between the lock function and this one, so i've included this flag to avoid a deadlock (lock without unlock)
+	{
+		agios_mutex_unlock(&processed_reqnb_mutex);
+		processed_reqnb_mutex_is_locked=0;
+	}
+}
 
-//so we can let the AGIOS thread know we have new requests (so it can schedule them)
+/***********************************************************************************************************
+ * PARAMETERS AND FUNCTIONS TO CONTROL THE I/O SCHEDULING THREAD *
+ ***********************************************************************************************************/
 #ifdef AGIOS_KERNEL_MODULE
+struct task_struct	*task;
+#else
+int task;
+#endif
+struct client *client;
+//so we can let the AGIOS thread know we have new requests (so it can schedule them)
+#ifdef AGIOS_KERNEL
 static struct completion request_added;
 #else
 static pthread_cond_t request_added_cond;
 static pthread_mutex_t request_added_mutex;
+#endif
+#ifdef AGIOS_KERNEL_MODULE
+static struct completion exited;
 #endif
 //signal new requests
 void consumer_signal_new_reqs(void)
@@ -58,13 +98,11 @@ void consumer_signal_new_reqs(void)
 #endif
 	
 }
-
-
 #ifdef AGIOS_KERNEL_MODULE
-static struct completion exited;
+void consumer_init(struct client *clnt_value, struct task_struct *task_value)
+#else
+void consumer_init(struct client *clnt_value, int task_value)
 #endif
-
-void consumer_init()
 {
 #ifdef AGIOS_KERNEL_MODULE
 	init_completion(&exited);
@@ -73,13 +111,10 @@ void consumer_init()
 	agios_cond_init(&request_added_cond);
 	agios_mutex_init(&request_added_mutex);
 #endif
-	
+	task = task_value;
+	client = clnt_value;	
+	processed_reqnb=0;
 }
-
-
-static int processed_reqnb=0;
-static int processed_period = -1;
-
 #ifndef AGIOS_KERNEL_MODULE
 int agios_thread_stop = 0;
 pthread_mutex_t agios_thread_stop_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -106,6 +141,37 @@ int agios_thread_should_stop(void)
 #endif
 }
 
+
+
+/***********************************************************************************************************
+ * CURRENT SCHEDULING ALGORITHM AND ITS PARAMETERS 	   *
+ ***********************************************************************************************************/
+static struct io_scheduler_instance_t *dynamic_scheduler=NULL;
+static int dynamic_alg = 0;
+static struct io_scheduler_instance_t *current_scheduler=NULL;
+static int current_alg = 0;
+static long int algorithm_selection_period=-1;
+static int algorithm_selection_reqnumber=1;
+static struct timespec last_algorithm_update; //the time at the last time we've selected an algorithm
+static long long int last_selection_processed_reqnb=0; //the processed requests counter at the last time we've selected an algorithm
+
+/***********************************************************************************************************
+ * LOCAL COPIES OF CONFIGURATION FILE PARAMETERS 	   *
+ ***********************************************************************************************************/
+static short int tracing=0;
+inline void set_consumer_tracing(short int value)
+{
+	tracing = value;
+}
+/***********************************************************************************************************
+ * REFRESH OF PREDICTION MODULE'S ALPHA FACTOR 	   *
+ ***********************************************************************************************************/
+static int recalculate_alpha_period = -1;
+static long long int last_alpha_processed_reqnb=0; //the processed requests counter at the last time we've recalculated alpha
+
+/***********************************************************************************************************
+ * REQUESTS PROCESSING (CALLED BY THE I/O SCHEDULERS THROUGH THE AGIOS THREAD)	   *
+ ***********************************************************************************************************/
 //unlocks the mutex protecting the data structure where the request is being held.
 //if it is the hashtable, then hash gives the line of the table (because we have one mutex per line)
 //if hash= -1, we are using the timeline (a simple list with only one mutex)
@@ -135,17 +201,21 @@ inline void update_filenb_counter(int hash, struct request_file_t *req_file)
 	else if((hash == -1) && (req_file->timeline_reqnb == 0))
 		dec_current_reqfilenb();
 }
-
-void process_requests(struct request_t *head_req, struct client *clnt, int hash)
+//must hold relevant data structure mutex (it will release and then get it again tough)
+//it will return 1 if some refresh period has expired (it is time to recalculate the alpha factor and redo all predictions, or it is time to change the scheduling algorithm), 0 otherwise
+short int process_requests(struct request_t *head_req, struct client *clnt, int hash)
 {
 	struct request_t *req;
-	struct request_file_t *req_file = head_req->globalinfo->req_file;
+	struct request_file_t *req_file; 
+	short int update_time=0;	
 	
-	PRINT_FUNCTION_NAME;
 	if(!head_req)
 		return; /*whaaaat?*/
 
-	if(config_get_trace())
+	PRINT_FUNCTION_NAME;
+	req_file = head_req->globalinfo->req_file;
+
+	if(tracing)
 		agios_trace_process_requests(head_req);
 
 	if((clnt->process_requests) && (head_req->reqnb > 1)) //if the user has a function capable of processing a list of requests at once and this is an aggregated request
@@ -203,37 +273,103 @@ void process_requests(struct request_t *head_req, struct client *clnt, int hash)
 		}
 	}
 
-	if(processed_period > 0)
+	lock_processed_reqnb_mutex();
+	processed_reqnb += head_req->reqnb; //TODO when we overflow this variable, we will have problems, check this
+	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
+		update_time=1;
+	if((algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber))
 	{
-		processed_reqnb += head_req->reqnb;
-		if(processed_reqnb > processed_period)
-		{
-			processed_reqnb = 0;
-			refresh_predictions(); //it's time to recalculate the alpha factor and review all predicted requests aggregatio
-		}
+		if(get_nanoelapsed(last_algorithm_update) >= algorithm_selection_period)
+			update_time=1;
 	}
-	
+	unlock_processed_reqnb_mutex();
+
+
 	if(hash >= 0)
 		debug("current status. hashtable[%d] has %d requests, there are %d requests in the scheduler to %d files.", hash, get_hashlist_reqcounter(hash), get_current_reqnb(), get_current_reqfilenb());
 	PRINT_FUNCTION_EXIT;
+	return update_time;
 }
 
+void check_update_time()
+{
+	int next_alg = current_alg;
+	struct io_scheduler_instance_t *next_scheduler=NULL;
+
+	lock_processed_reqnb_mutex();
+	//is it time to recalculate the alpha factor and review all predicted requests aggregations?
+	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
+	{
+		refresh_predictions();
+		last_alpha_processed_reqnb = processed_reqnb;
+	}
+	//is it time to change the scheduling algorithm?
+	if((algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber) && (get_nanoelapsed(last_algorithm_update) >= algorithm_selection_period))
+	{
+		last_selection_processed_reqnb = processed_reqnb;
+		unlock_processed_reqnb_mutex(); //we release this lock before changing the scheduling algorithm because that will require acquiring the migration mutex, which the other thread could he holding while waiting for this lock (leading to a deadlock)
+		//make a decision on the next scheduling algorithm
+		next_alg = dynamic_scheduler.select_algorithm();
+		next_scheduler = initialize_scheduler(next_alg);
+		//migrate from one to another
+		lock_algorithm_migration_mutex(); //so we won't be able to include new requests while we migrate the data structures
+		change_selected_alg(next_alg, next_scheduler->needs_hashtable, next_scheduler->max_aggregation_size);
+		config_gossip_algorithm_parameters(next_alg);
+		current_scheduler = next_scheduler;
+		current_alg = next_alg;
+		agios_gettime(&last_algorithm_update); 
+		unlock_algorithm_migration_mutex();	
+		agios_debug("We've changed the scheduling algorithm to %s", current_scheduler->name);
+
+	}
+	else
+		unlock_processed_reqnb_mutex(); 
+}
+/* 
+ * SCHEDULING THREAD
+ */
 #ifdef AGIOS_KERNEL_MODULE
 int agios_thread(void *arg)
 #else
 void * agios_thread(void *arg)
 #endif
 {
-	struct consumer_t *consumer = arg;
 	short int stop=0;
 
 #ifndef AGIOS_KERNEL_MODULE
 	struct timespec timeout_tspec;
-
 #endif
-	processed_period = config_get_prediction_recalculate_alpha_period();
+	//let's find out which I/O scheduling algorithm we need to use
+	dynamic_alg = config_get_default_algorithm();
+	dynamic_scheduler = initialize_scheduler(dynamic_alg);
+	if(!dynamic_scheduler.is_dynamic) //we are NOT using a dynamic scheduling algorithm
+	{
+		current_alg = dynamic_alg;
+		current_scheduler = dynamic_scheduler;
+	}
+	else //we are using a dynamic scheduler
+	{
+		//with which algorithm should we start?
+		current_alg = config_get_starting_algorithm(); //if we are using DYN_TREE and it selected a scheduling algorithm at its initialization phase, the parameter was updated and we can access it here. If not, we will use the provided starting algorithm
+		config_gossip_algorithm_parameters(ret);	
+		current_scheduler = initialize_scheduler(current_alg);
+		algorithm_selection_period = config_get_select_algorithm_period();
+		algorithm_selection_reqnumber = config_get_select_min_reqnumber();
+		if(algorithm_selection_period > 0)
+		{
+			agios_gettime(&last_algorithm_update);			
+			last_selection_processed_reqnb=0;
+		}
+	}
+	agios_debug("selected algorithm: %s", current_scheduler->name);
+	//since the current algorithm is decided, we can allow requests to be included
+	unlock_algorithm_migration_mutex();	
+	
+	recalculate_alpha_period = config_get_prediction_recalculate_alpha_period();
+	last_alpha_processed_reqnb=0;
 
 
+	//execution loop, it only stops when we close the library
 	do {
 		if(get_current_reqnb() == 0)
 		{
@@ -242,31 +378,37 @@ void * agios_thread(void *arg)
                          * also because we have to check once in a while to see if we should end the execution.
 			 */
 #ifdef AGIOS_KERNEL_MODULE
-			wait_for_completion_timeout(&consumer->request_added, WAIT_SHIFT_CONST);
+			wait_for_completion_timeout(&request_added, WAIT_SHIFT_CONST);
 #else
 			/*fill the timeout structure*/
 			timeout_tspec.tv_sec =  WAIT_SHIFT_CONST / 1000000000L;
 			timeout_tspec.tv_nsec = WAIT_SHIFT_CONST % 1000000000L;
 			
- 			pthread_mutex_lock(&consumer->request_added_mutex);
-			pthread_cond_timedwait(&consumer->request_added_cond, &consumer->request_added_mutex, &timeout_tspec);
-			pthread_mutex_unlock(&consumer->request_added_mutex);
+ 			pthread_mutex_lock(&request_added_mutex);
+			pthread_cond_timedwait(&request_added_cond, &request_added_mutex, &timeout_tspec);
+			pthread_mutex_unlock(&request_added_mutex);
 #endif
 		}
 	
-		if(!(stop = agios_thread_should_stop())) {
+		if(!(stop = agios_thread_should_stop())) 
+		{
+			check_update_time();
+
 			if(get_current_reqnb() > 0)
 			{
-				consumer->io_scheduler->schedule(consumer->client);
+				current_scheduler->schedule(consumer->client);
 			}
+	
+			check_update_time();
 		}
         } while (!stop);
 
-	consumer->task = 0;
+	task = 0;
 #ifdef AGIOS_KERNEL_MODULE
-	complete(&consumer->exited);
+	complete(&exited);
 #endif
 	return 0;
 }
+	
 
 

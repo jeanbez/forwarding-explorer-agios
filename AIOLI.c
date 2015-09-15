@@ -47,7 +47,7 @@
 static unsigned long long int aioli_quantum; 
 static struct timespec aioli_start;
 
-static int AIOLI_init()
+int AIOLI_init()
 {
 	generic_init();
 	aioli_quantum = 0;
@@ -164,7 +164,7 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 }
 
 /*return the next quantum considering how much of the last one was used*/
-inline unsigned long long int adjust_quantum(unsigned long long int elapsed_time, unsigned long long int quantum, int type)
+unsigned long long int adjust_quantum(unsigned long long int elapsed_time, unsigned long long int quantum, int type)
 {
 	unsigned long long int requiredqt;
 	unsigned long long int max_bound;
@@ -209,9 +209,10 @@ void AIOLI(void *clnt)
 	struct request_t *req;
 	long long int remaining=0;
 	int type;
+	short int update_time=0;
 
 	PRINT_FUNCTION_NAME;
-	while(get_current_reqnb() > 0)
+	while((get_current_reqnb() > 0) && (update_time == 0))
 	{
 		/*1. select a request*/
 		AIOLI_selected_queue = AIOLI_select_queue(&selected_hash);
@@ -238,13 +239,13 @@ void AIOLI(void *clnt)
 				/*removes the request from the hastable*/
 				__hashtable_del_req(req);
 				/*sends it back to the file system*/
-				process_requests(req, (struct client *)clnt, selected_hash);
+				update_time = process_requests(req, (struct client *)clnt, selected_hash);
 				/*cleanup step*/
 				waiting_algorithms_postprocess(req);
 				
 				/*lets see if we expired the quantum*/	
 				remaining = aioli_quantum - get_nanoelapsed(aioli_start);
-			} while((!agios_list_empty(&AIOLI_selected_queue->list)) && (remaining > 0));
+			} while((!agios_list_empty(&AIOLI_selected_queue->list)) && (remaining > 0) && (update_time == 0));
 			
 			/*here we either ran out of quantum, or of requests. Adjust the next quantum to be given to this queue considering this*/
 			if(remaining <= 0) /*ran out of quantum*/
@@ -260,7 +261,8 @@ void AIOLI(void *clnt)
 			}
 			else /*ran out of requests*/
 			{
-				AIOLI_selected_queue->nextquantum = adjust_quantum(aioli_quantum-remaining, aioli_quantum, type);
+				if(update_time == 0) //if update_time is 1, we have stopped for this queue because it was time to refresh things, not because there were no more requests or quantum left. If we adjust quantum anyway, we would penalize this queue for no reason
+					AIOLI_selected_queue->nextquantum = adjust_quantum(aioli_quantum-remaining, aioli_quantum, type);
 			}
 
 

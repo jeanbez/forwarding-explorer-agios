@@ -46,9 +46,7 @@ extern int agios_thread_stop;
 extern pthread_mutex_t agios_thread_stop_mutex;
 #endif
 
-/* This list keeps all consumer threads that are running */
-static AGIOS_LIST_HEAD(consumers); //for now we only support one consumer 
-struct consumer_t consumer;
+struct consumer_t consumer; //the scheduling thread and its parameters
 
 static int selected_alg = -1;
 
@@ -61,29 +59,17 @@ int start_consumer(struct client *clnt)
 {
 	int ret;
 
-	consumer_init();
 #ifdef AGIOS_KERNEL_MODULE
-	consumer.task = NULL;
+	consumer_init(clnt, NULL);
 #else
-	consumer.task = 1;
+	consumer_init(clnt, 1);
 #endif
-	consumer.client = clnt;
-	consumer.io_device_id = 0;
 
 	selected_alg = config_get_default_algorithm();
 	if(config_get_select_algorithm())
 	{
 		/*select the scheduling algorithm automatically. First we need to wait for the prediction module to start*/
-		agios_wait_predict_init();
 		/*ask the prediction module to make this choice*/
-		ret = predict_select_best_algorithm();
-		if(ret >= 0) //it could return -1 if it is not able to decide*/
-		{
-			selected_alg = ret;
-			agios_print("Automatically selected algorithm %s\n", get_algorithm_name_from_index(selected_alg));
-		}
-		else
-			agios_print("Could not make a decision about scheduling algorithm, using default\n");
 		
 	}
 
@@ -176,10 +162,6 @@ int agios_init(struct client *clnt, char *config_file)
 
 	/*init the prediction module structures*/
 	prediction_module_init(file_counter-1); /*we use (file_counter-1) because file_counter includes the current trace file being written. we don't want to open it to read by the prediction thread*/
-
-	/*
-	 * Now start consumer threads.
-	 */
 
 	ret = start_consumer(clnt);
 	if (ret != 1)
