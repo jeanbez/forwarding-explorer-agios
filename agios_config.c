@@ -216,6 +216,7 @@ static long config_max_trace_buffer_size = 1*1024*1024;
 inline void config_set_stripesize(int value)
 {
 	config_stripe_size = value;
+	set_default_stripe_size(value);
 }
 inline int config_get_stripesize(void)
 {
@@ -320,9 +321,6 @@ inline short int read_configuration_file(char *config_file)
 #endif
 
 	config_print();
-
-	//make copies for performance reasons
-	//TODO if we ever decide to make any of these decisions dynamic (changing them during execution), we will need to update the copies
 
 	return 0;
 }

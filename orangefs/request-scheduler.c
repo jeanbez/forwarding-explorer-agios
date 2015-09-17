@@ -498,6 +498,9 @@ int PINT_req_sched_post(enum PVFS_server_op op,
     struct req_sched_element *last_element;
     struct qlist_head *iterator;
     int tmp_flag;
+#ifdef ORANGEFS_AGIOS
+	short int first_file_req=0;
+#endif
 
 	/*test_out = fopen(TEST_REQATTS_FILENAME, "a");
 	if(test_out)
@@ -592,6 +595,9 @@ int PINT_req_sched_post(enum PVFS_server_op op,
     }
     else
     {
+#ifdef ORANGEFS_AGIOS
+	first_file_req=1;
+#endif
 	/* no queue yet for this handle */
 	/* create one and add it in */
 	tmp_list = (struct req_sched_list *)malloc(
@@ -787,6 +793,10 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 			stripe_size = last_stripe_size;
 		else
 			last_stripe_size = stripe_size;
+
+		//if this is the first request to this file, update AGIOS' stripe size
+		if(first_req_file)
+			agios_set_stripe_size(file_fn, stripe_size);
 
 		//get the offset in the local file (offset from the request is about the global view of the file)
 		tmp_element->offset = offset;

@@ -315,13 +315,8 @@ void check_update_time()
 	struct io_scheduler_instance_t *next_scheduler=NULL;
 
 	lock_processed_reqnb_mutex();
-	//is it time to recalculate the alpha factor and review all predicted requests aggregations?
-	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
-	{
-		refresh_predictions();
-		last_alpha_processed_reqnb = processed_reqnb;
-	}
 	//is it time to change the scheduling algorithm?
+	//TODO it is possible that at this moment the prediction thread is reading traces and making predictions, i.e., accessing the hashtable. This could lead to awful problems. If we want to test with recalculate_alpha_period, we need to take care of that!
 	if((dynamic_scheduler->is_dynamic) && (algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber) && (get_nanoelapsed(last_algorithm_update) >= algorithm_selection_period))
 	{
 		last_selection_processed_reqnb = processed_reqnb;
@@ -343,6 +338,13 @@ void check_update_time()
 	}
 	else
 		unlock_processed_reqnb_mutex(); 
+	//is it time to recalculate the alpha factor and review all predicted requests aggregations?
+	//we check for this AFTER the change of scheduling algorithm (despite the fact that making it before would potentially allow for new information to be considered in the algorithm selection) because the refresh_predictions() only signals the prediction thread, that will then start reading traces, which may take a long time and access the hashtable. This is not to be made possible during scheduling algorithm migration. We could wait for the prediction thread to finish its operation, but this could mean keeping AGIOS frozen while making predictions, which would impair performance 
+	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
+	{
+		refresh_predictions();
+		last_alpha_processed_reqnb = processed_reqnb;
+	}
 }
 /***********************************************************************************************************
  * SCHEDULING THREAD
