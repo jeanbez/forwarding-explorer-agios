@@ -77,6 +77,41 @@ inline void set_iosched_trace(short int value)
 }
 
 /**********************************************************************************************************************/
+/*	FOR ALGORITHMS WITH THE SYNCHRONOUS APPROACH	*/
+/**********************************************************************************************************************/
+static short int is_synchronous=0; //to know if the current scheduling algorithm follows the synchronous approach
+//control the synchronous approach:
+static short int agios_can_continue=0;
+static pthread_mutex_t request_processed_mutex=PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t request_processed_cond = PTHREAD_COND_INITIALIZER;
+
+inline void set_iosched_is_synchronous(short int value)
+{
+	is_synchronous=value;
+}
+void iosched_signal_synchronous(void)
+{
+	if(is_synchronous)
+	{
+		pthread_mutex_lock(&request_processed_mutex);
+		agios_can_continue=1;
+		pthread_cond_signal(&request_processed_cond);
+		pthread_mutex_unlock(&request_processed_mutex);
+	}
+	
+}
+void iosched_wait_synchronous(void)
+{
+	if(is_synchronous) //there is no chance is_synchronous will change while we are waiting and then we will receive no signal, since it is the scheduling thread who calls it (it could be called by the add_request part, but only for NOOP, which is not synchronous), and scheduling algorithms only change when this same thread decides to do so
+	{
+		pthread_mutex_lock(&request_processed_mutex);
+		while(!agios_can_continue)
+			pthread_cond_wait(&request_processed_cond, &request_processed_mutex);
+		agios_can_continue = 0;
+		pthread_mutex_unlock(&request_processed_mutex);	
+	}
+}
+/**********************************************************************************************************************/
 /*	STATISTICS	*/
 /**********************************************************************************************************************/
 /*for calculating alpha during execution, which represents the ability to overlap waiting time with processing other requests*/
@@ -404,7 +439,7 @@ void register_static_io_schedulers(void)
 			.schedule = &NOOP,
 			.select_algorithm = NULL,
 			.max_aggreg_size = 1,
-			.sync = 0,
+			.sync = 0,  //NOOP cannot ever by sync, otherwise it will probably cause deadlock at the user 
 			.needs_hashtable= 0,
 			.can_be_dynamically_selected=1,
 			.is_dynamic = 0,

@@ -265,6 +265,7 @@ int agios_add_request(char *file_id, int type, long long offset,
 int agios_add_request(char *file_id, int type, long long offset,
 		       long len, int data, struct client *clnt);
 #endif
+int agios_release_request(char *file_id, int type, long len);
 
 
 // Try to add the request directly in the dispatch queue

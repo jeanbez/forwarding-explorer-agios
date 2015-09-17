@@ -175,6 +175,7 @@ void migrate_from_timeline_to_hashtable(int new_alg);
 //change the current scheduling algorithm and update local parameters
 //here we assume the scheduling thread is NOT running, so it won't mess with the structures
 //must hold the migration mutex
+//must be called before config_gossip_algorithm_parameters (otherwise we won't know that something changed)
 void change_selected_alg(int new_alg, short int new_needs_hashtable, int new_max_aggregation_size)
 {	
 	//TODO what about predict??

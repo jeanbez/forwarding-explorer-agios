@@ -86,6 +86,11 @@ struct io_scheduler_instance_t {
 //so configuration options can be updated
 inline void set_iosched_predict_request_aggregation(short int value);
 inline void set_iosched_trace(short int value);
+inline void set_iosched_is_synchronous(short int value);
+
+//for synchronous scheduling algorithms
+void iosched_signal_synchronous(void);
+void iosched_wait_synchronous(void);
 
 //so other parts can get statistics
 inline unsigned long long int get_time_spent_waiting(void);
