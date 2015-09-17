@@ -20,6 +20,7 @@
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
+//TODO Trace format, write, and read functions are *very* unneficient. It would be WAY BETTER to use a different format for traces and read them in larger chunks (like the trace module do for writing them, using a buffer). The prediction thread may sometimes be reading traces during the execution, and this could lead to it harming I/O performance. For now, I *do not* recommend using trace and prediction modules while evaluating AGIOS performance. 
 #include "agios.h"
 #ifndef AGIOS_KERNEL_MODULE 
 
@@ -653,6 +654,7 @@ void predict_aggregations(short int cleanup)
  *Between the requests from this stripe, we calculate the difference between the maximum and the minimum arrival times. 
  *Then we take the average between all stripes' differences
  */
+//TODO it probably does not make sense for orangefs
 void calculate_average_stripe_access_time_difference(struct related_list_t *related_list) 
 {
 	unsigned long long int arrival_times_differences_sum, max_arrival_time, min_arrival_time;
@@ -755,22 +757,24 @@ void update_traced_access_pattern()
 			/*go through all the files of this hash value*/
 			agios_list_for_each_entry(req_file, hash_list, hashlist)
 			{
-				if((!agios_list_empty(&req_file->predicted_reads.list)) || (req_file->predicted_reads.avg_distance > -1))
+				if((!agios_list_empty(&req_file->predicted_reads.list)) || (req_file->predicted_reads.stats_file.avg_distance > -1))
 				{
-					if(req_file->predicted_reads.avg_distance_count > 1)
+					//average distance between consecutive requests (we keep summing the difference while adding the requests, so we just have to take the average 
+					if(req_file->predicted_reads.stats_file.avg_distance_count > 1)
 					{
-						req_file->predicted_reads.avg_distance= ((long double) req_file->predicted_reads.avg_distance)/req_file->predicted_reads.avg_distance_count;
-						req_file->predicted_reads.avg_distance_count=1;
+						req_file->predicted_reads.stats_file.avg_distance= ((long double) req_file->predicted_reads.stats_file.avg_distance)/req_file->predicted_reads.stats_file.avg_distance_count;
+						req_file->predicted_reads.stats_file.avg_distance_count=1;
 					}
 
+					//average stripe arrival time difference
 					calculate_average_stripe_access_time_difference(&req_file->predicted_reads);
 
-					if((req_file->predicted_reads.avg_stripe_difference >= 0) && (req_file->predicted_reads.avg_distance >= 0))
+					if((req_file->predicted_reads.stats_file.avg_stripe_difference >= 0) && (req_file->predicted_reads.stats_file.avg_distance >= 0))
 					{
 						reads_count++;
-						read_server_reqsize += req_file->predicted_reads.stats.total_req_size / req_file->predicted_reads.proceedreq_nb;
+						read_server_reqsize += req_file->predicted_reads.stats_file.total_req_size / req_file->predicted_reads.stats_file.processedreq_nb;
 
-						access_pattern_detection_tree(RT_READ, req_file->predicted_reads.avg_distance, req_file->predicted_reads.avg_stripe_difference, &req_file->predicted_reads.spatiality, &req_file->predicted_reads.app_request_size);
+						access_pattern_detection_tree(RT_READ, req_file->predicted_reads.stats_file.avg_distance, req_file->predicted_reads.avg_stripe_difference, &req_file->predicted_reads.spatiality, &req_file->predicted_reads.app_request_size);
 						read_spatiality_count[req_file->predicted_reads.spatiality]++;
 						read_reqsize_count[req_file->predicted_reads.app_request_size]++;
 					}
@@ -873,9 +877,9 @@ void update_requests_arrival_times()
 				
 
 }
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//FUNCTIONS RELATED TO READING TRACE FILES
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+/************************************************************************************************************
+ * TRACE FILES
+ ************************************************************************************************************/
 void reset_files_first_arrival_time()
 {
 	int i;
@@ -976,6 +980,11 @@ int how_many_tracefiles_there_are(int start)
 
 	return ret-1;
 }
+/************************************************************************************************************
+ * SIMPLIFIED TRACE FILES
+ * instead of tracing requests, these files only give some metrics previously measured for files 
+ * (they are substantially faster than normal traces, very useful to repeat tests)
+ ************************************************************************************************************/
 //return the number of files for which we obtained information from simplified traces
 int read_predictions_from_simple_traces(void)
 {
@@ -1086,9 +1095,9 @@ void write_simplified_trace_files(void)
 	}
 }
 
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//PREDICTION THREAD'S MAIN FUNCTIONS
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+/************************************************************************************************************
+ * PREDICTION THREAD
+ ************************************************************************************************************/
 void *prediction_thr(void *arg)
 {
 	int new_tracefile_counter;

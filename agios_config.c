@@ -53,6 +53,10 @@ inline void config_set_select_algorithm_period(int value)
 	config_select_algorithm_period = value;
 	if(config_select_algorithm_period > 0)
 		config_select_algorithm_period = config_select_algorithm_period*1000000; //convert it to nanoseconds
+	if(config_select_algorithm_period >= 0)
+		set_DYN_TREE_dynamic_scheduler(1);
+	else
+		set_DYN_TREE_dynamic_scheduler(0);
 }
 inline long int config_get_select_algorithm_period(void)
 {
@@ -77,6 +81,10 @@ inline int config_get_starting_algorithm(void)
 inline void config_set_trace(short int value)
 {
 	config_trace_agios = value;
+	//pass this information to other modules
+	set_request_cache_trace(config_trace_agios);
+	set_iosched_trace(config_trace_agios);
+	set_consumer_tracing(config_trace_agios);
 }
 inline short int config_get_trace()
 {
@@ -87,6 +95,9 @@ inline void config_set_trace_predict(short int value)
 	config_trace_predict = value;
 	if((config_trace_predict) && (!config_trace_agios))
 		config_trace_predict=0;
+	//copy this information to other parts of the code
+	set_hashtable_trace_predict(config_trace_predict);
+	set_trace_config_trace_predict(config_trace_predict);
 }
 inline short int config_get_trace_predict(void)
 {
@@ -97,6 +108,8 @@ inline void config_set_trace_full(short int value)
 	config_trace_full = value;
 	if((config_trace_full) && (!config_trace_agios))
 		config_trace_full = 0;
+	//copy this information to other parts
+	set_trace_agios_config_trace_full(config_trace_full);
 }
 inline short int config_get_trace_full(void)
 {
@@ -115,6 +128,9 @@ inline void config_set_predict_request_aggregation(short int value)
 	config_predict_request_aggregation = value;
 	if((config_predict_request_aggregation) && (!config_predict_read_traces))
 		config_predict_request_aggregation = 0;
+	//pass on this information
+	set_request_cache_predict_request_aggregation(config_predict_request_aggregation);
+	set_iosched_predict_request_aggregation(config_predict_request_aggregation);
 }
 inline short int config_get_predict_request_aggregation(void)
 {
@@ -200,6 +216,7 @@ static long config_max_trace_buffer_size = 1*1024*1024;
 inline void config_set_stripesize(int value)
 {
 	config_stripe_size = value;
+	set_default_stripe_size(value);
 }
 inline int config_get_stripesize(void)
 {
@@ -208,16 +225,22 @@ inline int config_get_stripesize(void)
 inline void config_set_max_trace_buffer_size(int value)
 {
 	config_max_trace_buffer_size = value;
+	set_trace_agios_config_max_trace_buffer_size(config_max_trace_buffer_size);
 }
 inline long config_get_max_trace_buffer_size(void)
 {
 	return config_max_trace_buffer_size;
 }
 
-void config_gossip_algorithm_parameters(int alg)
+void config_gossip_algorithm_parameters(int alg, struct io_scheduler_instance_t *scheduler)
 {
-//TODO
-	proc_set_needs_hashtable(consumer.io_scheduler->needs_hashtable);
+	proc_set_needs_hashtable(scheduler->needs_hashtable);
+	set_selected_alg(alg);
+	set_max_aggregation_size(scheduler->max_aggregation_size);
+	set_needs_hashtable(scheduler->needs_hashtable);
+	proc_set_new_algorithm(alg);
+	performance_set_needs_hashtable(scheduler->needs_hashtable);
+	set_iosched_is_synchronous(scheduler->sync);
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -298,22 +321,6 @@ inline short int read_configuration_file(char *config_file)
 #endif
 
 	config_print();
-
-	//make copies for performance reasons
-	//TODO if we ever decide to make any of these decisions dynamic (changing them during execution), we will need to update the copies
-	set_hashtable_trace_predict(config_trace_predict);
-	set_request_cache_predict_request_aggregation(config_predict_request_aggregation);
-	set_iosched_predict_request_aggregation(config_predict_request_aggregation);
-	set_request_cache_trace(config_trace_agios);
-	set_iosched_trace(config_trace_agios);
-	set_trace_agios_config_trace_full(config_trace_full);
-	set_trace_agios_config_max_trace_buffer_size(config_max_trace_buffer_size);
-	set_trace_config_trace_predict(config_trace_predict);
-	set_consumer_tracing(config_trace_agios);
-	if(config_select_algorithm_period >= 0)
-		set_DYN_TREE_dynamic_scheduler(1);
-	else
-		set_DYN_TREE_dynamic_scheduler(0);
 
 	return 0;
 }

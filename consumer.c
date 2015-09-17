@@ -246,9 +246,9 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 		head_req->globalinfo->req_file->timeline_reqnb-=head_req->reqnb;
 		update_filenb_counter(hash, req_file);
 		dec_many_current_reqnb(hash, head_req->reqnb);
-		unlock_structure_mutex(hash);
+//		unlock_structure_mutex(hash); //I believe we no longer need to release this lock since we've removed the waiting by synchronous approach from the user callback function
 		clnt->process_requests(reqs, head_req->reqnb);
-		lock_structure_mutex(hash);
+//		lock_structure_mutex(hash);
 		free(reqs);
 	}
 	else{
@@ -260,9 +260,9 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 			head_req->globalinfo->req_file->timeline_reqnb--;
 			update_filenb_counter(hash, req_file);
 			dec_current_reqnb(hash);
-			unlock_structure_mutex(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
+//			unlock_structure_mutex(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
 			clnt->process_request(head_req->data);
-			lock_structure_mutex(hash);
+//			lock_structure_mutex(hash);
 		}
 		else
 		{
@@ -274,9 +274,9 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 				req->globalinfo->req_file->timeline_reqnb--;
 				update_filenb_counter(hash, req_file);
 				dec_current_reqnb(hash);
-				unlock_structure_mutex(hash); 
+//				unlock_structure_mutex(hash); 
 				clnt->process_request(req->data);
-				lock_structure_mutex(hash); 
+//				lock_structure_mutex(hash); 
 			}
 		}
 	}
@@ -285,7 +285,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 	processed_reqnb += head_req->reqnb; //TODO when we overflow this variable, we will have problems, check this
 	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
 		update_time=1;
-	if((algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber))
+	if((dynamic_scheduler->is_dynamic) && (algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber))
 	{
 		if(get_nanoelapsed(last_algorithm_update) >= algorithm_selection_period)
 			update_time=1;
@@ -295,6 +295,16 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 
 	if(hash >= 0)
 		debug("current status. hashtable[%d] has %d requests, there are %d requests in the scheduler to %d files.", hash, get_hashlist_reqcounter(hash), get_current_reqnb(), get_current_reqfilenb());
+
+	//if the current scheduling algorithm follows the synchronous approach, we need to wait until the request was processed
+	if(current_scheduler->sync)
+	{
+		//we need to release the hashtable/timeline mutex while waiting because otherwise other thread will not be able to acquire it in the release_request function and signal us
+		unlock_structure_mutex(hash); 
+		iosched_wait_synchronous();
+		lock_structure_mutex(hash);	
+	}	
+
 	PRINT_FUNCTION_EXIT;
 	return update_time;
 }
@@ -305,37 +315,40 @@ void check_update_time()
 	struct io_scheduler_instance_t *next_scheduler=NULL;
 
 	lock_processed_reqnb_mutex();
-	//is it time to recalculate the alpha factor and review all predicted requests aggregations?
-	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
-	{
-		refresh_predictions();
-		last_alpha_processed_reqnb = processed_reqnb;
-	}
 	//is it time to change the scheduling algorithm?
-	if((algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber) && (get_nanoelapsed(last_algorithm_update) >= algorithm_selection_period))
+	//TODO it is possible that at this moment the prediction thread is reading traces and making predictions, i.e., accessing the hashtable. This could lead to awful problems. If we want to test with recalculate_alpha_period, we need to take care of that!
+	if((dynamic_scheduler->is_dynamic) && (algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber) && (get_nanoelapsed(last_algorithm_update) >= algorithm_selection_period))
 	{
 		last_selection_processed_reqnb = processed_reqnb;
 		unlock_processed_reqnb_mutex(); //we release this lock before changing the scheduling algorithm because that will require acquiring the migration mutex, which the other thread could he holding while waiting for this lock (leading to a deadlock)
 		//make a decision on the next scheduling algorithm
-		next_alg = dynamic_scheduler.select_algorithm();
+		next_alg = dynamic_scheduler->select_algorithm();
 		next_scheduler = initialize_scheduler(next_alg);
 		//migrate from one to another
 		lock_algorithm_migration_mutex(); //so we won't be able to include new requests while we migrate the data structures
 		change_selected_alg(next_alg, next_scheduler->needs_hashtable, next_scheduler->max_aggregation_size);
-		config_gossip_algorithm_parameters(next_alg);
+		config_gossip_algorithm_parameters(next_alg, next_scheduler);
 		current_scheduler = next_scheduler;
 		current_alg = next_alg;
 		agios_gettime(&last_algorithm_update); 
+		reset_stats_window(); //reset all stats so they will not affect the next selection
 		unlock_algorithm_migration_mutex();	
 		agios_debug("We've changed the scheduling algorithm to %s", current_scheduler->name);
 
 	}
 	else
 		unlock_processed_reqnb_mutex(); 
+	//is it time to recalculate the alpha factor and review all predicted requests aggregations?
+	//we check for this AFTER the change of scheduling algorithm (despite the fact that making it before would potentially allow for new information to be considered in the algorithm selection) because the refresh_predictions() only signals the prediction thread, that will then start reading traces, which may take a long time and access the hashtable. This is not to be made possible during scheduling algorithm migration. We could wait for the prediction thread to finish its operation, but this could mean keeping AGIOS frozen while making predictions, which would impair performance 
+	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
+	{
+		refresh_predictions();
+		last_alpha_processed_reqnb = processed_reqnb;
+	}
 }
-/* 
+/***********************************************************************************************************
  * SCHEDULING THREAD
- */
+ ***********************************************************************************************************/
 #ifdef AGIOS_KERNEL_MODULE
 int agios_thread(void *arg)
 #else
@@ -350,7 +363,7 @@ void * agios_thread(void *arg)
 	//let's find out which I/O scheduling algorithm we need to use
 	dynamic_alg = config_get_default_algorithm();
 	dynamic_scheduler = initialize_scheduler(dynamic_alg);
-	if(!dynamic_scheduler.is_dynamic) //we are NOT using a dynamic scheduling algorithm
+	if(!dynamic_scheduler->is_dynamic) //we are NOT using a dynamic scheduling algorithm
 	{
 		current_alg = dynamic_alg;
 		current_scheduler = dynamic_scheduler;
@@ -359,7 +372,6 @@ void * agios_thread(void *arg)
 	{
 		//with which algorithm should we start?
 		current_alg = config_get_starting_algorithm(); //if we are using DYN_TREE and it selected a scheduling algorithm at its initialization phase, the parameter was updated and we can access it here. If not, we will use the provided starting algorithm
-		config_gossip_algorithm_parameters(ret);	
 		current_scheduler = initialize_scheduler(current_alg);
 		algorithm_selection_period = config_get_select_algorithm_period();
 		algorithm_selection_reqnumber = config_get_select_min_reqnumber();
@@ -369,6 +381,7 @@ void * agios_thread(void *arg)
 			last_selection_processed_reqnb=0;
 		}
 	}
+	config_gossip_algorithm_parameters(current_alg, current_scheduler);	
 	agios_debug("selected algorithm: %s", current_scheduler->name);
 	//since the current algorithm is decided, we can allow requests to be included
 	unlock_algorithm_migration_mutex();	

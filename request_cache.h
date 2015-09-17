@@ -43,6 +43,7 @@ inline void dec_current_reqfilenb();
 /* to set the local copies of configuration file parameters */
 inline void set_request_cache_predict_request_aggregation(short int value);
 inline void set_request_cache_trace(short int value);
+inline void set_default_stripe_size(int value);
 
 /* to access the scheduling algorithms management parameters and functions */
 inline int get_selected_alg();

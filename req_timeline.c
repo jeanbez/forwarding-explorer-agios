@@ -117,14 +117,13 @@ void __timeline_add_req(struct request_t *req, int max_aggregation_size, int sel
 	if (selected_alg == TIME_WINDOW_SCHEDULER) 
 	{
 		// Calculate the request priority
-		//TODO do you really want to use timestamp here? It is just a counter, you should probably use req->jiffies_64 and make sure TIME_WINDOW_SIZE is in ns
-		tw_priority = req->timestamp / TIME_WINDOW_SIZE * 32768 + req->tw_app_id;
+		tw_priority = req->jiffies_64 / TIME_WINDOW_SIZE * 32768 + req->tw_app_id; //32768 here is the maximum value app_id can assume
 
 		// Find the position to insert the request
 		agios_list_for_each_entry(tmp, this_timeline, related)
 		{
 			if (tmp->tw_priority > tw_priority) {
-				agios_list_add(&req->related, &tmp->related);
+				agios_list_add(&req->related, tmp->related.prev);
 				
 				return;
 			}

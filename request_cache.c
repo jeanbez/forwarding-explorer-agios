@@ -118,6 +118,7 @@ inline void dec_current_reqfilenb()
 //these parameters are obtained from the configuration file at the beginning of the execution. We keep copies for performance reasons
 static short int predict_request_aggregation=0;
 static short int trace=0;
+static unsigned int default_stripe_size=1;
 inline void set_request_cache_predict_request_aggregation(short int value)
 {
 	predict_request_aggregation=value;
@@ -125,6 +126,10 @@ inline void set_request_cache_predict_request_aggregation(short int value)
 inline void set_request_cache_trace(short int value)
 {
 	trace = value;
+}
+inline void set_default_stripe_size(int value)
+{
+	default_stripe_size = value;
 }
 
 /**********************************************************************************************************************/
@@ -175,6 +180,7 @@ void migrate_from_timeline_to_hashtable(int new_alg);
 //change the current scheduling algorithm and update local parameters
 //here we assume the scheduling thread is NOT running, so it won't mess with the structures
 //must hold the migration mutex
+//must be called before config_gossip_algorithm_parameters (otherwise we won't know that something changed)
 void change_selected_alg(int new_alg, short int new_needs_hashtable, int new_max_aggregation_size)
 {	
 	//TODO what about predict??
@@ -492,6 +498,8 @@ static void request_file_init(struct request_file_t *req_file, char *file_id)
 	req_file->waiting_time = 0;
 	req_file->wrote_simplified_trace=0;
 	req_file->timeline_reqnb=0;
+
+	req_file->stripe_size = default_stripe_size;
 
 	request_file_init_related_list(&req_file->related_reads, req_file);
 	request_file_init_related_list(&req_file->related_writes, req_file);
@@ -812,3 +820,25 @@ int agios_add_request(char *file_id, int type, long long offset, long len, int d
 	return -ENOMEM;
 }
 
+//when agios is used to schedule requests to a parallel file system server, the stripe size is relevant to some calculations (specially for algorithm selection). A default value is provided through the configuration file, but many file systems (like PVFS) allow for each file to have different configurations. In this situation, the user could call this function to update a specific file's stripe size
+int agios_set_stripe_size(char *file_id, unsigned int stripe_size)
+{
+	struct request_file_t *req_file;
+	unsigned long hash_val;
+	struct agios_list_head *list;
+	struct related_list_t *related;
+
+
+	//find the structure for this file (and acquire lock)
+	if(scheduler_needs_hashtable)
+	{
+		hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;	
+		list = hashtable_lock(hash_val);
+	}
+	else
+	{
+		list = timeline_lock();
+	}
+	req_file = find_req_file(list, file_id, RS_HASHTABLE);
+	req_file->stripe_size = stripe_size;
+}

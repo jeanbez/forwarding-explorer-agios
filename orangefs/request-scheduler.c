@@ -61,10 +61,6 @@ static struct client agios_clnt;
 
 static int agios_is_it_a_server=1;
 
-static short int agios_can_continue=0;
-static pthread_mutex_t request_processed_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t request_processed_cond = PTHREAD_COND_INITIALIZER;
-
 static int requests_sent_to_agios=0;
 static int requests_received_from_agios=0;
 
@@ -112,6 +108,7 @@ struct req_sched_element
 	long long offset;
 	long long real_offset;
 	long len;
+	int type;
 };
 
 
@@ -215,17 +212,6 @@ void PINT_req_sched_agios_process(int64_t req_id)
 		element->state = REQ_READY_TO_SCHEDULE;
 	//	fprintf(stderr, "ORANGEFS - requisicao offset %lld (real %lld) tamanho %ld passando pra READY", element->offset, element->real_offset, element->len);
 		ready_queue_include_request(&(element->ready_link));
-
-		//if required, wait until it was processed
-		if(agios_clnt.sync)
-		{
-			//fprintf(stderr, "will wait for sync\n");
-			pthread_mutex_lock(&request_processed_mutex);
-			while(!agios_can_continue)
-				pthread_cond_wait(&request_processed_cond, &request_processed_mutex);
-			agios_can_continue = 0;
-			pthread_mutex_unlock(&request_processed_mutex);
-		}
 	}	
 	else
 	{
@@ -255,16 +241,6 @@ void PINT_req_sched_agios_process_multiple(int64_t *reqs, int reqnb)
 			fprintf(stderr, "ORANGEFS PANIC! Could not find request that came back from AGIOS!\n");
 			exit(-1);
 		}
-	}
-	//if required, wait until it was processed
-	if(agios_clnt.sync)
-	{
-		//fprintf(stderr, "will wait for sync\n");
-		pthread_mutex_lock(&request_processed_mutex);
-		while(!agios_can_continue)
-			pthread_cond_wait(&request_processed_cond, &request_processed_mutex);
-		agios_can_continue = 0;
-		pthread_mutex_unlock(&request_processed_mutex);
 	}
 }
 #endif
@@ -522,6 +498,9 @@ int PINT_req_sched_post(enum PVFS_server_op op,
     struct req_sched_element *last_element;
     struct qlist_head *iterator;
     int tmp_flag;
+#ifdef ORANGEFS_AGIOS
+	short int first_file_req=0;
+#endif
 
 	/*test_out = fopen(TEST_REQATTS_FILENAME, "a");
 	if(test_out)
@@ -616,6 +595,9 @@ int PINT_req_sched_post(enum PVFS_server_op op,
     }
     else
     {
+#ifdef ORANGEFS_AGIOS
+	first_file_req=1;
+#endif
 	/* no queue yet for this handle */
 	/* create one and add it in */
 	tmp_list = (struct req_sched_list *)malloc(
@@ -776,7 +758,6 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 		PVFS_offset offset;
 		PVFS_size size, aux_size, stripe_size=-1;
 		uint32_t server_nb, this_server, aux_server;
-		int type;
 		char agios_fn[25];
 	
 		/*get filename*/	
@@ -812,6 +793,10 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 			stripe_size = last_stripe_size;
 		else
 			last_stripe_size = stripe_size;
+
+		//if this is the first request to this file, update AGIOS' stripe size
+		if(first_req_file)
+			agios_set_stripe_size(file_fn, stripe_size);
 
 		//get the offset in the local file (offset from the request is about the global view of the file)
 		tmp_element->offset = offset;
@@ -849,14 +834,14 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 
 		/*get operation type*/
 		if(((PINT_server_op *) s_op)->req->u.io.io_type == PVFS_IO_READ)
-			type = RT_READ;
+			tmp_element->type = RT_READ;
 		else
-			type = RT_WRITE;
+			tmp_element->type = RT_WRITE;
 
 		/*give the request to agios*/
 		requests_sent_to_agios+=1;
 //		fprintf(stderr, "this is the request no %d to go to AGIOS\n", requests_sent_to_agios);
-		agios_add_request(agios_fn, type, tmp_element->real_offset, tmp_element->len, tmp_element->id, &agios_clnt);
+		agios_add_request(agios_fn, tmp_element->type, tmp_element->real_offset, tmp_element->len, tmp_element->id, &agios_clnt);
 
 	}
 #endif
@@ -1099,18 +1084,16 @@ int PINT_req_sched_release(
 //	fprintf(stderr, "PINT_req_sched_release op = %d, id= %d\n", op, tmp_element->id);
 
 
-	/*release AGIOS to schedule more*/
+	/*notify AGIOS about request processing so it can keep performance measurements (and manage the synchronous approach)*/
 	if((agios_is_it_a_server) && ((tmp_element->op == PVFS_SERV_IO) || (tmp_element->op == PVFS_SERV_SMALL_IO)))
 	{
-		if(agios_clnt.sync)
-		{
-//			fprintf(stderr, "PINT_req_sched_release signaling AGIOS\n");
-			pthread_mutex_lock(&request_processed_mutex);
-			agios_can_continue=1;
-			pthread_cond_signal(&request_processed_cond);
-			pthread_mutex_unlock(&request_processed_mutex);
-//			fprintf(stderr, "PINT_req_sched_release signaled AGIOS\n");
-		}
+		char agios_fn[25];
+	
+		/*get filename*/	
+		sprintf(agios_fn, "%llu", llu(tmp_element->handle));
+
+		/*release request*/
+		agios_release_request(agios_fn, tmp_element->type, tmp_element->len);
 	}
 
     /* remove it from its handle queue */

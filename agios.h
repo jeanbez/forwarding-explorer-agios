@@ -213,6 +213,8 @@ struct request_file_t {
 
 	//used by the prediction module to keep track of generated simplified traces
 	short int wrote_simplified_trace;
+
+	unsigned int stripe_size; 
 };
 
 typedef void internal_data;
@@ -288,6 +290,9 @@ int agios_add_request(char *file_id, int type, long long offset,
 int agios_add_request(char *file_id, int type, long long offset,
 		       long len, int data, struct client *clnt);
 #endif
+int agios_release_request(char *file_id, int type, long len);
+
+int agios_set_stripe_size(char *file_id, unsigned int stripe_size);
 
 
 // Try to add the request directly in the dispatch queue
