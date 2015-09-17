@@ -65,6 +65,8 @@ static unsigned long int global_max_req_size;
  * LOCAL COPIES OF PARAMETERS *
  ***********************************************************************************************************/
 static short int proc_needs_hashtable=1;
+static int *proc_scheduling_algs;
+static int proc_algs_start, proc_algs_end;
 
 inline void proc_set_needs_hashtable(short int value)
 {
@@ -92,17 +94,97 @@ static int hash_position;
 /***********************************************************************************************************
  * FUNCTIONS TO UPDATE STATISTICS UPON EVENTS *
  ***********************************************************************************************************/
+//receives a request (which is part of a virtual request) and returns the latest contiguous request's timestamp (from the same virtual request). -1 if no contiguous request (?)
+unsigned long long int get_latest_contig(struct request_t *req)
+{
+	unsigned long long int ret=-1;
+	struct request_t *other_req;
+	//look to the request with lower offset	
+	if(req->aggregation_element.prev != &req->agg_head->reqs_list) //if this is not the first request of the virtual request list
+	{
+		other_req = agios_list_entry(req->aggregation_element.prev, struct request_t, aggregation_element);
+		ret = other_req->jiffies_64;
+	}
+	//look to the next request
+	if(req->aggregation_element.next != &req->agg_head->reqs_list) //if this is not the last request of the virtual request list
+	{
+		other_req = agios_list_entry(req->aggregation_element.next, struct request_t, aggregation_element);
+		if(other_req->jiffies64 > ret)
+			ret = other_req->jiffies_64;
+	}
+	return ret;
+}
+void update_local_stats(struct related_list_statistics_t *stats, struct request_t *req)
+{
+	unsigned long long int elapsedtime=0;
+	long int this_distance;
+
+	//update local statistics on time between requests
+	if(stats->total_request_time == 0)
+		stats->total_request_time = 1;
+	else
+	{
+		elapsedtime = (req->jiffies_64 - get_timespec2llu(req->globalinfo->last_req_time))/1000; //nano to microseconds
+		if(stats->total_request_time == 1)
+			stats->total_request_time = 0;
+
+		stats->total_request_time += elapsedtime;
+		
+		if(elapsedtime > stats->max_request_time)
+			stats->max_request_time = elapsedtime;
+		if(elapsedtime < stats->min_request_time)
+			stats->min_request_time = elapsedtime;
+	}
+	get_llu2timespec(req->jiffies_64, req->globalinfo->last_req_time);
+		
+	//update local statistics on average offset distance between consecutive requests
+	//TODO is it the same thing done by predict when including requests? should we join these codes?
+	if(req->globalinfo->last_received_finaloffset > 0)
+	{
+		if(stats->avg_distance == -1)
+			stats->avg_distance = 0;
+		this_distance = req->io_data.offset - req->globalinfo->last_received_finaloffset;
+		if(this_distance < 0)
+			this_distance *= -1;
+		this_distance = this_distance/ req->io_data.len; //should we use the last request's size instead of this one? or maybe the average request size of this queue?
+		stats->avg_distance += this_distance;
+		stats->avg_distance_count++;
+	}
+
+	//update local statistics on request size
+	stats->total_req_size+=req->io_data.len;
+	if(req->io_data.len > stats->max_req_size)
+		stats->max_req_size = req->io_data.len;
+	if(req->io_data.len < stats->min_req_size)
+		stats->min_req_size = req->io_data.len;
+
+	//update local statistics on time between contiguous requests
+	//TODO actually this does not give much information, since it includes only measurements from requests which were successfully aggregated
+	if(req->agg_head) //this request was included in a virtual one
+	{
+		elapsedtime = get_latest_contig(req); ///take the latest from the contiguous requests (the minimum difference)
+		if(elapsed_time >=0)
+		{
+			elapsedtime = (req->jiffies64 - elapsedtime)/1000; //microseconds
+			stats->total_contig_time+=elapsedtime;
+			stats->contig_count++;
+			if(elapsedtime < stats->min_contig_time)
+				stats->min_contig_time = elapsedtime;
+			if(elapsedtime > stats->max_contig_time)
+				stats->max_contig_time = elapsedtime;
+		}	
+	}
+}
 /*update the stats after the arrival of a new request
  * must hold the hashtable mutex 
  */
 void proc_stats_newreq(struct request_t *req)
 {
-	unsigned long long int elapsedtime=0;
-	long int this_distance;
 
 	if(req->state == RS_PREDICTED)
 	{
-		req->globalinfo->proceedreq_nb++; //we use the related_list structure counter to keep track of predicted requests 
+		req->globalinfo->stats_file.processedreq_nb++; //we use the related_list structure counter to keep track of predicted requests 
+		req->globalinfo->stats_window.processedreq_nb++; //we use the related_list structure counter to keep track of predicted requests 
 	}
 	else //if req->state is RS_HASHTABLE
 	{
@@ -125,55 +207,17 @@ void proc_stats_newreq(struct request_t *req)
 			global_max_req_size = req->io_data.len;
 		if(req->io_data.len < global_min_req_size)
 			global_min_req_size = req->io_data.len;
-		
-		//update local statistics on time between requests
-		if(req->globalinfo->stats.total_request_time == 0)
-			req->globalinfo->stats.total_request_time = 1;
-		else
-		{
-			elapsedtime = req->jiffies_64 - get_timespec2llu(req->globalinfo->stats.last_req_time);
-			if(req->globalinfo->stats.total_request_time == 1)
-				req->globalinfo->stats.total_request_time = 0;
 
-			elapsedtime = (unsigned long long int) elapsedtime / 1000; //nano to microseconds
-			req->globalinfo->stats.total_request_time += elapsedtime;
+		//update local statistics
+		update_local_stats(&req->globalinfo->stats_file);
+		update_local_stats(&req->globalinfo->stats_window);
 		
-			if(elapsedtime > req->globalinfo->stats.max_request_time)
-				req->globalinfo->stats.max_request_time = elapsedtime;
-			if(elapsedtime < req->globalinfo->stats.min_request_time)
-				req->globalinfo->stats.min_request_time = elapsedtime;
-		}
-		get_llu2timespec(req->jiffies_64, &req->globalinfo->stats.last_req_time);
-		
-		//update local statistics on average offset distance between consecutive requests
-		//TODO is it the same thing done by predict when including requests? should we join these codes?
-		if(req->globalinfo->last_received_finaloffset > 0)
-		{
-			if(req->globalinfo->avg_distance == -1)
-				req->globalinfo->avg_distance = 0;
-			this_distance = req->io_data.offset - req->globalinfo->last_received_finaloffset;
-			if(this_distance < 0)
-				this_distance *= -1;
-			this_distance = this_distance/ req->io_data.len; //should we use the last request's size instead of this one?
-			req->globalinfo->avg_distance += this_distance;
-			req->globalinfo->avg_distance_count++;
-		}
 		req->globalinfo->last_received_finaloffset = req->io_data.offset + req->io_data.len;
-	
-	
 	}
-	//update local statistics on request size
-	req->globalinfo->stats.total_req_size+=req->io_data.len;
-	if(req->io_data.len > req->globalinfo->stats.max_req_size)
-		req->globalinfo->stats.max_req_size = req->io_data.len;
-	if(req->io_data.len < req->globalinfo->stats.min_req_size)
-		req->globalinfo->stats.min_req_size = req->io_data.len;
-
-	
 }
 
 /*reset some global stats*/
-void reset_reqstats()
+void reset_global_reqstats()
 {
 	total_reqnb=0;
 	global_req_time = 0;
@@ -187,55 +231,39 @@ void reset_reqstats()
 /*updates the stats after an aggregation*/
 void stats_aggregation(struct related_list_t *related)
 {
-	
 	if (related->lastaggregation > 1) {
-		related->stats.aggs_no++;
-		related->stats.sum_of_agg_reqs += related->lastaggregation;
-		if (related->stats.biggest < related->lastaggregation)
-			related->stats.biggest = related->lastaggregation;
+		related->stats_file.aggs_no++;
+		related->stats_file.sum_of_agg_reqs += related->lastaggregation;
+		related->stats_window.aggs_no++;
+		related->stats_window.sum_of_agg_reqs += related->lastaggregation;
+		if (related->best_agg < related->lastaggregation)
+			related->best_agg = related->lastaggregation;
 	}
-	
 }
-void specificstats_aggregation(struct related_list_t *related, unsigned int reqnb)
-{
-	
-	// if there were just one request selected before that means we have 
-	//a new aggregation request	
-	if ((related->lastaggregation - reqnb) == 1) {
-		related->stats.aggs_no++;
-		related->stats.sum_of_agg_reqs += related->lastaggregation;
-	}
-	else 	// It was alread a virtual request so just add the number 
-		// of new requests added
-		related->stats.sum_of_agg_reqs += reqnb;
-
-	if (related->stats.biggest < related->lastaggregation)
-			related->stats.biggest = related->lastaggregation;
-
-	debug("last agg = %d, aggs = %d", related->lastaggregation,
-		   related->stats.aggs_no);
-	
-}
-
 /*updates the stats after the detection of a shift phenomenon*/
 void stats_shift_phenomenon(struct related_list_t *related)
 {
-	related->stats.shift_phenomena++;
+	related->stats_file.shift_phenomena++;
+	related->stats_window.shift_phenomena++;
 }
 /*updates the stats after the detection that a better aggregation is possible (by looking to the current stats for the file)*/
 void stats_better_aggregation(struct related_list_t *related)
 {
-	related->stats.better_aggregation++;
+	related->stats_file.better_aggregation++;
+	related->stats_window.better_aggregation++;
 }
 /*updates the stats after the detection that a better aggregation is possible (by looking at the predictions)*/
 void stats_predicted_better_aggregation(struct related_list_t *related)
 {
-
-
-	related->stats.predicted_better_aggregation++;
+	related->stats_file.predicted_better_aggregation++;
+	related->stats_window.predicted_better_aggregation++;
 }
 
-
+/***********************************************************************************************************
+ * FUNCTIONS TO WRITE THE STATS FILE *
+ ***********************************************************************************************************/
+//the functions that write the stats file are organized in a way as to be used by both library and kernel module implementations. The kernel module implementation uses the proc interface. The functions iterate through statistics list.
+//get_first points the first element (and locks the relevant mutex)
 struct request_file_t *get_first(void)
 {
 	struct agios_list_head *reqfile_l;
@@ -252,12 +280,12 @@ struct request_file_t *get_first(void)
 		}
 
 		if(!agios_list_empty(reqfile_l))
-		{
+		{ //take the first element of the list
 			agios_list_for_each_entry(req_file, reqfile_l, hashlist)
 				break;
 		}	
 		else
-		{
+		{//list is empty, nothing to show, unlock the mutex
 			if(proc_needs_hashtable)
 			{
 				hashtable_unlock(hash_position);
@@ -275,6 +303,7 @@ struct request_file_t *get_first(void)
 	return req_file;	
 }
 
+//start prints the initial information in the file and calls the other functions
 #ifdef AGIOS_KERNEL_MODULE
 void *print_stats_start(struct seq_file *s, loff_t *pos)
 #else
@@ -753,6 +782,7 @@ void agios_print_stats_file(char *filename)
 /*register proc entries, useful only to the kernel module implementation*/
 void proc_stats_init(void)
 {
+	
 #ifdef AGIOS_KERNEL_MODULE
 	struct proc_dir_entry *entry;
 

@@ -423,38 +423,61 @@ struct request_t * request_constructor(char *file_id, int type, long long offset
 
 //to each file, we will have related_list structures for read and write queues (and sometimes for predicted queues as well)
 //even when requests are kept in timeline (not in these queues), we still have the structures to keep track of statistics
+void request_file_init_related_statistics(struct related_list_statistics_t *stats)
+{
+	stats->processedreq_nb=0;
+
+	stats->total_req_size = 0;
+	stats->min_req_size = ~0;
+	stats->max_req_size=0;
+
+	stats->max_request_time = 0;
+	stats->total_request_time = 0;
+	stats->min_request_time = ~0;
+
+	stats->avg_distance = -1;
+	stats->avg_distance_count = 1;
+
+	stats->total_contig_time=0;
+	stats->min_contig_time=~0;
+	stats->max_contig_time=0;
+	contig_count=1;
+
+	stats->aggs_no = 0;
+	stats->sum_of_agg_reqs = 0;
+}
 //this function initializes a related_list structure
 void request_file_init_related_list(struct related_list_t *related_list, struct request_file_t *req_file)
-{//TODO update this with changes made to agios.h
+{
 	init_agios_list_head(&related_list->list);
+	related_list->req_file = req_file;
 
 	related_list->laststartoff = 0;
 	related_list->lastfinaloff = 0;
-	related_list->used_quantum_rate=100;
 	related_list->predictedoff = 0;
-	related_list->lastaggregation = 0;
-	related_list->proceedreq_nb = 0;
+
 	related_list->nextquantum = 0;
+
 	related_list->current_size = 0;
-	related_list->req_file = req_file;
-	related_list->avg_distance = -1;
-	related_list->avg_distance_count = 1;
-	related_list->avg_stripe_difference=-1;
+
+	related_list->lastaggregation = 0;
+	related_list->best_agg = 0;
+
+	related_list->last_received_finaloffset = 0;
+
+#ifndef ORANGEFS_AGIOS
+	related_list->avg_stripe_difference= -1;
+#endif
+
 	related_list->spatiality = -1;
 	related_list->app_request_size = -1;
 
-	related_list->stats.aggs_no = 0;
-	related_list->stats.sum_of_agg_reqs = 0;
-	related_list->stats.biggest = 0;
 	related_list->stats.shift_phenomena = 0;
 	related_list->stats.better_aggregation = 0;
 	related_list->stats.predicted_better_aggregation = 0;
-	related_list->stats.total_req_size = 0;
-	related_list->stats.min_req_size = ~0;
-	related_list->stats.max_req_size = 0;
-	related_list->stats.max_request_time = 0;
-	related_list->stats.total_request_time = 0;
-	related_list->stats.min_request_time = ~0;
+
+	request_file_init_related_statistics(&related_list->stats_file);
+	request_file_init_related_statistics(&related_list->stats_window);
 }
 /*
  * Function sets fields of struct request_file_t @req_file to default values.

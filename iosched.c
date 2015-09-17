@@ -101,7 +101,7 @@ void generic_post_process(struct request_t *req)
 	struct request_t *sub_req, *aux_req=NULL;
 
 	req->globalinfo->lastaggregation = req->reqnb;
-	req->globalinfo->proceedreq_nb += req->reqnb;
+	req->globalinfo->stats += req->reqnb;
 	stats_aggregation(req->globalinfo);
 
 	if(req->reqnb == 1)
