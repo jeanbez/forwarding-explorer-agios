@@ -1,4 +1,4 @@
-/* File:	performance.h
+/* File:	DYN_TREE.h
  * Created: 	2015 
  * License:	GPL version 3
  * Author:
@@ -8,8 +8,8 @@
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
- *		It provides the release function, called by the user after processing requests.
- *		It keeps performance measurements and handles the synchronous approach.
+ *		It provides the dynamic scheduling algorithm selection through selection trees 
+ *		(the algorithm used in Francieli's thesis)
  *		Further information is available at http://agios.bitbucket.org/
  *
  * Contributors:
@@ -22,8 +22,11 @@
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
-#ifndef _PERFORMANCE_H_
-#define _PERFORMANCE_H_
 
-inline void performance_set_needs_hashtable(short int value);
+#ifndef _DYN_TREE_H_
+#define _DYN_TREE_H_
+
+inline void set_DYN_TREE_dynamic_scheduler(short int value);
+int DYN_TREE_init(void);
+int DYN_TREE_select_next_algorithm(void);
 #endif

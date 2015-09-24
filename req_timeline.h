@@ -25,10 +25,10 @@
 #define _REQ_TIMELINE_H_
 
 /* to access the associated data structures*/
-inline struct agios_list_head *timeline_lock(void);
-inline void timeline_unlock(void);
-inline struct agios_list_head *get_timeline_files(void);
-inline struct agios_list_head *get_timeline(void);
+struct agios_list_head *timeline_lock(void);
+void timeline_unlock(void);
+struct agios_list_head *get_timeline_files(void);
+struct agios_list_head *get_timeline(void);
 
 /* to include or remove requests*/
 void timeline_add_req(struct request_t *req, int max_aggregation_size, int selected_alg, struct request_file_t *given_req_file);
@@ -37,6 +37,6 @@ struct request_t *timeline_oldest_req(void);
 
 /* timeline management functions*/
 void reorder_timeline(int new_alg, int new_max_aggregation_size);
-inline void timeline_init();
+void timeline_init();
 
 #endif

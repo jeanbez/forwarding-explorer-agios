@@ -41,6 +41,7 @@
 #include "access_pattern_detection_tree.h"
 #include "scheduling_algorithm_selection_tree.h"
 #include "agios_config.h"
+#include "req_hashtable.h"
 
 static int prediction_thr_stop = 0; /*for being notified about finishing the scheduler's execution*/
 static pthread_mutex_t prediction_thr_stop_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -319,7 +320,7 @@ int add_prediction(char *file_id, int type, long long offset, long len, unsigned
 
 	if(req)
 	{
-		hash = hashtable_add_req(req);
+		hash = hashtable_add_req(req, NULL);
 		proc_stats_newreq(req);  //update statistics
 		update_average_distance(req->globalinfo, offset, len);
 		hashtable_unlock(hash);
@@ -435,14 +436,14 @@ void update_average_distance(struct related_list_t *related_list, long long offs
 	
 	if(related_list->lastfinaloff > 0)
 	{
-		if(related_list->avg_distance == -1)
-			related_list->avg_distance = 0;
+		if(related_list->stats_file.avg_distance == -1)
+			related_list->stats_file.avg_distance = 0;
 		this_distance = offset - related_list->lastfinaloff;
 		if(this_distance < 0)
 			this_distance *= -1;
 		this_distance = this_distance/len;
-		related_list->avg_distance += this_distance;
-		related_list->avg_distance_count++;
+		related_list->stats_file.avg_distance += this_distance;
+		related_list->stats_file.avg_distance_count++;
 	}
 	related_list->lastfinaloff = offset+len;
 }
@@ -594,7 +595,7 @@ void predict_aggregations_onlist(struct related_list_t *predicted_l, short int c
 					/*aggregate them!*/
 					req->predicted_aggregation_size++;
 					req_next->predicted_aggregation_start = req;
-					req->globalinfo->stats.aggs_no++;
+					req->globalinfo->stats_file.aggs_no++;
 					if(req_next->jiffies_64 < req->first_agg_time)
 						req->first_agg_time = req_next->jiffies_64;
 					if(req_next->jiffies_64 > req->last_agg_time)
@@ -605,9 +606,9 @@ void predict_aggregations_onlist(struct related_list_t *predicted_l, short int c
 			
 				req_l_next = req_l_next->next;
 			} 
-			req->globalinfo->stats.sum_of_agg_reqs+= req->predicted_aggregation_size;
-			if(req->predicted_aggregation_size > req->globalinfo->stats.biggest)
-				req->globalinfo->stats.biggest = req->predicted_aggregation_size;
+			req->globalinfo->stats_file.sum_of_agg_reqs+= req->predicted_aggregation_size;
+			if(req->predicted_aggregation_size > req->globalinfo->best_agg)
+				req->globalinfo->best_agg = req->predicted_aggregation_size;
 
 		}
 		req_l = req_l->next;
@@ -621,7 +622,7 @@ void predict_aggregations(short int cleanup)
 	struct agios_list_head *hash_list;
 	struct request_file_t *req_file;
 	
-	for(i=0; i< hashtable_get_size(); i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
 
@@ -748,7 +749,7 @@ void update_traced_access_pattern()
 	
 	PRINT_FUNCTION_NAME;
 	
-	for(i=0; i< hashtable_get_size(); i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
 
@@ -769,7 +770,7 @@ void update_traced_access_pattern()
 					//average stripe arrival time difference
 					calculate_average_stripe_access_time_difference(&req_file->predicted_reads);
 
-					if((req_file->predicted_reads.stats_file.avg_stripe_difference >= 0) && (req_file->predicted_reads.stats_file.avg_distance >= 0))
+					if((req_file->predicted_reads.avg_stripe_difference >= 0) && (req_file->predicted_reads.stats_file.avg_distance >= 0))
 					{
 						reads_count++;
 						read_server_reqsize += req_file->predicted_reads.stats_file.total_req_size / req_file->predicted_reads.stats_file.processedreq_nb;
@@ -779,22 +780,22 @@ void update_traced_access_pattern()
 						read_reqsize_count[req_file->predicted_reads.app_request_size]++;
 					}
 				}
-				if((!agios_list_empty(&req_file->predicted_writes.list)) || (req_file->predicted_writes.avg_distance > -1))
+				if((!agios_list_empty(&req_file->predicted_writes.list)) || (req_file->predicted_writes.stats_file.avg_distance > -1))
 				{
-					if(req_file->predicted_writes.avg_distance_count > 1)
+					if(req_file->predicted_writes.stats_file.avg_distance_count > 1)
 					{
-						req_file->predicted_writes.avg_distance= req_file->predicted_writes.avg_distance/req_file->predicted_writes.avg_distance_count;
-						req_file->predicted_writes.avg_distance_count=1;
+						req_file->predicted_writes.stats_file.avg_distance= req_file->predicted_writes.stats_file.avg_distance/req_file->predicted_writes.stats_file.avg_distance_count;
+						req_file->predicted_writes.stats_file.avg_distance_count=1;
 					}
 
 					calculate_average_stripe_access_time_difference(&req_file->predicted_writes);	
 			
-					if((req_file->predicted_writes.avg_stripe_difference >= 0) && (req_file->predicted_writes.avg_distance >= 0))
+					if((req_file->predicted_writes.avg_stripe_difference >= 0) && (req_file->predicted_writes.stats_file.avg_distance >= 0))
 					{
 						writes_count++;
-						write_server_reqsize += req_file->predicted_writes.stats.total_req_size / req_file->predicted_writes.proceedreq_nb;
+						write_server_reqsize += req_file->predicted_writes.stats_file.total_req_size / req_file->predicted_writes.stats_file.processedreq_nb;
 
-						access_pattern_detection_tree(RT_WRITE, req_file->predicted_writes.avg_distance, req_file->predicted_writes.avg_stripe_difference, &req_file->predicted_writes.spatiality, &req_file->predicted_writes.app_request_size);
+						access_pattern_detection_tree(RT_WRITE, req_file->predicted_writes.stats_file.avg_distance, req_file->predicted_writes.avg_stripe_difference, &req_file->predicted_writes.spatiality, &req_file->predicted_writes.app_request_size);
 						write_spatiality_count[req_file->predicted_writes.spatiality]++;
 						write_reqsize_count[req_file->predicted_writes.app_request_size]++;
 					}
@@ -837,7 +838,7 @@ void update_requests_arrival_times()
 	
 	PRINT_FUNCTION_NAME;
 	
-	for(i=0; i< hashtable_get_size(); i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
 
@@ -888,7 +889,7 @@ void reset_files_first_arrival_time()
 	
 	PRINT_FUNCTION_NAME;
 	
-	for(i=0; i< hashtable_get_size(); i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
 
@@ -1021,7 +1022,7 @@ int read_predictions_from_simple_traces(void)
 			hash_list = hashtable_lock(hash_val);
 			req_file = find_req_file(hash_list, file_id, RS_NONE);
 
-			ret = fscanf(input_file, "%Le\t%Le\t%lld\nWRITE\t%Le\t%Le\t%lld\n", &req_file->predicted_reads.avg_distance, &req_file->predicted_reads.avg_stripe_difference, &req_file->predicted_reads.stats.total_req_size, &req_file->predicted_writes.avg_distance, &req_file->predicted_writes.avg_stripe_difference, &req_file->predicted_writes.stats.total_req_size);
+			ret = fscanf(input_file, "%Le\t%Le\t%llu\nWRITE\t%Le\t%Le\t%llu\n", &req_file->predicted_reads.stats_file.avg_distance, &req_file->predicted_reads.avg_stripe_difference, &req_file->predicted_reads.stats_file.total_req_size, &req_file->predicted_writes.stats_file.avg_distance, &req_file->predicted_writes.avg_stripe_difference, &req_file->predicted_writes.stats_file.total_req_size);
 			if(ret != 6)
 			{
 				agios_print("could not read from simplified trace file %s\n", filename);
@@ -1029,9 +1030,9 @@ int read_predictions_from_simple_traces(void)
 				hashtable_unlock(hash_val);
 				continue;
 			}
-			debug("READ\t%Le\t%Le\t%lld\tWRITE\t%Le\t%Le\t%lld\n", req_file->predicted_reads.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats.total_req_size, req_file->predicted_writes.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats.total_req_size);
+			debug("READ\t%Le\t%Le\t%llu\tWRITE\t%Le\t%Le\t%llu\n", req_file->predicted_reads.stats_file.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats_file.total_req_size, req_file->predicted_writes.stats_file.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats_file.total_req_size);
 			req_file->wrote_simplified_trace=1; //so we won't write it to another file
-			req_file->predicted_reads.proceedreq_nb = req_file->predicted_writes.proceedreq_nb = 1;
+			req_file->predicted_reads.stats_file.processedreq_nb = req_file->predicted_writes.stats_file.processedreq_nb = 1;
 			count++;
 
 			hashtable_unlock(hash_val);
@@ -1053,7 +1054,7 @@ void write_simplified_trace_files(void)
 	FILE *output_file=NULL;
 	char filename[300];
 
-	for(i=0; i< hashtable_get_size(); i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
 
@@ -1080,11 +1081,11 @@ void write_simplified_trace_files(void)
 						if(agios_list_empty(&(req_file->predicted_reads.list)))
 							fprintf(output_file, "READ\t-1\t-1\t0\n");
 						else
-							fprintf(output_file, "READ\t%Le\t%Le\t%lld\n", req_file->predicted_reads.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats.total_req_size / req_file->predicted_reads.proceedreq_nb);
+							fprintf(output_file, "READ\t%Le\t%Le\t%llu\n", req_file->predicted_reads.stats_file.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats_file.total_req_size / req_file->predicted_reads.stats_file.processedreq_nb);
 						if(agios_list_empty(&(req_file->predicted_writes.list)))
 							fprintf(output_file, "WRITE\t-1\t-1\t0\n");
 						else
-							fprintf(output_file, "WRITE\t%Le\t%Le\t%lld\n", req_file->predicted_writes.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats.total_req_size / req_file->predicted_writes.proceedreq_nb);
+							fprintf(output_file, "WRITE\t%Le\t%Le\t%llu\n", req_file->predicted_writes.stats_file.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats_file.total_req_size / req_file->predicted_writes.stats_file.processedreq_nb);
 						fclose(output_file);
 					}
 				}

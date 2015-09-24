@@ -157,7 +157,7 @@ void __exit __agios_exit(void)
 #endif
 void agios_exit(void)
 {
-	struct consumer_t *consumer;
+	struct io_scheduler_instance_t *current_sched;
 	PRINT_FUNCTION_NAME;
 
 #ifdef AGIOS_KERNEL_MODULE
@@ -175,22 +175,17 @@ void agios_exit(void)
 	/*stop the prediction thread*/
 	stop_prediction_thr();
 
-	agios_list_for_each_entry(consumer, &consumers, list) {
-		if (consumer->task) {
+	if (consumer_get_task()) 
+	{
+		consumer_signal_new_reqs();
 #ifdef AGIOS_KERNEL_MODULE
-			complete(&consumer->request_added);
-			wait_for_completion(&consumer->exited);
+		consumer_wait_completion();
 #else
-			agios_mutex_lock(&consumer->request_added_mutex);
-			agios_cond_signal(&consumer->request_added_cond);
-			agios_mutex_unlock(&consumer->request_added_mutex);
-
-			pthread_join(agios_pthread, NULL);
+		pthread_join(agios_pthread, NULL);
 #endif
-
-			if (consumer->io_scheduler->exit)
-				consumer->io_scheduler->exit();
-		}
+		current_sched = consumer_get_current_scheduler();
+		if(current_sched->exit)
+			current_sched->exit();
 	}
 
 	request_cache_cleanup();

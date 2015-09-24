@@ -384,9 +384,9 @@ void request_cache_free(struct request_t *req)
  * to values passed as arguments.
  */
 #ifdef ORANGEFS_AGIOS
-struct request_t * request_constructor(char *file_id, int type, long long offset, long len, int64_t data, unsigned long long int arrival_time, int state)
+struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, unsigned long int arrival_time, short int state)
 #else
-struct request_t * request_constructor(char *file_id, int type, long long offset, long len, int data, unsigned long long int arrival_time, int state) 
+struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int data, unsigned long int arrival_time, short int state) 
 #endif
 
 {
@@ -444,11 +444,6 @@ void request_file_init_related_statistics(struct related_list_statistics_t *stat
 	stats->avg_distance = -1;
 	stats->avg_distance_count = 1;
 
-	stats->total_contig_time=0;
-	stats->min_contig_time=~0;
-	stats->max_contig_time=0;
-	contig_count=1;
-
 	stats->aggs_no = 0;
 	stats->sum_of_agg_reqs = 0;
 }
@@ -478,9 +473,9 @@ void request_file_init_related_list(struct related_list_t *related_list, struct 
 	related_list->spatiality = -1;
 	related_list->app_request_size = -1;
 
-	related_list->stats.shift_phenomena = 0;
-	related_list->stats.better_aggregation = 0;
-	related_list->stats.predicted_better_aggregation = 0;
+	related_list->shift_phenomena = 0;
+	related_list->better_aggregation = 0;
+	related_list->predicted_better_aggregation = 0;
 
 	request_file_init_related_statistics(&related_list->stats_file);
 	request_file_init_related_statistics(&related_list->stats_window);
@@ -754,9 +749,9 @@ struct request_file_t *find_req_file(struct agios_list_head *hash_list, char *fi
 }
 
 #ifdef ORANGEFS_AGIOS
-int agios_add_request(char *file_id, int type, long long offset, long len, int64_t data, struct client *clnt)
+int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, struct client *clnt)
 #else
-int agios_add_request(char *file_id, int type, long long offset, long len, int data, struct client *clnt) //TODO we will need app_id for time_window as well
+int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, int data, struct client *clnt) //TODO we will need app_id for time_window as well
 #endif
 {
 	struct request_t *req;
@@ -826,8 +821,6 @@ int agios_set_stripe_size(char *file_id, unsigned int stripe_size)
 	struct request_file_t *req_file;
 	unsigned long hash_val;
 	struct agios_list_head *list;
-	struct related_list_t *related;
-
 
 	//find the structure for this file (and acquire lock)
 	if(scheduler_needs_hashtable)
@@ -841,4 +834,5 @@ int agios_set_stripe_size(char *file_id, unsigned int stripe_size)
 	}
 	req_file = find_req_file(list, file_id, RS_HASHTABLE);
 	req_file->stripe_size = stripe_size;
+	return 1;
 }

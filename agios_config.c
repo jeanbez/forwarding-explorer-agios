@@ -26,6 +26,12 @@
 #include "iosched.h"
 #include "common_functions.h"
 #include "DYN_TREE.h"
+#include "request_cache.h"
+#include "proc.h"
+#include "consumer.h"
+#include "req_hashtable.h"
+#include "trace.h"
+#include "performance.h"
 
 //-------------------------------------------------------------------------------------------------------
 //LIBRARY OPTIONS
@@ -211,7 +217,7 @@ inline char *config_get_access_times_file()
 //USER INFO
 //-------------------------------------------------------------------------------------------------------
 static int config_stripe_size = 32*1024;
-static long config_max_trace_buffer_size = 1*1024*1024;
+static unsigned long int config_max_trace_buffer_size = 1*1024*1024;
 
 inline void config_set_stripesize(int value)
 {
@@ -227,16 +233,20 @@ inline void config_set_max_trace_buffer_size(int value)
 	config_max_trace_buffer_size = value;
 	set_trace_agios_config_max_trace_buffer_size(config_max_trace_buffer_size);
 }
-inline long config_get_max_trace_buffer_size(void)
+inline unsigned long int config_get_max_trace_buffer_size(void)
 {
 	return config_max_trace_buffer_size;
 }
 
+//-------------------------------------------------------------------------------------------------------
+//SPREAD CONFIGURATION PARAMETERS TO OTHER MODULES
+//-------------------------------------------------------------------------------------------------------
+//this function needs to be called when changing the scheduling algorithm. It updates other modules' local copies of configuration paramters
 void config_gossip_algorithm_parameters(int alg, struct io_scheduler_instance_t *scheduler)
 {
 	proc_set_needs_hashtable(scheduler->needs_hashtable);
 	set_selected_alg(alg);
-	set_max_aggregation_size(scheduler->max_aggregation_size);
+	set_max_aggregation_size(scheduler->max_aggreg_size);
 	set_needs_hashtable(scheduler->needs_hashtable);
 	proc_set_new_algorithm(alg);
 	performance_set_needs_hashtable(scheduler->needs_hashtable);
@@ -292,11 +302,11 @@ inline short int read_configuration_file(char *config_file)
 	config_set_write_simplified_traces(ret);
 	config_lookup_string(&agios_config, "library_options.access_times_func_file", &ret_str);
 	config_set_access_times_file(ret_str);
-	config.lookup_int(&agios_config, "library_options.select_algorithm_period", &ret);
+	config_lookup_int(&agios_config, "library_options.select_algorithm_period", &ret);
 	config_set_select_algorithm_period(ret); 
-	config.lookup_int(&agios_config, "library_options.select_algorithm_min_reqnumber", &ret);
+	config_lookup_int(&agios_config, "library_options.select_algorithm_min_reqnumber", &ret);
 	config_set_select_algorithm_min_reqnumber(ret);
-	config.lookup_string(&agios_config, "library_options.starting_algorithm", &ret_str);
+	config_lookup_string(&agios_config, "library_options.starting_algorithm", &ret_str);
 	config_set_starting_algorithm(get_algorithm_from_string(ret_str));
 	
 	
@@ -347,10 +357,10 @@ void config_print(void)
 		agios_just_print("\tSimplified trace files are named %s.*.%s\n", config_simple_trace_file_prefix, config_trace_file_sufix);
 		config_print_flag(config_trace_predict, "\tTracing the Prediction Module's activities (for debug purposes)? ");
 		config_print_flag(config_trace_full, "\tComplete tracing (for debug purposes)? ");
-		agios_just_print("\tTrace file buffer has size %ld bytes\n", config_max_trace_buffer_size);
+		agios_just_print("\tTrace file buffer has size %lu bytes\n", config_max_trace_buffer_size);
 	}
 	agios_just_print("Default scheduling algorithm: %s\n", get_algorithm_name_from_index(config_default_algorithm)); 
-	if(strcmp(config_default_algorithm,"DYN_TREE") == 0)
+	if(config_default_algorithm == DYN_TREE_SCHEDULER)
 	{	
 		agios_just_print("AGIOS will select the best scheduling algorithm according for the situation\n");
 		if(config_select_algorithm_period >= 0)

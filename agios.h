@@ -114,31 +114,25 @@ struct client {
 
 struct related_list_statistics_t 
 {
-	int processedreq_nb; //number of processed requests (for tmpstats, this is actually the number of received requests
+	unsigned long int processedreq_nb; //number of processed requests 
 	
 	//statistics on request size
-	unsigned long int total_req_size;
-	unsigned int min_req_size;
-	unsigned int max_req_size;
+	unsigned long long int total_req_size;
+	unsigned long int min_req_size;
+	unsigned long int max_req_size;
 
 	//statistics on time between requests
-	unsigned long long int max_request_time;
 	unsigned long long int total_request_time;
-	unsigned long long int min_request_time;
+	unsigned long int max_request_time;
+	unsigned long int min_request_time;
 
 	//statistics on average offset difference between consecutive requests
 	long double avg_distance;
-	int avg_distance_count;
-
-	//statistics on time between contiguous requests
-	unsigned long long int total_contig_time;
-	unsigned long long int max_contig_time;
-	unsigned long long int min_contig_time;
-	int contig_count;
+	unsigned long int avg_distance_count;
 
 	//number of performed aggregations and of aggregated requests
-	unsigned int 	aggs_no;	 
-	unsigned int 	sum_of_agg_reqs; 
+	unsigned long int 	aggs_no;	 
+	unsigned long int 	sum_of_agg_reqs; 
 };
 	
 
@@ -148,15 +142,15 @@ struct related_list_t {
 	struct request_file_t *req_file;
 
 	//for shift phenomenon detection
-	long long laststartoff ;
-	long long lastfinaloff ;
-	long long predictedoff ;
+	unsigned long int laststartoff ;
+	unsigned long int lastfinaloff ;
+	unsigned long int predictedoff ;
 
 	//for AIOLI
-	unsigned long nextquantum; 
+	unsigned int nextquantum; 
 
 	//for SJF, SRTF and some statistics
-	long long current_size; //sum of all its requests' sizes (even if they overlap)
+	unsigned long int current_size; //sum of all its requests' sizes (even if they overlap)
 
 	//to help decide on waiting times
 	unsigned int lastaggregation ;	// Number of request contained in the last processed virtual request.
@@ -164,20 +158,19 @@ struct related_list_t {
 
 	struct timespec last_req_time; //so we can keep statistics on time between requests
 
-	long long last_received_finaloffset; //so we can keep statistics on offset distance between consecutive requests //TODO do we need to use long long?
+	unsigned long int last_received_finaloffset; //so we can keep statistics on offset distance between consecutive requests //TODO do we need to use long long?
 
 	//used with dNFSp, do not seem to apply to orangefs
-#ifndef ORANGEFS_AGIOS
 	long double avg_stripe_difference;  //in ms
-#endif
+
 	//the last detected access pattern for this queue
 	short int spatiality;
 	short int app_request_size;
 
 	//counters for decisions on waiting times
-	unsigned int 	shift_phenomena;
-	unsigned int 	better_aggregation;
-	unsigned int 	predicted_better_aggregation;
+	unsigned long int 	shift_phenomena;
+	unsigned long int 	better_aggregation;
+	unsigned long int 	predicted_better_aggregation;
 
 	//statistics to be eventually written in stats file
 	struct related_list_statistics_t stats_file;
@@ -185,6 +178,7 @@ struct related_list_t {
 	//statistics to be eventually used to make decisions on scheduling algorithms
 	struct related_list_statistics_t stats_window; 
 	//we keep both statistics because we will want to reset them at different times. For instance, when we reset statistics used for scheduling algorithm selection, we don't want to lose information that will later go to the stats file
+	//predicted lists use stats_file only (because we never reset it)
 };
 
 /*
@@ -200,16 +194,16 @@ struct request_file_t {
 	struct related_list_t predicted_reads;
 	struct related_list_t predicted_writes;
 
-	int timeline_reqnb; //counter for knowing how many requests in the timeline are accessing this file 
+	unsigned long int timeline_reqnb; //counter for knowing how many requests in the timeline are accessing this file 
 	struct agios_list_head hashlist; //to insert this structure in a list (hashtable position or timeline_files)
 
 	//to handle waiting times (they apply to the whole file, not only the queue)
-	unsigned long long int waiting_time;
+	unsigned int waiting_time;
 	struct timespec waiting_start;
 
 	//to make arrival times relative
-	unsigned long long int first_request_time;
-	unsigned long long int first_request_predicted_time;
+	unsigned long int first_request_time;
+	unsigned long int first_request_predicted_time;
 
 	//used by the prediction module to keep track of generated simplified traces
 	short int wrote_simplified_trace;
@@ -220,8 +214,8 @@ struct request_file_t {
 typedef void internal_data;
 
 struct io_data {
-	long long offset;
-	long len;
+	unsigned long int offset;
+	unsigned long int len;
 };
 #ifdef ORANGEFS_AGIOS
 typedef int64_t user_data_type;
@@ -232,34 +226,34 @@ typedef int user_data_type;
 struct request_t { //TODO rethink data types, we probably do not need to have long long long long long long something
 	/*parameters*/
 	char *file_id;  //name of the file
-	unsigned long long int jiffies_64; //arrival time 
-	int type; //read or write
+	unsigned long int jiffies_64; //arrival time 
+	short int type; //read or write
 	struct io_data io_data; //offset and datasize
-	int state; //used to differentiate between real and predicted requests
+	short int state; //used to differentiate between real and predicted requests
 	
 	//for the TIME WINDOW scheduling algorithm
-	int tw_app_id;
-	int tw_priority;
+	unsigned int tw_app_id; 
+	unsigned long int tw_priority; 
 
 	user_data_type data;  /*passed by AGIOS' user (for knowing which request is this one)*/
 
 	//for MLF and aIOLi	
-	unsigned long long int sched_factor; 
+	unsigned int sched_factor; 
 
 #ifdef AGIOS_DEBUG
 	int sanity;
 #endif
-	short unsigned int already_waited; /*used by the prediction module when using predicted aggregations to device about waiting times. we do not need to keep it waiting forever, so we just do it once (only the real version - not the predicted - is marked)*/
+	short int already_waited; /*used by the prediction module when using predicted aggregations to device about waiting times. we do not need to keep it waiting forever, so we just do it once (only the real version - not the predicted - is marked)*/
 
 	/*request's position inside data structures*/
-	unsigned int timestamp; //just the arrival order at the scheduler
+	unsigned long int timestamp; //just the arrival order at the scheduler
 
 	struct agios_list_head related; //for including in hashtable or timeline  (see the list implementation)
 	
 	struct related_list_t *globalinfo; //pointer for the related list inside the file (list of reads, writes, predicted reads or predicted writes)
 
 	/*for aggregations*/
-	int reqnb; //for virtual requests (real requests), it is the number of requests aggregated into this one. For predicted requests, it is used while reading traces to count how many times this request was predicted (and then reset to 1 after finishing reading)
+	unsigned int reqnb; //for virtual requests (real requests), it is the number of requests aggregated into this one. For predicted requests, it is used while reading traces to count how many times this request was predicted (and then reset to 1 after finishing reading)
 	struct agios_list_head reqs_list; //list of requests
 	struct agios_list_head aggregation_element; //for being inserted on the list of requests
 	struct request_t *agg_head; //pointer to the virtual request structure (if this one is part of an aggregation)
@@ -269,8 +263,8 @@ struct request_t { //TODO rethink data types, we probably do not need to have lo
 	struct request_t *mirror; //link between real and predicted requests (actually, only the real requests has it)
 	struct request_t * predicted_aggregation_start; //link to the predicted request that is the first one of the predicted aggregation
 	unsigned int predicted_aggregation_size; //for the first predicted request of a predicted aggregation, how many requests are expected to be aggregated
-	unsigned long long int first_agg_time;
-	unsigned long long int last_agg_time;
+	unsigned long int first_agg_time;
+	unsigned long int last_agg_time;
 
 	struct agios_list_head list; 
 };
@@ -284,13 +278,13 @@ void agios_exit(void);
 
 
 #ifdef ORANGEFS_AGIOS
-int agios_add_request(char *file_id, int type, long long offset,
-		       long len, int64_t data, struct client *clnt);
+int agios_add_request(char *file_id, short int type, unsigned long int offset,
+		       unsigned long int len, int64_t data, struct client *clnt);
 #else
-int agios_add_request(char *file_id, int type, long long offset,
-		       long len, int data, struct client *clnt);
+int agios_add_request(char *file_id, short int type, unsigned long int offset,
+		       unsigned long int len, int data, struct client *clnt);
 #endif
-int agios_release_request(char *file_id, int type, long len);
+int agios_release_request(char *file_id, short int type, unsigned long int len);
 
 int agios_set_stripe_size(char *file_id, unsigned int stripe_size);
 

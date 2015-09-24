@@ -25,6 +25,8 @@
 #include "req_hashtable.h"
 #include "common_functions.h"
 #include "hash.h"
+#include "request_cache.h"
+#include "trace.h"
 
 
 static struct agios_list_head *hashlist; //a contiguous list of fixed size. Files are distributed among the positions in this list according to a hash function
@@ -65,6 +67,7 @@ inline void inc_hashlist_reqcounter(int hash)
 //initializes data structures and locks. returns 0 if success
 int hashtable_init(void)
 {
+	int i;
 	hashlist = (struct agios_list_head *) agios_alloc(sizeof(struct agios_list_head) * AGIOS_HASH_ENTRIES);
 	if(!hashlist)
 	{

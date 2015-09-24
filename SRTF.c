@@ -38,12 +38,15 @@
 
 #include "agios.h"
 #include "SRTF.h"
-#include "req_timeline.h"
 #include "request_cache.h"
 #include "consumer.h"
 #include "iosched.h"
+#include "req_hashtable.h"
+#include "common_functions.h"
+#include "estimate_access_times.h"
+#include "iosched.h"
 
-int SRTF_check_queue(struct related_list_t *related_list, struct related_list_t *predicted_list, long long *min_size)
+int SRTF_check_queue(struct related_list_t *related_list, struct related_list_t *predicted_list, unsigned long int *min_size)
 {
 	if(related_list->current_size <= 0) //we dont have requests in this queue, it cannot be selected
 		return 0;
@@ -61,7 +64,7 @@ struct related_list_t *SRTF_select_a_queue(int *current_hash)
 {
 	int i;
 	struct agios_list_head *reqfile_l;
-	long long min_size = LLONG_MAX;
+	unsigned long int min_size = ULONG_MAX;
 	struct related_list_t *chosen_queue=NULL;
 	struct request_file_t *req_file;
 	int evaluated_reqfiles=0;
@@ -76,10 +79,10 @@ struct related_list_t *SRTF_select_a_queue(int *current_hash)
 		{
 			if((!agios_list_empty(&req_file->related_writes.list)) || (!agios_list_empty(&req_file->related_reads.list)))
 			{	 
-				debug("file %s, related_reads com %lld e related_writes com %lld, min_size is %lld\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size, min_size);
+				debug("file %s, related_reads com %lu e related_writes com %lu, min_size is %lu\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size, min_size);
 				if((req_file->related_reads.current_size < 0) || (req_file->related_writes.current_size < 0))
 				{
-					printf("PANIC! current_size for file %s is %lld and %lld\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size);
+					printf("PANIC! current_size for file %s is %lu and %lu\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size);
 					exit(-1);			
 				}
 				evaluated_reqfiles++;

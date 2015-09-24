@@ -38,9 +38,11 @@
 
 #include "agios.h"
 #include "MLF.h"
-#include "req_timeline.h"
 #include "request_cache.h"
 #include "consumer.h"
+#include "common_functions.h"
+#include "req_hashtable.h"
+#include "estimate_access_times.h"
 #include "iosched.h"
 
 
@@ -122,7 +124,7 @@ void MLF(void *clnt)
 	struct request_t *req;
 	struct agios_list_head *reqfile_l;
 	struct request_file_t *req_file;
-	unsigned long long int smaller_waiting_time=~0;	
+	unsigned int smaller_waiting_time=~0;	
 	struct request_file_t *swt_file=NULL;
 	int starting_hash = MLF_current_hash;
 	int processed_requests = 0;
@@ -192,7 +194,7 @@ void MLF(void *clnt)
 				if((processed_requests == 0) && (swt_file))
 				{
 					/*if we can not process because every file is waiting for something, we have no choice but to sleep a little (the other choice would be to continue active waiting...)*/
-					debug("could not avoid it, will have to wait %llu", smaller_waiting_time);
+					debug("could not avoid it, will have to wait %u", smaller_waiting_time);
 					agios_wait(smaller_waiting_time, swt_file->file_id);	
 					swt_file->waiting_time = 0;
 					swt_file = NULL;

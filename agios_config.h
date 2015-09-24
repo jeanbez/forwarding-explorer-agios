@@ -20,9 +20,18 @@
  */
 #ifndef _AGIOS_CONFIG_H_
 #define _AGIOS_CONFIG_H_
+
+#include "iosched.h"
+
 inline short int read_configuration_file(char *config_file);
 
 //library options
+inline void config_set_select_algorithm_period(int value);
+inline long int config_get_select_algorithm_period(void);
+inline void config_set_select_algorithm_min_reqnumber(int value);
+inline int config_get_select_algorithm_min_reqnumber(void);
+inline void config_set_starting_algorithm(int value);
+inline int config_get_starting_algorithm(void);
 inline void config_set_trace(short int value);
 inline short int config_get_trace(void);
 inline void config_set_trace_predict(short int value);
@@ -54,7 +63,10 @@ inline char *config_get_access_times_file(void);
 inline void config_set_stripesize(int value);
 inline int config_get_stripesize(void);
 inline void config_set_max_trace_buffer_size(int value);
-inline long config_get_max_trace_buffer_size(void);
+inline unsigned long int config_get_max_trace_buffer_size(void);
+
+//to spread configuration parameters to all modules
+void config_gossip_algorithm_parameters(int alg, struct io_scheduler_instance_t *scheduler);
 
 void config_print(void);
 #endif

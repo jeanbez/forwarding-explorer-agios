@@ -67,7 +67,7 @@ inline int agios_start_thread_km(struct task_struct *thread, thread_function *fu
 /****************************************************************************************************/
 /*timing functions*/
 /*takes a struct timespec and tells you how many nanoseconds passed since the timespec was obtained*/
-inline unsigned long long int get_nanoelapsed(struct timespec t1)
+inline unsigned long int get_nanoelapsed(struct timespec t1)
 {
 	struct timespec t2;
 	agios_gettime(&t2);
@@ -75,20 +75,20 @@ inline unsigned long long int get_nanoelapsed(struct timespec t1)
 }
 
 /*translates a struct timespec to a unsigned long long int (in nanoseconds)*/
-inline unsigned long long int get_timespec2llu(struct timespec t)
+inline unsigned long int get_timespec2llu(struct timespec t)
 {
 	return (t.tv_sec*1000000000L + t.tv_nsec);
 }
 
 /*traslates a unsigned long long int (in nanoseconds) to struct timespec*/
-inline void get_llu2timespec(unsigned long long int t, struct timespec *ret)
+inline void get_llu2timespec(unsigned long int t, struct timespec *ret)
 {
 	ret->tv_sec = t / 1000000000L;
 	ret->tv_nsec = t % 1000000000L;
 }
 
 /*does the same as get_nanoelapsed, but takes as parameter a unsigned long long int instead of a struct timespec*/
-inline unsigned long long int get_nanoelapsed_llu(unsigned long long int t1)
+inline unsigned long int get_nanoelapsed_llu(unsigned long int t1)
 {
 	struct timespec t2;
 	agios_gettime(&t2);

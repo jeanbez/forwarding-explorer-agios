@@ -35,7 +35,7 @@
  * LOCAL COPIES OF SCHEDULING ALGORITHM PARAMETERS
  ************************************************************************************************************/
 static short int performance_needs_hashtable=0;
-inline void set_performance_needs_hashtable(short int value)
+inline void performance_set_needs_hashtable(short int value)
 {
 	performance_needs_hashtable = value;
 }

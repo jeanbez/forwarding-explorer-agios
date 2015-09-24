@@ -26,11 +26,17 @@
 #ifdef AGIOS_KERNEL_MODULE
 int agios_thread(void *arg);
 void consumer_init(struct client *clnt_value, struct task_struct *task_value);
+void consumer_set_task(struct task_struct *value);
+struct task_struct * consumer_get_task(void);
 #else
 void * agios_thread(void *arg);
 void consumer_init(struct client *clnt_value, int task_value);
+void consumer_set_task(int value);
+int consumer_get_task(void);
 #endif
-inline void set_consumer_tracing(short int value);
+void set_consumer_tracing(short int value);
+
+struct io_scheduler_instance_t *consumer_get_current_scheduler(void);
 
 void consumer_signal_new_reqs(void);
 

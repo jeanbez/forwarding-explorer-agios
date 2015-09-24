@@ -57,6 +57,7 @@
 #include "TW.h"
 #include "AIOLI.h"
 #include "NOOP.h"
+#include "DYN_TREE.h"
 
 
 static AGIOS_LIST_HEAD(io_schedulers); //the list of scheduling algorithms (with their parameters)
@@ -115,14 +116,14 @@ void iosched_wait_synchronous(void)
 /*	STATISTICS	*/
 /**********************************************************************************************************************/
 /*for calculating alpha during execution, which represents the ability to overlap waiting time with processing other requests*/
-static unsigned long long int time_spent_waiting=0;
-static unsigned long long int waiting_time_overlapped=0;
+static unsigned long int time_spent_waiting=0;
+static unsigned long int waiting_time_overlapped=0;
 
-inline unsigned long long int get_time_spent_waiting(void)
+inline unsigned long int get_time_spent_waiting(void)
 {
 	return time_spent_waiting;
 }
-inline unsigned long long int get_waiting_time_overlapped(void)
+inline unsigned long int get_waiting_time_overlapped(void)
 {
 	return waiting_time_overlapped;
 
@@ -136,7 +137,9 @@ void generic_post_process(struct request_t *req)
 	struct request_t *sub_req, *aux_req=NULL;
 
 	req->globalinfo->lastaggregation = req->reqnb;
-	req->globalinfo->stats += req->reqnb;
+	req->globalinfo->stats_file.processedreq_nb += req->reqnb;
+	req->globalinfo->stats_window.processedreq_nb += req->reqnb;
+
 	stats_aggregation(req->globalinfo);
 
 	if(req->reqnb == 1)
@@ -233,7 +236,7 @@ inline struct request_t *checkSelection(struct request_t *req, struct request_fi
 }
 
 /*sleeps for timeout ns*/
-void agios_wait(unsigned long long int  timeout, char *file)
+void agios_wait(unsigned int timeout, char *file)
 {
 #ifndef AGIOS_KERNEL_MODULE
 	struct timespec timeout_tspec;
@@ -243,7 +246,7 @@ void agios_wait(unsigned long long int  timeout, char *file)
 	if(trace)
 		agios_trace_wait(timeout,file);
 	
-	debug("going to sleep for %llu\n", timeout);
+	debug("going to sleep for %u\n", timeout);
 
 #ifdef AGIOS_KERNEL_MODULE
 	/*TODO see if this approach really works as expected*/
@@ -252,17 +255,17 @@ void agios_wait(unsigned long long int  timeout, char *file)
 	set_current_state(TASK_RUNNING);		
 #else
 
-	timeout_tspec.tv_sec = (unsigned long long int) timeout / 1000000000L;
-	timeout_tspec.tv_nsec = (unsigned long long int) timeout % 1000000000L;
+	timeout_tspec.tv_sec = (unsigned int) timeout / 1000000000L;
+	timeout_tspec.tv_nsec = (unsigned int) timeout % 1000000000L;
 
 	nanosleep(&timeout_tspec, NULL);
 #endif
 }
 
 //used by AIOLI and MLF, the algorithms which employ waiting times. Since we try not to wait (when waiting on one file, we go on processing requests to other files), every time we try to get requests from a file we need to update its waiting time to see if it is still waiting or not
-void update_waiting_time_counters(struct request_file_t *req_file, unsigned long long int *smaller_waiting_time, struct request_file_t **swt_file )
+void update_waiting_time_counters(struct request_file_t *req_file, unsigned int *smaller_waiting_time, struct request_file_t **swt_file )
 {
-	unsigned long long int elapsed;
+	unsigned long int elapsed;
 
 	elapsed = get_nanoelapsed(req_file->waiting_start);
 	if(req_file->waiting_time > elapsed)
@@ -293,14 +296,16 @@ void generic_init()
 /*	FUNCTIONS TO I/O SCHEDULING ALGORITHMS MANAGEMENT (INITIALIZATION, SETTING, ETC)	*/
 /**********************************************************************************************************************/
 //finds and returns the current scheduler indicated by index. If this scheduler needs an initialization function, calls it
-struct io_scheduler_instance_t *initialize_scheduler(int index) {
+struct io_scheduler_instance_t *initialize_scheduler(int index) 
+{
 	struct io_scheduler_instance_t *ret = find_io_scheduler(index);
+	int this_ret;
 	
 	if(ret)
 	{
-		int this_ret = ret->init();
+		this_ret = ret->init();
 		if(this_ret != 1)
-			return NULL
+			return NULL;
 	}
 		
 	return ret;

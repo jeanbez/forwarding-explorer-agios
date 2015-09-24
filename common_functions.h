@@ -89,13 +89,13 @@ inline int agios_start_thread_km(struct task_struct *thread, thread_function *fu
 /*call with (struct timespec t1, struct timespec t2) */
 #define get_nanoelapsed_diff(t1, t2)  ((t2.tv_nsec - t1.tv_nsec) + ((t2.tv_sec - t1.tv_sec)*1000000000L))
 /*takes a struct timespec and tells you how many nanoseconds passed since the timespec was obtained*/
-inline unsigned long long int get_nanoelapsed(struct timespec t1);
+inline unsigned long int get_nanoelapsed(struct timespec t1);
 /*translates a struct timespec to a unsigned long long int (in nanoseconds)*/
-inline unsigned long long int get_timespec2llu(struct timespec t);
+inline unsigned long int get_timespec2llu(struct timespec t);
 /*traslates a unsigned long long int (in nanoseconds) to struct timespec*/
-inline void get_llu2timespec(unsigned long long int t, struct timespec *ret);
+inline void get_llu2timespec(unsigned long int t, struct timespec *ret);
 /*does the same as get_nanoelapsed, but takes as parameter a unsigned long long int instead of a struct timespec*/
-inline unsigned long long int get_nanoelapsed_llu(unsigned long long int t1);
+inline unsigned long int get_nanoelapsed_llu(unsigned long int t1);
 
 /****************************************************************************************************/
 /*debug functions*/

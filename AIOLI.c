@@ -38,13 +38,15 @@
 
 #include "agios.h"
 #include "AIOLI.h"
-#include "req_timeline.h"
 #include "request_cache.h"
 #include "consumer.h"
 #include "iosched.h"
+#include "common_functions.h"
+#include "req_hashtable.h"
+#include "estimate_access_times.h"
 
 
-static unsigned long long int aioli_quantum; 
+static unsigned int aioli_quantum; 
 static struct timespec aioli_start;
 
 int AIOLI_init()
@@ -55,7 +57,7 @@ int AIOLI_init()
 	return 1;
 }
 
-int AIOLI_select_from_list(struct related_list_t *related_list, struct related_list_t **selected_queue, unsigned int *selected_timestamp)
+int AIOLI_select_from_list(struct related_list_t *related_list, struct related_list_t **selected_queue, unsigned long int *selected_timestamp)
 {
 	int reqnb = 0;
 	struct request_t *req;
@@ -79,7 +81,7 @@ int AIOLI_select_from_list(struct related_list_t *related_list, struct related_l
 	return reqnb;
 }
 
-int AIOLI_select_from_file(struct request_file_t *req_file, struct related_list_t **selected_queue, unsigned int *selected_timestamp)
+int AIOLI_select_from_file(struct request_file_t *req_file, struct related_list_t **selected_queue, unsigned long int *selected_timestamp)
 {
 	int reqnb=0;
 //	PRINT_FUNCTION_NAME;
@@ -100,13 +102,13 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 	int i;
 	struct agios_list_head *reqfile_l;
 	struct request_file_t *req_file;
-	unsigned long long int smaller_waiting_time=~0;	
+	unsigned int smaller_waiting_time=~0;	
 	struct request_file_t *swt_file=NULL;
 	int reqnb;
 	struct related_list_t *tmp_selected_queue=NULL;
 	struct related_list_t *selected_queue = NULL;
-	unsigned int tmp_timestamp;
-	unsigned int selected_timestamp=~0;
+	unsigned long int tmp_timestamp;
+	unsigned long int selected_timestamp=~0;
 	int waiting_options=0;
 	struct request_t *req=NULL;
 
@@ -156,7 +158,7 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 	}
 	else if(waiting_options) // we could not select a queue, because all the files are waiting. So we should wait
 	{
-		debug("could not avoid it, will have to wait %llu", smaller_waiting_time);
+		debug("could not avoid it, will have to wait %u", smaller_waiting_time);
 		agios_wait(smaller_waiting_time, swt_file->file_id);	
 		swt_file->waiting_time = 0;
 	}
@@ -164,11 +166,11 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 }
 
 /*return the next quantum considering how much of the last one was used*/
-unsigned long long int adjust_quantum(unsigned long long int elapsed_time, unsigned long long int quantum, int type)
+unsigned long long int adjust_quantum(unsigned long int elapsed_time, unsigned int quantum, short int type)
 {
-	unsigned long long int requiredqt;
-	unsigned long long int max_bound;
-	unsigned long long int used_quantum_rate = (elapsed_time*100)/quantum;
+	unsigned long int requiredqt;
+	unsigned long int max_bound;
+	unsigned long int used_quantum_rate = (elapsed_time*100)/quantum;
 
 	/*adjust the next quantum considering how much of the last one was really used*/
 	
@@ -208,7 +210,7 @@ void AIOLI(void *clnt)
 	int selected_hash = 0;
 	struct request_t *req;
 	long long int remaining=0;
-	int type;
+	short int type;
 	short int update_time=0;
 
 	PRINT_FUNCTION_NAME;

@@ -47,14 +47,14 @@
  * GLOBAL ACCESS PATTERN STATISTICS *
  ***********************************************************************************************************/
 //TODO could we have multiple threads accessing the statistics at the same time? So should we protect them?
-static unsigned int total_reqnb; //we have a similar counter in consumer.c, but this one can be reset, that one is fixed
+static unsigned long int total_reqnb; //we have a similar counter in consumer.c, but this one can be reset, that one is fixed
 //to measure time between requests
 static struct timespec last_req; 
 static unsigned long long int global_req_time; 
-static unsigned long long int global_min_req_time;
-static unsigned long long int global_max_req_time;
+static unsigned long int global_min_req_time;
+static unsigned long int global_max_req_time;
 //to measure request size
-static unsigned long int global_req_size;
+static unsigned long long int global_req_size;
 static unsigned long int global_min_req_size; //TODO do we need long?
 static unsigned long int global_max_req_size;
 
@@ -108,29 +108,9 @@ static int hash_position;
 /***********************************************************************************************************
  * FUNCTIONS TO UPDATE STATISTICS UPON EVENTS *
  ***********************************************************************************************************/
-//receives a request (which is part of a virtual request) and returns the latest contiguous request's timestamp (from the same virtual request). -1 if no contiguous request (?)
-unsigned long long int get_latest_contig(struct request_t *req)
-{
-	unsigned long long int ret=-1;
-	struct request_t *other_req;
-	//look to the request with lower offset	
-	if(req->aggregation_element.prev != &req->agg_head->reqs_list) //if this is not the first request of the virtual request list
-	{
-		other_req = agios_list_entry(req->aggregation_element.prev, struct request_t, aggregation_element);
-		ret = other_req->jiffies_64;
-	}
-	//look to the next request
-	if(req->aggregation_element.next != &req->agg_head->reqs_list) //if this is not the last request of the virtual request list
-	{
-		other_req = agios_list_entry(req->aggregation_element.next, struct request_t, aggregation_element);
-		if(other_req->jiffies64 > ret)
-			ret = other_req->jiffies_64;
-	}
-	return ret;
-}
 void update_local_stats(struct related_list_statistics_t *stats, struct request_t *req)
 {
-	unsigned long long int elapsedtime=0;
+	unsigned long int elapsedtime=0;
 	long int this_distance;
 
 	//update local statistics on time between requests
@@ -149,7 +129,7 @@ void update_local_stats(struct related_list_statistics_t *stats, struct request_
 		if(elapsedtime < stats->min_request_time)
 			stats->min_request_time = elapsedtime;
 	}
-	get_llu2timespec(req->jiffies_64, req->globalinfo->last_req_time);
+	get_llu2timespec(req->jiffies_64, &req->globalinfo->last_req_time);
 		
 	//update local statistics on average offset distance between consecutive requests
 	//TODO is it the same thing done by predict when including requests? should we join these codes?
@@ -171,29 +151,13 @@ void update_local_stats(struct related_list_statistics_t *stats, struct request_
 		stats->max_req_size = req->io_data.len;
 	if(req->io_data.len < stats->min_req_size)
 		stats->min_req_size = req->io_data.len;
-
-	//update local statistics on time between contiguous requests
-	//TODO actually this does not give much information, since it includes only measurements from requests which were successfully aggregated
-	if(req->agg_head) //this request was included in a virtual one
-	{
-		elapsedtime = get_latest_contig(req); ///take the latest from the contiguous requests (the minimum difference)
-		if(elapsed_time >=0)
-		{
-			elapsedtime = (req->jiffies64 - elapsedtime)/1000; //microseconds
-			stats->total_contig_time+=elapsedtime;
-			stats->contig_count++;
-			if(elapsedtime < stats->min_contig_time)
-				stats->min_contig_time = elapsedtime;
-			if(elapsedtime > stats->max_contig_time)
-				stats->max_contig_time = elapsedtime;
-		}	
-	}
 }
 /*update the stats after the arrival of a new request
  * must hold the hashtable mutex 
  */
 void proc_stats_newreq(struct request_t *req)
 {
+	unsigned long int elapsedtime=0;
 
 	if(req->state == RS_PREDICTED)
 	{
@@ -223,8 +187,8 @@ void proc_stats_newreq(struct request_t *req)
 			global_min_req_size = req->io_data.len;
 
 		//update local statistics
-		update_local_stats(&req->globalinfo->stats_file);
-		update_local_stats(&req->globalinfo->stats_window);
+		update_local_stats(&req->globalinfo->stats_file, req);
+		update_local_stats(&req->globalinfo->stats_window, req);
 		
 		req->globalinfo->last_received_finaloffset = req->io_data.offset + req->io_data.len;
 	}
@@ -243,9 +207,23 @@ void reset_global_reqstats()
 }
 /*reset statistics used for scheduling algorithm selection*/
 //this is called while holding the migration mutex algorithm, so no other mutexes are necessary
-void reset_stats_window_related_list(struct related_list_t *related)
+void reset_stats_window_related_list(struct related_list_t *related_list)
 {
-	//TODO according to agios.h
+	related_list->stats_window.processedreq_nb = 0;
+
+	related_list->stats_window.total_req_size=0;
+	related_list->stats_window.min_req_size=~0;
+	related_list->stats_window.max_req_size=0;
+
+	related_list->stats_window.max_request_time = 0;
+	related_list->stats_window.total_request_time = 0;
+	related_list->stats_window.min_request_time = ~0;
+
+	related_list->stats_window.avg_distance=0;
+	related_list->stats_window.avg_distance_count=1;
+
+	related_list->stats_window.aggs_no = 0;
+	related_list->stats_window.sum_of_agg_reqs = 0;
 }
 void reset_stats_window(void)
 {
@@ -292,20 +270,17 @@ void stats_aggregation(struct related_list_t *related)
 /*updates the stats after the detection of a shift phenomenon*/
 void stats_shift_phenomenon(struct related_list_t *related)
 {
-	related->stats_file.shift_phenomena++;
-	related->stats_window.shift_phenomena++;
+	related->shift_phenomena++;
 }
 /*updates the stats after the detection that a better aggregation is possible (by looking to the current stats for the file)*/
 void stats_better_aggregation(struct related_list_t *related)
 {
-	related->stats_file.better_aggregation++;
-	related->stats_window.better_aggregation++;
+	related->better_aggregation++;
 }
 /*updates the stats after the detection that a better aggregation is possible (by looking at the predictions)*/
 void stats_predicted_better_aggregation(struct related_list_t *related)
 {
-	related->stats_file.predicted_better_aggregation++;
-	related->stats_window.predicted_better_aggregation++;
+	related->predicted_better_aggregation++;
 }
 
 /***********************************************************************************************************
@@ -427,9 +402,9 @@ void print_predicted_stats_start(void)
 #endif
 }
 
-predicted_stats_show_related_list(struct related_list_t *related, const char *list_name)
+void predicted_stats_show_related_list(struct related_list_t *related, const char *list_name)
 {
-	unsigned int min_req_size, avg_req_size;
+	unsigned long int min_req_size, avg_req_size;
 	double avg_agg_size;
 
 	if(related->stats_file.min_req_size == ~0)
@@ -450,8 +425,8 @@ predicted_stats_show_related_list(struct related_list_t *related, const char *li
 #else
 	fprintf(stats_file, 
 #endif
-	"file id: %s\n\t%s:\t%u\t%llu\t%u\t%u\t%u\t%u/%u=%.2f\t%u\t%Le\t%Le\n",
-	   related_list->req_file->file_id,
+	"file id: %s\n\t%s:\t%lu\t%llu\t%lu\t%lu\t%lu\t%lu/%lu=%.2f\t%u\t%Le\t%Le\n",
+	   related->req_file->file_id,
 	   list_name,
 	   related->stats_file.processedreq_nb,
 	   related->stats_file.total_req_size,
@@ -462,12 +437,8 @@ predicted_stats_show_related_list(struct related_list_t *related, const char *li
 	   related->stats_file.aggs_no,
 	   avg_agg_size,
 	   related->best_agg,
-	   related->stats_file->avg_distance,
-#ifndef ORANGEFS_AGIOS
+	   related->stats_file.avg_distance,
 	   related->avg_stripe_difference);
-#else
-	   -1);
-#endif
 
 }
 
@@ -511,7 +482,7 @@ void stats_show_predicted(void)
 		{
 			agios_list_for_each_entry(req_file, reqfile_l, hashlist)
 			{
-				if((req_file->predicted_writes.proceedreq_nb > 0) || (req_file->predicted_reads.proceedreq_nb > 0))
+				if((req_file->predicted_writes.stats_file.processedreq_nb > 0) || (req_file->predicted_reads.stats_file.processedreq_nb > 0))
 					predicted_stats_show_one(req_file);
 			}
 		}		
@@ -521,10 +492,10 @@ void stats_show_predicted(void)
 }
 #endif
 
-void stats_show_related_list(struct related_list *related, const char *list_name)
+void stats_show_related_list(struct related_list_t *related, const char *list_name)
 {
-	unsigned long long int min_request_time, avg_request_time;
-	unsigned int min_req_size, avg_req_size;
+	unsigned long int min_request_time, avg_request_time;
+	unsigned long int min_req_size, avg_req_size;
 	double avg_agg_size;
 
 	if(related->stats_file.min_request_time == ~0)
@@ -554,7 +525,7 @@ void stats_show_related_list(struct related_list *related, const char *list_name
 #else
 	seq_printf(stats_file,
 #endif
-	   "file id: %s\n\t%s:\t%u\t%llu\t%u\t%u\t%u\t%u/%u=%.2f\t%u\t%u\t%u\t%u\t%u\t%llu\t%llu\t%llu\n",
+	   "file id: %s\n\t%s:\t%lu\t%llu\t%lu\t%lu\t%lu\t%lu/%lu=%.2f\t%u\t%u\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\n",
 	   related->req_file->file_id,
 	   list_name,
 	   related->stats_file.processedreq_nb,
@@ -582,14 +553,12 @@ static int stats_show_one(struct seq_file *s, void *v)
 void stats_show_one(struct request_file_t *req_file)
 #endif
 {
-	int reqnb_file;
 #ifdef AGIOS_KERNEL_MODULE
 	struct request_file_t *req_file = (struct request_file_t *)v;
 	stats_file = s;
 #endif
 
-	reqnb_file = req_file->related_reads.stats_file.processedreq_nb + req_file->related_writes.stats_file.processedreq_nb;
-	if(reqnb_file <= 0)
+	if((req_file->related_reads.stats_file.processedreq_nb + req_file->related_writes.stats_file.processedreq_nb) <= 0)
 #ifndef AGIOS_KERNEL_MODULE
 			return;
 #else
@@ -609,7 +578,7 @@ static void stats_show_ending(struct seq_file *s, void *v)
 void stats_show_ending(void)
 #endif
 {
-	unsigned long long int global_avg_time;
+	unsigned long int global_avg_time;
 	unsigned long int global_avg_size;
 
 	if(total_reqnb > 1)
@@ -628,7 +597,7 @@ void stats_show_ending(void)
 #else
 	seq_printf(stats_file,
 #endif
-	"total of %d requests\n\tavg\tmin\tmax\nglobal time between requests:\t%llu\t%llu\t%llu\nrequest size:\t%lu\t%lu\t%lu", 
+	"total of %lu requests\n\tavg\tmin\tmax\nglobal time between requests:\t%lu\t%lu\t%lu\nrequest size:\t%lu\t%lu\t%lu", 
 	total_reqnb, 
 	global_avg_time,
 	global_min_req_time,
@@ -683,25 +652,32 @@ void stats_show(void)
 
 void reset_stats_related_list(struct related_list_t *related_list)
 {
-//TODO adjust this to the changes made to agios.h
 	related_list->laststartoff = 0;
 	related_list->lastfinaloff = 0;
-	related_list->used_quantum_rate=100;
 	related_list->predictedoff = 0;
+
 	related_list->lastaggregation = 0;
-	related_list->proceedreq_nb = 0;
-	related_list->stats.aggs_no = 0;
-	related_list->stats.sum_of_agg_reqs = 0;
-	related_list->stats.biggest = 0;
-	related_list->stats.shift_phenomena = 0;
-	related_list->stats.better_aggregation = 0;
-	related_list->stats.predicted_better_aggregation = 0;
-	related_list->stats.total_req_size=0;
-	related_list->stats.min_req_size=~0;
-	related_list->stats.max_req_size=0;
-	related_list->stats.max_request_time = 0;
-	related_list->stats.total_request_time = 0;
-	related_list->stats.min_request_time = ~0;
+	related_list->best_agg = 0;
+
+	related_list->shift_phenomena = 0;
+	related_list->better_aggregation = 0;
+	related_list->predicted_better_aggregation = 0;
+
+	related_list->stats_file.processedreq_nb = 0;
+
+	related_list->stats_file.total_req_size=0;
+	related_list->stats_file.min_req_size=~0;
+	related_list->stats_file.max_req_size=0;
+
+	related_list->stats_file.max_request_time = 0;
+	related_list->stats_file.total_request_time = 0;
+	related_list->stats_file.min_request_time = ~0;
+
+	related_list->stats_file.avg_distance=0;
+	related_list->stats_file.avg_distance_count=1;
+
+	related_list->stats_file.aggs_no = 0;
+	related_list->stats_file.sum_of_agg_reqs = 0;
 
 }
 

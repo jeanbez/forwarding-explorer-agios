@@ -93,15 +93,15 @@ void iosched_signal_synchronous(void);
 void iosched_wait_synchronous(void);
 
 //so other parts can get statistics
-inline unsigned long long int get_time_spent_waiting(void);
-inline unsigned long long int get_waiting_time_overlapped(void);
+inline unsigned long int get_time_spent_waiting(void);
+inline unsigned long int get_waiting_time_overlapped(void);
 
 //functions to I/O scheduling algorithm management (setting schedulers, initializing, etc)
 int get_algorithm_from_string(const char *alg);
 char *get_algorithm_name_from_index(int index);
 void register_static_io_schedulers(void);
 struct io_scheduler_instance_t *find_io_scheduler(int index);
-int initialize_scheduler(int index, void *consumer);
+struct io_scheduler_instance_t *initialize_scheduler(int index);
 
 //generic functions to be used by multiple scheduling algorithms
 void generic_post_process(struct request_t *req);
@@ -109,8 +109,8 @@ void generic_init();
 void waiting_algorithms_postprocess(struct request_t *req);
 inline void increment_sched_factor(struct request_t *req);
 inline struct request_t *checkSelection(struct request_t *req, struct request_file_t *req_file);
-void agios_wait(unsigned long long int  timeout, char *file);
-void update_waiting_time_counters(struct request_file_t *req_file, unsigned long long int *smaller_waiting_time, struct request_file_t **swt_file );
+void agios_wait(unsigned int  timeout, char *file);
+void update_waiting_time_counters(struct request_file_t *req_file, unsigned int *smaller_waiting_time, struct request_file_t **swt_file );
 
 
 /*TODO maybe we could tolerate some useless space between the two aggregated requests, since it is possible that, because of block sizes, this useless portion will be requested anyway*/

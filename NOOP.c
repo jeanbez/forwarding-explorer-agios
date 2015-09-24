@@ -36,13 +36,14 @@
 #endif
 
 
-#include "agios.h"
+#include "NOOP.h"
 #include "req_timeline.h"
 #include "req_hashtable.h"
 #include "request_cache.h"
 #include "consumer.h"
 #include "iosched.h"
-#include "NOOP.h"
+#include "common_functions.h"
+#include "mylist.h"
 
 //we need to know which was the data structure used by the last scheduling algorithm so we know where to take requests from
 static short int previous_needs_hashtable=0;
@@ -51,12 +52,12 @@ void set_noop_previous_needs_hashtable(short int value)
 	previous_needs_hashtable=value;
 }
 
-short int process_all_requests_from_related_list(struct related_list_t *related_list, struct client_t *clnt, int hash)
+short int process_all_requests_from_related_list(struct related_list_t *related_list, struct client *clnt, int hash)
 {
 	struct request_t *req, *aux_req=NULL;
 	short int update_time = 0;
 	
-	agios_list_for_each_entry(req, related_list, related)
+	agios_list_for_each_entry(req, &related_list->list, related)
 	{
 		if(aux_req)
 		{
@@ -83,6 +84,7 @@ void NOOP(void *clnt)
 {
 	int i;
 	struct agios_list_head *list;
+	struct request_file_t *req_file;
 	struct request_t *req;
 	short int update_time=0;
 
@@ -98,7 +100,7 @@ void NOOP(void *clnt)
 					update_time = process_all_requests_from_related_list(&req_file->related_reads, clnt, i);
 				if(update_time)
 				{
-					agios_debug("NOOP cleanup exiting without finishing because it of some refresh period");
+					debug("NOOP cleanup exiting without finishing because it of some refresh period");
 					break; //we've changed to NOOP and then started cleaning the current data structures (that we are no longer feeding). But it is time to refresh something so we will stop
 				}
 			}
@@ -116,7 +118,7 @@ void NOOP(void *clnt)
 				generic_post_process(req);
 				if(update_time)
 				{
-					agios_debug("NOOP cleanup exiting without finishing because it of some refresh period");
+					debug("NOOP cleanup exiting without finishing because it of some refresh period");
 					break; //we've changed to NOOP and then started cleaning the current data structures (that we are no longer feeding). But it is time to refresh something so we will stop
 				}
 			}

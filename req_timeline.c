@@ -117,7 +117,7 @@ void __timeline_add_req(struct request_t *req, int max_aggregation_size, int sel
 	if (selected_alg == TIME_WINDOW_SCHEDULER) 
 	{
 		// Calculate the request priority
-		tw_priority = req->jiffies_64 / TIME_WINDOW_SIZE * 32768 + req->tw_app_id; //32768 here is the maximum value app_id can assume
+		tw_priority = req->jiffies_64 / TIME_WINDOW_SIZE * 32768 + req->tw_app_id; //32768 here is the maximum value app_id can assume  //TODO make sure this is exactly like presented in the paper
 
 		// Find the position to insert the request
 		agios_list_for_each_entry(tmp, this_timeline, related)

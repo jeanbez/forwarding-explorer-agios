@@ -35,6 +35,7 @@
 #include "predict.h"
 #include "req_hashtable.h"
 #include "req_timeline.h"
+#include "proc.h"
 
 #ifndef AGIOS_KERNEL_MODULE
 #include <pthread.h>
@@ -43,33 +44,10 @@
 #endif
 
 /***********************************************************************************************************
- * COUNTER FOR PROCESSED REQUESTS 	   *
- * we need to protect it because when using the NOOP scheduler the thread adding requests will also call *
- * process_requests, which updates this counter								 *
- ***********************************************************************************************************/
-static long long int processed_reqnb;  //it counts user requests, not virtual requests
-static pthread_mutex_t processed_reqnb_mutex = PTHREAD_MUTEX_INITIALIZER;
-static short int processed_reqnb_mutex_is_locked=0;
-inline void lock_processed_reqnb_mutex()
-{
-	if(current_alg != NOOP_SCHEDULER)
-	{
-		agios_mutex_lock(&processed_reqnb_mutex);
-		processed_reqnb_mutex_is_locked=1;
-	}
-}
-inline void unlock_processed_reqnb_mutex()
-{
-	if(processed_reqnb_mutex_is_locked) //it could be possible that the scheduling algorithm changed between the lock function and this one, so i've included this flag to avoid a deadlock (lock without unlock)
-	{
-		agios_mutex_unlock(&processed_reqnb_mutex);
-		processed_reqnb_mutex_is_locked=0;
-	}
-}
-
-/***********************************************************************************************************
  * PARAMETERS AND FUNCTIONS TO CONTROL THE I/O SCHEDULING THREAD *
  ***********************************************************************************************************/
+static unsigned long int processed_reqnb;  //it counts user requests, not virtual requests //I've had to move the definition to here because it is used by a function from this part
+
 #ifdef AGIOS_KERNEL_MODULE
 struct task_struct	*task;
 #else
@@ -85,6 +63,10 @@ static pthread_mutex_t request_added_mutex;
 #endif
 #ifdef AGIOS_KERNEL_MODULE
 static struct completion exited;
+void consumer_wait_completion(void)
+{
+	wait_for_completion(&exited);
+}
 #endif
 #ifdef AGIOS_KERNEL_MODULE
 void consumer_set_task(struct task_struct *value)
@@ -93,6 +75,14 @@ void consumer_set_task(int value)
 #endif
 {
 	task = value;
+}
+#ifdef AGIOS_KERNEL_MODULE
+struct task_struct * consumer_get_task(void)
+#else
+int consumer_get_task(void)
+#endif
+{
+	return task;
 }
 //signal new requests
 void consumer_signal_new_reqs(void)
@@ -158,10 +148,38 @@ static struct io_scheduler_instance_t *dynamic_scheduler=NULL;
 static int dynamic_alg = 0;
 static struct io_scheduler_instance_t *current_scheduler=NULL;
 static int current_alg = 0;
-static long int algorithm_selection_period=-1;
+static unsigned long int algorithm_selection_period=-1;
 static int algorithm_selection_reqnumber=1;
 static struct timespec last_algorithm_update; //the time at the last time we've selected an algorithm
-static long long int last_selection_processed_reqnb=0; //the processed requests counter at the last time we've selected an algorithm
+static unsigned long int last_selection_processed_reqnb=0; //the processed requests counter at the last time we've selected an algorithm
+struct io_scheduler_instance_t *consumer_get_current_scheduler(void)
+{
+	return current_scheduler;
+}
+
+/***********************************************************************************************************
+ * COUNTER FOR PROCESSED REQUESTS 	   *
+ * we need to protect it because when using the NOOP scheduler the thread adding requests will also call *
+ * process_requests, which updates this counter								 *
+ ***********************************************************************************************************/
+static pthread_mutex_t processed_reqnb_mutex = PTHREAD_MUTEX_INITIALIZER;
+static short int processed_reqnb_mutex_is_locked=0;
+inline void lock_processed_reqnb_mutex()
+{
+	if(current_alg != NOOP_SCHEDULER)
+	{
+		agios_mutex_lock(&processed_reqnb_mutex);
+		processed_reqnb_mutex_is_locked=1;
+	}
+}
+inline void unlock_processed_reqnb_mutex()
+{
+	if(processed_reqnb_mutex_is_locked) //it could be possible that the scheduling algorithm changed between the lock function and this one, so i've included this flag to avoid a deadlock (lock without unlock)
+	{
+		agios_mutex_unlock(&processed_reqnb_mutex);
+		processed_reqnb_mutex_is_locked=0;
+	}
+}
 
 /***********************************************************************************************************
  * LOCAL COPIES OF CONFIGURATION FILE PARAMETERS 	   *
@@ -175,7 +193,7 @@ inline void set_consumer_tracing(short int value)
  * REFRESH OF PREDICTION MODULE'S ALPHA FACTOR 	   *
  ***********************************************************************************************************/
 static int recalculate_alpha_period = -1;
-static long long int last_alpha_processed_reqnb=0; //the processed requests counter at the last time we've recalculated alpha
+static unsigned long int last_alpha_processed_reqnb=0; //the processed requests counter at the last time we've recalculated alpha
 
 /***********************************************************************************************************
  * REQUESTS PROCESSING (CALLED BY THE I/O SCHEDULERS THROUGH THE AGIOS THREAD)	   *
@@ -218,7 +236,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 	short int update_time=0;	
 	
 	if(!head_req)
-		return; /*whaaaat?*/
+		return 0; /*whaaaat?*/
 
 	PRINT_FUNCTION_NAME;
 	req_file = head_req->globalinfo->req_file;
@@ -237,7 +255,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 		agios_list_for_each_entry(req, &head_req->reqs_list, aggregation_element)
 		{
 			VERIFY_REQUEST(req);
-			debug("request [%d] - size %ld, offset %lld, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
+			debug("request [%d] - size %lu, offset %lu, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
 			reqs[reqs_index]=req->data;
 			reqs_index++;
 			req->globalinfo->current_size -= req->io_data.len; //when we aggregate overlapping requests, we don't adjust the related list current_size, since it is simply the sum of all requests sizes. For this reason, we have to subtract all requests from it individually when processing a virtual request.
@@ -255,7 +273,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 		if(head_req->reqnb == 1)
 		{
 			VERIFY_REQUEST(head_req);
-			debug("request [%d]  - size %ld, offset %lld, file %s - going back to the file system", head_req->data, head_req->io_data.len, head_req->io_data.offset, head_req->file_id);
+			debug("request [%d]  - size %lu, offset %lu, file %s - going back to the file system", head_req->data, head_req->io_data.len, head_req->io_data.offset, head_req->file_id);
 			head_req->globalinfo->current_size -= head_req->io_data.len; 
 			head_req->globalinfo->req_file->timeline_reqnb--;
 			update_filenb_counter(hash, req_file);
@@ -269,7 +287,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 			agios_list_for_each_entry(req, &head_req->reqs_list, aggregation_element)
 			{	
 				VERIFY_REQUEST(req);
-				debug("request [%d] - size %ld, offset %lld, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
+				debug("request [%d] - size %lu, offset %lu, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
 				req->globalinfo->current_size -= req->io_data.len; 
 				req->globalinfo->req_file->timeline_reqnb--;
 				update_filenb_counter(hash, req_file);
@@ -326,14 +344,14 @@ void check_update_time()
 		next_scheduler = initialize_scheduler(next_alg);
 		//migrate from one to another
 		lock_algorithm_migration_mutex(); //so we won't be able to include new requests while we migrate the data structures
-		change_selected_alg(next_alg, next_scheduler->needs_hashtable, next_scheduler->max_aggregation_size);
+		change_selected_alg(next_alg, next_scheduler->needs_hashtable, next_scheduler->max_aggreg_size);
 		config_gossip_algorithm_parameters(next_alg, next_scheduler);
 		current_scheduler = next_scheduler;
 		current_alg = next_alg;
 		agios_gettime(&last_algorithm_update); 
 		reset_stats_window(); //reset all stats so they will not affect the next selection
 		unlock_algorithm_migration_mutex();	
-		agios_debug("We've changed the scheduling algorithm to %s", current_scheduler->name);
+		debug("We've changed the scheduling algorithm to %s", current_scheduler->name);
 
 	}
 	else
@@ -374,7 +392,7 @@ void * agios_thread(void *arg)
 		current_alg = config_get_starting_algorithm(); //if we are using DYN_TREE and it selected a scheduling algorithm at its initialization phase, the parameter was updated and we can access it here. If not, we will use the provided starting algorithm
 		current_scheduler = initialize_scheduler(current_alg);
 		algorithm_selection_period = config_get_select_algorithm_period();
-		algorithm_selection_reqnumber = config_get_select_min_reqnumber();
+		algorithm_selection_reqnumber = config_get_select_algorithm_min_reqnumber();
 		if(algorithm_selection_period > 0)
 		{
 			agios_gettime(&last_algorithm_update);			
@@ -382,7 +400,7 @@ void * agios_thread(void *arg)
 		}
 	}
 	config_gossip_algorithm_parameters(current_alg, current_scheduler);	
-	agios_debug("selected algorithm: %s", current_scheduler->name);
+	debug("selected algorithm: %s", current_scheduler->name);
 	//since the current algorithm is decided, we can allow requests to be included
 	unlock_algorithm_migration_mutex();	
 	
@@ -417,7 +435,7 @@ void * agios_thread(void *arg)
 
 			if(get_current_reqnb() > 0)
 			{
-				current_scheduler->schedule(consumer->client);
+				current_scheduler->schedule(client);
 			}
 	
 			check_update_time();
