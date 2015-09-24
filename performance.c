@@ -43,7 +43,7 @@ inline void performance_set_needs_hashtable(short int value)
 /************************************************************************************************************
  * RELEASE FUNCTION, CALLED BY THE USER AFTER PROCESSING A REQUEST
  ************************************************************************************************************/
-int agios_release_request(char *file_id, int type, long len)
+int agios_release_request(char *file_id, int type, unsigned long int len, unsigned long int offset)
 {
 	struct request_file_t *req_file;
 	unsigned long hash_val;
@@ -69,8 +69,8 @@ int agios_release_request(char *file_id, int type, long len)
 	else
 		related = &req_file->related_reads;
 
-	//update performance information 
-	//TODO
+	//update local performance information 
+	
 
 	//release data structure lock
 	if(performance_needs_hashtable)
@@ -78,6 +78,6 @@ int agios_release_request(char *file_id, int type, long len)
 	else
 		timeline_unlock();
 
-	//if the current scheduling algorithm follows synchronous approach, we need to make allow it to continue
+	//if the current scheduling algorithm follows synchronous approach, we need to allow it to continue
 	iosched_signal_synchronous();
 }
