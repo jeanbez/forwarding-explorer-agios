@@ -60,7 +60,6 @@
 #include "DYN_TREE.h"
 
 
-static AGIOS_LIST_HEAD(io_schedulers); //the list of scheduling algorithms (with their parameters)
 
 /**********************************************************************************************************************/
 /*	LOCAL COPIES OF CONFIGURATION FILE PARAMETERS	*/
@@ -288,6 +287,19 @@ void generic_init()
 /**********************************************************************************************************************/
 /*	FUNCTIONS TO I/O SCHEDULING ALGORITHMS MANAGEMENT (INITIALIZATION, SETTING, ETC)	*/
 /**********************************************************************************************************************/
+static AGIOS_LIST_HEAD(io_schedulers); //the list of scheduling algorithms (with their parameters)
+//counts how many scheduling algorithms we have
+int get_io_schedulers_size(void)
+{
+	struct io_scheduler_instance_t *last_scheduler;
+
+	if(agios_list_empty(&io_schedulers))
+		return 0;
+
+	//get the last scheduler (because they have ordered indexes)
+	last_scheduler = agios_list_entry(last_scheduler, struct io_scheduler_instance_t, list);
+	return last_scheduler->index + 1;	//+1 because indexes start at 0
+}
 //finds and returns the current scheduler indicated by index. If this scheduler needs an initialization function, calls it
 struct io_scheduler_instance_t *initialize_scheduler(int index) 
 {
@@ -326,10 +338,6 @@ struct io_scheduler_instance_t *find_io_scheduler(int index)
 		
 int register_io_scheduler(struct io_scheduler_instance_t *io_sched)
 {
-
-	if (!io_sched->schedule)
-		return -1;
-
 	agios_list_add_tail(&io_sched->list, &io_schedulers);
 	return 0;
 }
@@ -443,7 +451,7 @@ void register_static_io_schedulers(void)
 			.schedule = &NOOP,
 			.select_algorithm = NULL,
 			.max_aggreg_size = 1,
-			.sync = 0,  //NOOP cannot ever by sync, otherwise it will probably cause deadlock at the user 
+			.sync = 0,  //NOOP cannot ever be sync, otherwise it will probably cause deadlock at the user 
 			.needs_hashtable= 0,
 			.can_be_dynamically_selected=1,
 			.is_dynamic = 0,
@@ -465,7 +473,7 @@ void register_static_io_schedulers(void)
 		},
 		{
 			.init = &ARMED_BANDIT_init,
-			.exit = NULL,
+			.exit = &ARMED_BANDIT_exit,
 			.schedule = NULL,
 			.select_algorithm = &ARMED_BANDIT_select_next_algorithm,
 			.max_aggreg_size = 1,

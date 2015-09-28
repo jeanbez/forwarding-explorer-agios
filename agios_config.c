@@ -79,6 +79,12 @@ inline int config_get_select_algorithm_min_reqnumber(void)
 inline void config_set_starting_algorithm(int value)
 {
 	config_starting_algorithm = value;
+	if((config_starting_algorithm == DYN_TREE_SCHEDULER) || (config_starting_algorithm == ARMED_BANDIT_SCHEDULER))
+	{
+		config_starting_algorithm = SJF_SCHEDULER;
+		agios_print("Error! Starting algorithm cannot be a dynamic one. Using SJF instead");
+	}
+	
 }
 inline int config_get_starting_algorithm(void)
 {
