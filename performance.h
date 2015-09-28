@@ -25,5 +25,8 @@
 #ifndef _PERFORMANCE_H_
 #define _PERFORMANCE_H_
 
+void reset_performance_counters(void);
+unsigned long long int get_performance_size(void);
+double get_performance_bandwidth(void);
 inline void performance_set_needs_hashtable(short int value);
 #endif

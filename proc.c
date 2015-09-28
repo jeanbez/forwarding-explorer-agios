@@ -32,6 +32,7 @@
 #include "agios_config.h"
 #include "req_hashtable.h"
 #include "req_timeline.h"
+#include "performance.h"
 
 #ifdef AGIOS_KERNEL_MODULE
 #include <linux/string.h>
@@ -46,17 +47,22 @@
 /***********************************************************************************************************
  * GLOBAL ACCESS PATTERN STATISTICS *
  ***********************************************************************************************************/
-//TODO could we have multiple threads accessing the statistics at the same time? So should we protect them?
-static unsigned long int total_reqnb; //we have a similar counter in consumer.c, but this one can be reset, that one is fixed
+struct global_statistics_t 
+{ 
+	unsigned long int total_reqnb; //we have a similar counter in consumer.c, but this one can be reset, that one is fixed (never set to 0, counts through the whole execution)
 //to measure time between requests
+	unsigned long long int global_req_time; 
+	unsigned long int global_min_req_time;
+	unsigned long int global_max_req_time;
+	//to measure request size
+	unsigned long long int global_req_size;
+	unsigned long int global_min_req_size; 
+	unsigned long int global_max_req_size;
+};
 static struct timespec last_req; 
-static unsigned long long int global_req_time; 
-static unsigned long int global_min_req_time;
-static unsigned long int global_max_req_time;
-//to measure request size
-static unsigned long long int global_req_size;
-static unsigned long int global_min_req_size; //TODO do we need long?
-static unsigned long int global_max_req_size;
+static struct global_statistics_t stats_for_file;
+static struct global_statistics_t stats_for_window;
+static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 
@@ -152,6 +158,26 @@ void update_local_stats(struct related_list_statistics_t *stats, struct request_
 	if(req->io_data.len < stats->min_req_size)
 		stats->min_req_size = req->io_data.len;
 }
+void update_global_stats_newreq(struct global_statistics_t *stats, struct request_t *req, unsigned long int elapsedtime)
+{
+
+	stats->total_reqnb++;
+	//update global statistics on time between requests
+	if((stats->total_reqnb > 1) && (elapsedtime > 0))
+	{
+		stats->global_req_time += elapsedtime;
+		if(elapsedtime > stats->global_max_req_time)
+			stats->global_max_req_time = elapsedtime;
+		if(elapsedtime < stats->global_min_req_time)
+			stats->global_min_req_time = elapsedtime;
+	}
+	//update global statistics on request size
+	stats->global_req_size += req->io_data.len;
+	if(req->io_data.len > stats->global_max_req_size)
+		stats->global_max_req_size = req->io_data.len;
+	if(req->io_data.len < stats->global_min_req_size)
+		stats->global_min_req_size = req->io_data.len;
+} 
 /*update the stats after the arrival of a new request
  * must hold the hashtable mutex 
  */
@@ -159,57 +185,76 @@ void proc_stats_newreq(struct request_t *req)
 {
 	unsigned long int elapsedtime=0;
 
+	req->globalinfo->stats_file.receivedreq_nb++; 
+	req->globalinfo->stats_window.receivedreq_nb++; 
+
 	if(req->state == RS_PREDICTED)
 	{
-		req->globalinfo->stats_file.processedreq_nb++; //we use the related_list structure counter to keep track of predicted requests 
-		req->globalinfo->stats_window.processedreq_nb++; //we use the related_list structure counter to keep track of predicted requests 
+		req->globalinfo->stats_file.processedreq_nb++; 
+		req->globalinfo->stats_window.processedreq_nb++; 
 	}
 	else //if req->state is RS_HASHTABLE
 	{
-		//update global statistics on time between requests
-		total_reqnb++;
-		if(total_reqnb > 1)
-		{
+		agios_mutex_lock(&global_statistics_mutex);
+
+		//update global statistics
+		if(req->jiffies_64 == req->globalinfo->req_file->first_request_time)
+			elapsedtime=0;
+		else
 			elapsedtime = (req->jiffies_64 - get_timespec2llu(last_req)) / 1000; //nano to microseconds
-			global_req_time += elapsedtime;
-			if(elapsedtime > global_max_req_time)
-				global_max_req_time = elapsedtime;
-			if(elapsedtime < global_min_req_time)
-				global_min_req_time = elapsedtime;
-		}
+		update_global_stats_newreq(&stats_for_file, req, elapsedtime); 
+		update_global_stats_newreq(&stats_for_window, req, elapsedtime); 
 		get_llu2timespec(req->jiffies_64, &last_req);
-		
-		//update global statistics on request size
-		global_req_size += req->io_data.len;
-		if(req->io_data.len > global_max_req_size)
-			global_max_req_size = req->io_data.len;
-		if(req->io_data.len < global_min_req_size)
-			global_min_req_size = req->io_data.len;
+
+		agios_mutex_unlock(&global_statistics_mutex);
 
 		//update local statistics
 		update_local_stats(&req->globalinfo->stats_file, req);
 		update_local_stats(&req->globalinfo->stats_window, req);
+
 		
 		req->globalinfo->last_received_finaloffset = req->io_data.offset + req->io_data.len;
 	}
 }
 
 /*reset some global stats*/
-void reset_global_reqstats()
+void _reset_global_reqstats(struct global_statistics_t *stats)
 {
-	total_reqnb=0;
-	global_req_time = 0;
-	global_min_req_time = ~0;
-	global_max_req_time = 0;
-	global_req_size = 0;
-	global_min_req_size = ~0;
-	global_max_req_size=0;
+	stats->total_reqnb=0;
+	stats->global_req_time = 0;
+	stats->global_min_req_time = ~0;
+	stats->global_max_req_time = 0;
+	stats->global_req_size = 0;
+	stats->global_min_req_size = ~0;
+	stats->global_max_req_size=0;
+}
+void reset_global_reqstats(void)
+{
+	agios_mutex_lock(&global_statistics_mutex);
+	_reset_global_reqstats(&stats_for_file);
+	_reset_global_reqstats(&stats_for_window);
+	agios_mutex_unlock(&global_statistics_mutex);
+}
+void reset_global_reqstats_window(void)
+{
+	agios_mutex_lock(&global_statistics_mutex);
+	_reset_global_reqstats(&stats_for_window);
+	agios_mutex_unlock(&global_statistics_mutex);
+}
+void reset_global_reqstats_file(void)
+{
+	agios_mutex_lock(&global_statistics_mutex);
+	_reset_global_reqstats(&stats_for_file);
+	agios_mutex_unlock(&global_statistics_mutex);
 }
 /*reset statistics used for scheduling algorithm selection*/
 //this is called while holding the migration mutex algorithm, so no other mutexes are necessary
 void reset_stats_window_related_list(struct related_list_t *related_list)
 {
 	related_list->stats_window.processedreq_nb = 0;
+	related_list->stats_window.receivedreq_nb = 0;
+	related_list->stats_window.processed_req_size = 0;
+	related_list->stats_window.processed_req_time = 0;
 
 	related_list->stats_window.total_req_size=0;
 	related_list->stats_window.min_req_size=~0;
@@ -252,7 +297,8 @@ void reset_stats_window(void)
 			reset_stats_window_related_list(&req_file->related_writes);
 		}
 	}
-	//TODO should we reset global statistics as well (actually, if we want to do this, then we will need to keep separate copies of them for the stats file.
+	reset_global_reqstats_window();
+	reset_performance_counters();
 }
 
 /*updates the stats after an aggregation*/
@@ -340,6 +386,9 @@ void print_something(const char *something)
 void print_selected_algs(void)
 {
 	int i;
+
+	PRINT_FUNCTION_NAME;
+
 	print_something("Scheduling algorithms:\n");
 	i = proc_algs_start;
 	while(i != proc_algs_end)
@@ -360,19 +409,14 @@ void *print_stats_start(struct seq_file *s, loff_t *pos)
 void print_stats_start(void)
 #endif
 {
+	PRINT_FUNCTION_NAME;
+
 #ifdef AGIOS_KERNEL_MODULE
 	stats_file = s;
 #endif
 	print_selected_algs();
 	
-	if ((get_current_reqfilenb() == 0)) //with this we are not showing predicted statistics
-#ifdef AGIOS_KERNEL_MODULE
-		return NULL;
-#else
-		return;
-#endif
-
-	print_something("\t\treqs\tsize\tsize_avg\tsize_min\tsize_max\tsum_/_aggs\tagg_bigg\tagg_last\tshift\tbetter\tpdt_better\ttbr_avg\ttbr_min\ttbr_max\n");
+	print_something("\t\treqs\tsize\tsize_avg\tsize_min\tsize_max\tsum_/_aggs\tagg_bigg\tagg_last\tshift\tbetter\tpdt_better\ttbr_avg\ttbr_min\ttbr_max\tproc_req\tband\n");
 
 #ifdef AGIOS_KERNEL_MODULE
 	hash_position=0;
@@ -420,13 +464,22 @@ void predicted_stats_show_related_list(struct related_list_t *related, const cha
 	else
 		avg_agg_size = 1;
 
+	if(strcmp(list_name, "read") == 0)
+	{
+#ifdef AGIOS_KERNEL_MODULE
+		seq_printf(stats_file, 
+#else
+		fprintf(stats_file, 
+#endif
+		"file id: %s\n", related->req_file->file_id);
+	} 
+
 #ifdef AGIOS_KERNEL_MODULE
 	seq_printf(stats_file, 
 #else
 	fprintf(stats_file, 
 #endif
-	"file id: %s\n\t%s:\t%lu\t%llu\t%lu\t%lu\t%lu\t%lu/%lu=%.2f\t%u\t%Le\t%Le\n",
-	   related->req_file->file_id,
+	"\t%s:\t%lu\t%llu\t%lu\t%lu\t%lu\t%lu/%lu=%.2f\t%u\t%Le\t%Le\n",
 	   list_name,
 	   related->stats_file.processedreq_nb,
 	   related->stats_file.total_req_size,
@@ -497,6 +550,8 @@ void stats_show_related_list(struct related_list_t *related, const char *list_na
 	unsigned long int min_request_time, avg_request_time;
 	unsigned long int min_req_size, avg_req_size;
 	double avg_agg_size;
+	double bandwidth=0.0;
+	long double tmp_time;
 
 	if(related->stats_file.min_request_time == ~0)
 		min_request_time = 0;
@@ -507,28 +562,43 @@ void stats_show_related_list(struct related_list_t *related, const char *list_na
 		min_req_size = 0;
 	else
 		min_req_size = related->stats_file.min_req_size;
-	if(related->stats_file.processedreq_nb > 0)
-		avg_req_size = (related->stats_file.total_req_size / related->stats_file.processedreq_nb);
+	if(related->stats_file.receivedreq_nb > 0)
+		avg_req_size = (related->stats_file.total_req_size / related->stats_file.receivedreq_nb);
 	else
 		avg_req_size = 0;
 	if(related->stats_file.aggs_no > 0) 
 		avg_agg_size = (((double)related->stats_file.sum_of_agg_reqs)/((double)related->stats_file.aggs_no));
 	else
 		avg_agg_size = 0;
-	if(related->stats_file.processedreq_nb > 1)
-		avg_request_time = (related->stats_file.total_request_time / (related->stats_file.processedreq_nb-1));
+	if(related->stats_file.receivedreq_nb > 1)
+		avg_request_time = (related->stats_file.total_request_time / (related->stats_file.receivedreq_nb-1));
 	else
 		avg_request_time = 0;
+	if(related->stats_file.processedreq_nb > 0)
+	{
+		tmp_time = get_ns2s(related->stats_file.processed_req_time);
+		if(tmp_time > 0)		
+			bandwidth = ((related->stats_file.processed_req_size) / tmp_time) / 1024.0;
+	}
+
+	if(strcmp(list_name, "read") == 0)
+	{
+#ifndef AGIOS_KERNEL_MODULE
+		fprintf(stats_file, 
+#else	
+		seq_printf(stats_file,
+#endif
+	   	"file id: %s\n", related->req_file->file_id);
+	}
 
 #ifndef AGIOS_KERNEL_MODULE
 	fprintf(stats_file, 
 #else
 	seq_printf(stats_file,
 #endif
-	   "file id: %s\n\t%s:\t%lu\t%llu\t%lu\t%lu\t%lu\t%lu/%lu=%.2f\t%u\t%u\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\n",
-	   related->req_file->file_id,
+	   "\t%s:\t%lu\t%llu\t%lu\t%lu\t%lu\t%lu/%lu=%.2f\t%u\t%u\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%.2f\n",
 	   list_name,
-	   related->stats_file.processedreq_nb,
+	   related->stats_file.receivedreq_nb,
 	   related->stats_file.total_req_size,
 	   avg_req_size,
 	   min_req_size,
@@ -543,7 +613,9 @@ void stats_show_related_list(struct related_list_t *related, const char *list_na
 	   related->predicted_better_aggregation,
            avg_request_time,
 	   min_request_time,
-	   related->stats_file.max_request_time);
+	   related->stats_file.max_request_time,
+	   related->stats_file.processedreq_nb,
+	   bandwidth);
 
 }
 
@@ -557,8 +629,9 @@ void stats_show_one(struct request_file_t *req_file)
 	struct request_file_t *req_file = (struct request_file_t *)v;
 	stats_file = s;
 #endif
+	PRINT_FUNCTION_NAME;
 
-	if((req_file->related_reads.stats_file.processedreq_nb + req_file->related_writes.stats_file.processedreq_nb) <= 0)
+	if((req_file->related_reads.stats_file.receivedreq_nb + req_file->related_writes.stats_file.receivedreq_nb) <= 0)
 #ifndef AGIOS_KERNEL_MODULE
 			return;
 #else
@@ -581,12 +654,14 @@ void stats_show_ending(void)
 	unsigned long int global_avg_time;
 	unsigned long int global_avg_size;
 
-	if(total_reqnb > 1)
-		global_avg_time = (global_req_time / (total_reqnb-1));
+	agios_mutex_lock(&global_statistics_mutex);
+
+	if(stats_for_file.total_reqnb > 1)
+		global_avg_time = (stats_for_file.global_req_time / (stats_for_file.total_reqnb-1));
 	else
 		global_avg_time = 0;
-	if(total_reqnb > 0)
-		global_avg_size = (global_req_size / total_reqnb);
+	if(stats_for_file.total_reqnb > 0)
+		global_avg_size = (stats_for_file.global_req_size / stats_for_file.total_reqnb);
 	else
 		global_avg_size = 0;
 	
@@ -597,14 +672,26 @@ void stats_show_ending(void)
 #else
 	seq_printf(stats_file,
 #endif
-	"total of %lu requests\n\tavg\tmin\tmax\nglobal time between requests:\t%lu\t%lu\t%lu\nrequest size:\t%lu\t%lu\t%lu", 
-	total_reqnb, 
+	"total of %lu requests\n\tavg\tmin\tmax\nglobal time between requests:\t%lu\t%lu\t%lu\nrequest size:\t%lu\t%lu\t%lu\n", 
+	stats_for_file.total_reqnb, 
 	global_avg_time,
-	global_min_req_time,
-	global_max_req_time,
+	stats_for_file.global_min_req_time,
+	stats_for_file.global_max_req_time,
 	global_avg_size,
-	global_min_req_size,
-	global_max_req_size);
+	stats_for_file.global_min_req_size,
+	stats_for_file.global_max_req_size);
+
+	agios_mutex_unlock(&global_statistics_mutex);
+
+#ifndef AGIOS_KERNEL_MODULE
+	fprintf(stats_file,  
+#else
+	seq_printf(stats_file,
+#endif
+	"served an amount of %llu bytes, bandwidth was %.2f KB/s",
+	get_performance_size(),
+	get_performance_bandwidth()/1024.0);
+
 
 }
 
@@ -614,6 +701,8 @@ void stats_show(void)
 	struct request_file_t *req_file;
 	int i;
 	struct agios_list_head *reqfile_l;
+
+	PRINT_FUNCTION_NAME;
 
 	if(proc_needs_hashtable)
 	{
@@ -634,6 +723,7 @@ void stats_show(void)
 	}
 	else
 	{
+		debug("printing statistics to file from timeline");
 		timeline_lock();
 		reqfile_l = get_timeline_files();
 		if(!agios_list_empty(reqfile_l))
@@ -664,6 +754,9 @@ void reset_stats_related_list(struct related_list_t *related_list)
 	related_list->predicted_better_aggregation = 0;
 
 	related_list->stats_file.processedreq_nb = 0;
+	related_list->stats_file.receivedreq_nb = 0;
+	related_list->stats_file.processed_req_size = 0;
+	related_list->stats_file.processed_req_time = 0;
 
 	related_list->stats_file.total_req_size=0;
 	related_list->stats_file.min_req_size=~0;
@@ -687,7 +780,7 @@ void agios_reset_stats()
 	int i;
 	struct agios_list_head *reqfile_l;
 
-	reset_reqstats();
+	reset_global_reqstats_file();
 #ifndef AGIOS_KERNEL_MODULE
 	if(config_get_trace())
 		agios_trace_reset();	
@@ -725,6 +818,8 @@ void agios_reset_stats()
 #ifndef AGIOS_KERNEL_MODULE
 void agios_print_stats_file(char *filename)
 {
+	PRINT_FUNCTION_NAME;
+
 	/*opens the stats file*/
 	if(!filename)
 	{

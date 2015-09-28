@@ -94,4 +94,10 @@ inline unsigned long int get_nanoelapsed_llu(unsigned long int t1)
 	agios_gettime(&t2);
 	return (get_timespec2llu(t2) - t1);
 }
+inline long double get_ns2s(unsigned long int t1)
+{
+	long double ret = t1 / 1000.0;
+	ret = ret / 1000.0;
+	return ret / 1000.0;
+}
 

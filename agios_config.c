@@ -244,6 +244,7 @@ inline unsigned long int config_get_max_trace_buffer_size(void)
 //this function needs to be called when changing the scheduling algorithm. It updates other modules' local copies of configuration paramters
 void config_gossip_algorithm_parameters(int alg, struct io_scheduler_instance_t *scheduler)
 {
+	PRINT_FUNCTION_NAME;
 	proc_set_needs_hashtable(scheduler->needs_hashtable);
 	set_selected_alg(alg);
 	set_max_aggregation_size(scheduler->max_aggreg_size);
@@ -362,7 +363,7 @@ void config_print(void)
 	agios_just_print("Default scheduling algorithm: %s\n", get_algorithm_name_from_index(config_default_algorithm)); 
 	if(config_default_algorithm == DYN_TREE_SCHEDULER)
 	{	
-		agios_just_print("AGIOS will select the best scheduling algorithm according for the situation\n");
+		agios_just_print("AGIOS will select the best scheduling algorithm for the situation\n");
 		if(config_select_algorithm_period >= 0)
 			agios_just_print("The scheduling algorithm selection will be redone every %ld nanoseconds, as long as %d requests were processed in this period. We will start with %s\n", 
 config_select_algorithm_period, config_select_algorithm_min_reqnumber, get_algorithm_name_from_index(config_starting_algorithm));

@@ -30,7 +30,7 @@
 void stats_aggregation(struct related_list_t *related);
 void stats_shift_phenomenon(struct related_list_t *related);
 void stats_better_aggregation(struct related_list_t *related);
-void reset_reqstats(void);
+void reset_global_reqstats(void);
 void stats_predicted_better_aggregation(struct related_list_t *related);
 void proc_stats_newreq(struct request_t *req);
 

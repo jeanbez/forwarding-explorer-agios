@@ -37,8 +37,8 @@ struct client {
 	void (*process_request)(int64_t req_id);
 	void (*process_requests)(int64_t *reqs, int reqnb);
 #else
-	void (*process_request)(int i);
-	void (*process_requests)(int *i, int reqnb);
+	void (*process_request)(void * i);
+	void (*process_requests)(void ** i, int reqnb);
 #endif
 
 	short int sync; //this parameter is decided by AGIOS, after choosing the scheduling algorithm. 
@@ -55,12 +55,15 @@ void agios_exit(void);
 
 
 #ifdef ORANGEFS_AGIOS
-int agios_add_request(char *file_id, int type, long long offset,
-		       long len, int64_t data, struct client *clnt);
+int agios_add_request(char *file_id, short int type, unsigned long int offset,
+		       unsigned long int len, int64_t data, struct client *clnt);
 #else
-int agios_add_request(char *file_id, int type, long long offset,
-		       long len, int data, struct client *clnt);
+int agios_add_request(char *file_id, short int type, unsigned long int offset,
+		       unsigned long int len, void * data, struct client *clnt);
 #endif
+int agios_release_request(char *file_id, short int type, unsigned long int len, unsigned long int offset);
+
+int agios_set_stripe_size(char *file_id, unsigned int stripe_size);
 
 
 void agios_print_stats_file(char *filename);

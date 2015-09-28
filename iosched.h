@@ -41,6 +41,7 @@
 #define TIME_WINDOW_SCHEDULER 6
 #define NOOP_SCHEDULER 7
 #define DYN_TREE_SCHEDULER 8
+#define ARMED_BANDIT_SCHEDULER 9
 
 struct request_t;
 struct request_file_t;
@@ -105,6 +106,7 @@ struct io_scheduler_instance_t *initialize_scheduler(int index);
 
 //generic functions to be used by multiple scheduling algorithms
 void generic_post_process(struct request_t *req);
+void generic_cleanup(struct request_t *req);
 void generic_init();
 void waiting_algorithms_postprocess(struct request_t *req);
 inline void increment_sched_factor(struct request_t *req);

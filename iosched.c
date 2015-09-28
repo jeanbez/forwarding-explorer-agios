@@ -134,34 +134,27 @@ inline unsigned long int get_waiting_time_overlapped(void)
 /*cleans up request_t structures after processing requests*/
 void generic_post_process(struct request_t *req)
 {
-	struct request_t *sub_req, *aux_req=NULL;
+	req->globalinfo->lastaggregation = req->reqnb; 
 
-	req->globalinfo->lastaggregation = req->reqnb;
-	req->globalinfo->stats_file.processedreq_nb += req->reqnb;
-	req->globalinfo->stats_window.processedreq_nb += req->reqnb;
-
-	stats_aggregation(req->globalinfo);
-
-	if(req->reqnb == 1)
-		request_cache_free(req);
-	else
+	if(req->reqnb > 1) //this was an aggregated request
 	{
-		agios_list_for_each_entry(sub_req, &(req->reqs_list), aggregation_element)
-		{
-			if(aux_req)
-			{
-				agios_list_del(&aux_req->aggregation_element);
-				request_cache_free(aux_req);
-				aux_req=NULL;
-			}
-			aux_req=sub_req;
-		}
-		if(aux_req)
-		{
-			agios_list_del(&aux_req->aggregation_element);
-			request_cache_free(aux_req);
-		}
+		stats_aggregation(req->globalinfo);
+		request_cache_free(req); //we free the virtual request structure, since its parts were included in the dispatch queue as separated requests
 	}
+}
+/*this function is called by the release function, when the library user signaled it finished processing a request. In the case of a virtual request, its requests will be signaled separately, so here we are sure to receive a singel request */
+void generic_cleanup(struct request_t *req)
+{
+	//update the processed requests counter
+	req->globalinfo->stats_window.processedreq_nb++;
+	req->globalinfo->stats_file.processedreq_nb++;
+
+	//update the data counter
+	req->globalinfo->stats_window.processed_req_size += req->io_data.len;
+	req->globalinfo->stats_file.processed_req_size += req->io_data.len;
+
+	agios_list_del(&req->related); //remove from the dispatch queue
+	request_cache_free(req); //free the memory
 }
 /* post process function for scheduling algorithms which use waiting times (AIOLI and MLF)*/
 void waiting_algorithms_postprocess(struct request_t *req)
@@ -303,11 +296,17 @@ struct io_scheduler_instance_t *initialize_scheduler(int index)
 	
 	if(ret)
 	{
-		this_ret = ret->init();
-		if(this_ret != 1)
-			return NULL;
+		debug("Initializing scheduler %s", ret->name);
+		if(ret->init)
+		{
+			debug("will call specific initialization routine for this algorithm");
+			this_ret = ret->init();
+			if(this_ret != 1)
+				return NULL;
+		}
 	}
 		
+	PRINT_FUNCTION_EXIT;
 	return ret;
 }
 
@@ -463,6 +462,19 @@ void register_static_io_schedulers(void)
 			.is_dynamic = 1,
 			.name = "DYN_TREE",
 			.index = 8,
+		},
+		{
+			.init = &ARMED_BANDIT_init,
+			.exit = NULL,
+			.schedule = NULL,
+			.select_algorithm = &ARMED_BANDIT_select_next_algorithm,
+			.max_aggreg_size = 1,
+			.sync = 0,
+			.needs_hashtable = 0,
+			.can_be_dynamically_selected = 0,
+			.is_dynamic = 1,
+			.name = "ARMED_BANDIT",
+			.index = 9,
 		}
 	};
 	int i = 0;

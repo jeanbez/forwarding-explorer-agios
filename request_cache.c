@@ -24,6 +24,7 @@
 
 #include "common_functions.h"
 #include "NOOP.h"
+#include "performance.h"
 
 #ifdef AGIOS_KERNEL_MODULE
 /*
@@ -386,7 +387,7 @@ void request_cache_free(struct request_t *req)
 #ifdef ORANGEFS_AGIOS
 struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, unsigned long int arrival_time, short int state)
 #else
-struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int data, unsigned long int arrival_time, short int state) 
+struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, unsigned long int arrival_time, short int state) 
 #endif
 
 {
@@ -432,6 +433,10 @@ struct request_t * request_constructor(char *file_id, short int type, unsigned l
 void request_file_init_related_statistics(struct related_list_statistics_t *stats)
 {
 	stats->processedreq_nb=0;
+	stats->receivedreq_nb=0;
+
+	stats->processed_req_size=0;
+	stats->processed_req_time=0;
 
 	stats->total_req_size = 0;
 	stats->min_req_size = ~0;
@@ -451,6 +456,7 @@ void request_file_init_related_statistics(struct related_list_statistics_t *stat
 void request_file_init_related_list(struct related_list_t *related_list, struct request_file_t *req_file)
 {
 	init_agios_list_head(&related_list->list);
+	init_agios_list_head(&related_list->dispatch);
 	related_list->req_file = req_file;
 
 	related_list->laststartoff = 0;
@@ -531,7 +537,8 @@ int request_cache_init(void)
 {
 	int ret=0;
 
-	reset_reqstats(); //put all statistics to zero
+	reset_global_reqstats(); //put all statistics to zero
+	reset_performance_counters();
 
 	timeline_init(); //initializes the timeline
 
@@ -751,7 +758,7 @@ struct request_file_t *find_req_file(struct agios_list_head *hash_list, char *fi
 #ifdef ORANGEFS_AGIOS
 int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, struct client *clnt)
 #else
-int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, int data, struct client *clnt) //TODO we will need app_id for time_window as well
+int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, struct client *clnt) //TODO we will need app_id for time_window as well
 #endif
 {
 	struct request_t *req;
@@ -799,8 +806,6 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 		}
 
 		//free the lock
-		if(scheduler_needs_hashtable)
-			debug("current status. hashtable[%d] has %d requests, there are %d requests in the scheduler to %d files.", hash, hashlist_reqcounter[hash], get_current_reqnb(), get_current_reqfilenb());
 		if(scheduler_needs_hashtable)
 			hashtable_unlock(hash);
 		else

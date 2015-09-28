@@ -241,6 +241,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 	PRINT_FUNCTION_NAME;
 	req_file = head_req->globalinfo->req_file;
 
+
 	if(tracing)
 		agios_trace_process_requests(head_req);
 
@@ -249,13 +250,13 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 #ifdef ORANGEFS_AGIOS
 		int64_t *reqs = (int64_t *)malloc(sizeof(int64_t)*(head_req->reqnb+1));
 #else
-		int *reqs = (int *)malloc(sizeof(int)*(head_req->reqnb+1));
+		void **reqs = (void **)malloc(sizeof(void *)*(head_req->reqnb+1));
 #endif
 		int reqs_index=0;
 		agios_list_for_each_entry(req, &head_req->reqs_list, aggregation_element)
 		{
-			VERIFY_REQUEST(req);
-			debug("request [%d] - size %lu, offset %lu, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
+			agios_list_add_tail(&req->related, &head_req->globalinfo->dispatch);
+			debug("request - size %lu, offset %lu, file %s - going back to the file system", req->io_data.len, req->io_data.offset, req->file_id);
 			reqs[reqs_index]=req->data;
 			reqs_index++;
 			req->globalinfo->current_size -= req->io_data.len; //when we aggregate overlapping requests, we don't adjust the related list current_size, since it is simply the sum of all requests sizes. For this reason, we have to subtract all requests from it individually when processing a virtual request.
@@ -272,8 +273,8 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 	else{
 		if(head_req->reqnb == 1)
 		{
-			VERIFY_REQUEST(head_req);
-			debug("request [%d]  - size %lu, offset %lu, file %s - going back to the file system", head_req->data, head_req->io_data.len, head_req->io_data.offset, head_req->file_id);
+			agios_list_add_tail(&head_req->related, &head_req->globalinfo->dispatch);
+			debug("request - size %lu, offset %lu, file %s - going back to the file system", head_req->io_data.len, head_req->io_data.offset, head_req->file_id);
 			head_req->globalinfo->current_size -= head_req->io_data.len; 
 			head_req->globalinfo->req_file->timeline_reqnb--;
 			update_filenb_counter(hash, req_file);
@@ -286,8 +287,8 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 		{
 			agios_list_for_each_entry(req, &head_req->reqs_list, aggregation_element)
 			{	
-				VERIFY_REQUEST(req);
-				debug("request [%d] - size %lu, offset %lu, file %s - going back to the file system", req->data, req->io_data.len, req->io_data.offset, req->file_id);
+				agios_list_add_tail(&req->related, &head_req->globalinfo->dispatch);
+				debug("request - size %lu, offset %lu, file %s - going back to the file system", req->io_data.len, req->io_data.offset, req->file_id);
 				req->globalinfo->current_size -= req->io_data.len; 
 				req->globalinfo->req_file->timeline_reqnb--;
 				update_filenb_counter(hash, req_file);
@@ -378,6 +379,8 @@ void * agios_thread(void *arg)
 #ifndef AGIOS_KERNEL_MODULE
 	struct timespec timeout_tspec;
 #endif
+	PRINT_FUNCTION_NAME;
+
 	//let's find out which I/O scheduling algorithm we need to use
 	dynamic_alg = config_get_default_algorithm();
 	dynamic_scheduler = initialize_scheduler(dynamic_alg);

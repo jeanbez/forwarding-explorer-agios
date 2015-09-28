@@ -342,7 +342,7 @@ void prediction_newreq(struct request_t *req)
 	struct agios_list_head *predicted_list;
 
 #ifdef AGIOS_DEBUG
-	agios_print("looking for the request %s %d %lld %ld...", req->file_id, req->type, req->io_data.offset, req->io_data.len);
+	agios_print("looking for the request %s %d %lu %lu...", req->file_id, req->type, req->io_data.offset, req->io_data.len);
 #endif
 
 	if(req->type == RT_READ)

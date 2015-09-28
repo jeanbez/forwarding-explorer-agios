@@ -6,21 +6,31 @@
 
 
 #define REQ_TYPE 0
+#define MAX_SLEEP_TIME 50000 //in ns
 
-int processed_reqnb=0;
-pthread_mutex_t processed_reqnb_mutex=PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t processed_reqnb_cond=PTHREAD_COND_INITIALIZER;
+static int processed_reqnb=0;
+static pthread_mutex_t processed_reqnb_mutex=PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t processed_reqnb_cond=PTHREAD_COND_INITIALIZER;
 
-int generated_reqnb;
-int reqnb_perthread;
-int thread_nb;
-int req_size;
-int time_between;
+static int generated_reqnb;
+static int reqnb_perthread;
+static int thread_nb;
+static int req_size;
+static int time_between;
+static unsigned long int *req_offset;
 
 struct client clnt;
 
 static pthread_t *threads;
-pthread_barrier_t test_start;
+static pthread_barrier_t test_start;
+static pthread_t *processing_threads;
+static int processing_threads_index;
+
+struct req_id_t
+{
+	int reqid;
+	int threadid;
+};
 
 void inc_processed_reqnb()
 {
@@ -31,20 +41,54 @@ void inc_processed_reqnb()
 	pthread_mutex_unlock(&processed_reqnb_mutex);
 }
 
-void test_process(int req_id)
+void *process_request_thr(void *arg)
 {
-	inc_processed_reqnb();	
+	struct req_id_t *req = (struct req_id_t *)arg;
+	char *filename = malloc(sizeof(char)*100);
+
+	int sleep_time = rand() % MAX_SLEEP_TIME;
+	struct timespec sleep_time_tsp;
+
+	printf("thread created to process request starting ");
+	printf("our request is %d\n", req->reqid);
+
+	sleep_time_tsp.tv_sec = (unsigned int) sleep_time / 1000000000L;
+	sleep_time_tsp.tv_nsec = (unsigned int) sleep_time % 1000000000L;
+	nanosleep(&sleep_time_tsp, NULL);
+
+	sprintf(filename, "arquivo.%d.out", req->threadid);
+	agios_release_request(filename, REQ_TYPE, req_size, req_offset[req->reqid]);
+
+	inc_processed_reqnb();
+	free(req);	
+}
+
+void test_process(void * req_id)
+{
+	struct req_id_t *req = (struct req_id_t *)req_id;
+	int ret;
+
+	ret = pthread_create(&processing_threads[processing_threads_index], NULL, process_request_thr, req);		
+	processing_threads_index++;
+	if(ret != 0)
+	{
+		printf("PANIC! Unable to create thread to process request!\n");
+	}
 }
 
 /*thread that will generate tons of requests to AGIOS*/
 void *test_thr(void *arg)
 {
 	char *filename = malloc(sizeof(char)*100);
-	long long offset = 0;
+	unsigned long int offset = 0;
 	int i;
 	struct timespec timeout;
+	struct req_id_t *req_id;
+	int threadid = (int)pthread_self();
 
-	sprintf(filename, "arquivo.%d.out", (int)pthread_self());
+	printf("Thread %d starting its execution\n", threadid);
+
+	sprintf(filename, "arquivo.%d.out", threadid);
 //	printf("starting generation of requests to file %s\n", filename);
 
 	/*wait for the start signal*/
@@ -52,8 +96,11 @@ void *test_thr(void *arg)
 
 	for(i=0; i<reqnb_perthread; i++)
 	{
+		req_id = malloc(sizeof(struct req_id_t));
+		req_id->reqid = i;
+		req_id->threadid = threadid;
 		/*generate a request*/
-		agios_add_request(filename, REQ_TYPE, offset, req_size, i, &clnt);
+		agios_add_request(filename, REQ_TYPE, offset, req_size, (void *) req_id, &clnt);
 		offset += req_size;
 		 
 		/*wait a while before generating the next one*/
@@ -70,6 +117,7 @@ int main (int argc, char **argv)
 	char **filenames;
 	unsigned long long int elapsed;
 
+	srand(1512);
 	/*get arguments*/
 	if(argc < 6)
 	{
@@ -81,6 +129,10 @@ int main (int argc, char **argv)
 	generated_reqnb = reqnb_perthread * thread_nb;
 	req_size = atoi(argv[3]);
 	time_between = atoi(argv[4]);
+	req_offset = malloc(sizeof(unsigned long int)*(reqnb_perthread+1));
+	req_offset[0] = 0;
+	for (i=1; i < reqnb_perthread; i++)
+		req_offset[i] = req_offset[i-1]+req_size;
 
 	/*start AGIOS*/
 	clnt.process_requests = NULL;
@@ -96,6 +148,8 @@ int main (int argc, char **argv)
 
 	pthread_barrier_init(&test_start, NULL, thread_nb+1);
 	threads = malloc(sizeof(pthread_t)*(thread_nb+1));
+	processing_threads=malloc(sizeof(pthread_t)*((thread_nb*reqnb_perthread)+1));
+	processing_threads_index=0;
 	for(i=0; i< thread_nb; i++)
 	{
 		ret = pthread_create(&(threads[i]), NULL, test_thr, NULL);		
@@ -103,6 +157,7 @@ int main (int argc, char **argv)
 		{
 			printf("PANIC! Unable to create thread %d!\n", i);
 			free(threads);
+			free(processing_threads);
 			exit(1);
 		}
 	}
@@ -128,6 +183,9 @@ int main (int argc, char **argv)
 	
 	agios_print_stats_file(argv[5]);
 	agios_exit();
+
+	free(processing_threads);
+	free(threads);
 
 	return 0;
 }

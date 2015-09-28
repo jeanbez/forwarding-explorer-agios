@@ -68,7 +68,7 @@ enum {
 /*
  * Request state.
  */
-enum {
+enum { //attention, most of these states are deprecated
 	RS_HASHTABLE = 0,
 	RS_DISPATCH_QUEUE = 1,
 	RS_PROCESSED = 2,
@@ -101,8 +101,8 @@ struct client {
 	void (*process_request)(int64_t req_id);
 	void (*process_requests)(int64_t *reqs, int reqnb);
 #else
-	void (*process_request)(int i);
-	void (*process_requests)(int *i, int reqnb);
+	void (*process_request)(void * i);
+	void (*process_requests)(void ** i, int reqnb);
 #endif
 
 	/*
@@ -115,9 +115,13 @@ struct client {
 struct related_list_statistics_t 
 {
 	unsigned long int processedreq_nb; //number of processed requests 
-	
+	unsigned long int receivedreq_nb; //number of received requests 
+
+	unsigned long long int processed_req_size; //total amount of served data
+	unsigned long long int processed_req_time; //time it took to serve the amount of data
+
 	//statistics on request size
-	unsigned long long int total_req_size;
+	unsigned long long int total_req_size; //this value is not the same as processed_req_size, since this one is updated when adding a request, and the other is updated in the release function. This means the average request size among received requests is obtained by total_req_size / receivedreq_nb, and the average request size among processed requests is obtained by processed_req_size / processedreq_nb
 	unsigned long int min_req_size;
 	unsigned long int max_req_size;
 
@@ -137,7 +141,8 @@ struct related_list_statistics_t
 	
 
 struct related_list_t {
-	struct agios_list_head list ;
+	struct agios_list_head list ; //the queue
+	struct agios_list_head dispatch; //the queue of requests which were already scheduled, but not released yet
 
 	struct request_file_t *req_file;
 
@@ -220,7 +225,7 @@ struct io_data {
 #ifdef ORANGEFS_AGIOS
 typedef int64_t user_data_type;
 #else
-typedef int user_data_type;
+typedef void * user_data_type;
 #endif
 
 struct request_t { //TODO rethink data types, we probably do not need to have long long long long long long something
@@ -282,9 +287,9 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset,
 		       unsigned long int len, int64_t data, struct client *clnt);
 #else
 int agios_add_request(char *file_id, short int type, unsigned long int offset,
-		       unsigned long int len, int data, struct client *clnt);
+		       unsigned long int len, void * data, struct client *clnt);
 #endif
-int agios_release_request(char *file_id, short int type, unsigned long int len);
+int agios_release_request(char *file_id, short int type, unsigned long int len, unsigned long int offset);
 
 int agios_set_stripe_size(char *file_id, unsigned int stripe_size);
 
@@ -302,5 +307,4 @@ void agios_wait_predict_init(void);
 #define EINVAL 22
 #endif
 
-int get_selected_alg(void);
 #endif // #ifndef AGIOS_H

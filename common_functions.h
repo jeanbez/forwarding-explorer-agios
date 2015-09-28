@@ -96,6 +96,7 @@ inline unsigned long int get_timespec2llu(struct timespec t);
 inline void get_llu2timespec(unsigned long int t, struct timespec *ret);
 /*does the same as get_nanoelapsed, but takes as parameter a unsigned long long int instead of a struct timespec*/
 inline unsigned long int get_nanoelapsed_llu(unsigned long int t1);
+inline long double get_ns2s(unsigned long int t1);
 
 /****************************************************************************************************/
 /*debug functions*/
