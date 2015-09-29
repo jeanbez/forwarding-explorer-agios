@@ -1,27 +1,3 @@
-/* File:	ARMED_BANDIT.c
- * Created: 	2015 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It provides the Armed Bandit approach 
- *		Further information is available at http://agios.bitbucket.org/
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- */
-
 #include "agios_config.h"
 #include "iosched.h"
 #include "predict.h"
@@ -31,6 +7,7 @@ static int scheduler_nb=0; //number of possible scheduling algorithms
 static int useful_sched_nb=0; //from the possible scheduling algorithms, how many can be dynamically selected (whe have to exclude the dynamic ones, the ones still being tested, etc)
 static int benchmarked_scheds=0; //how many of the possible scheduling algorithms were already selected
 static int best_bandwidth=-1; //we keep an updated best scheduling algorithm (according to bandwidth) so we don't have to go through all of them when recalculating probabilities
+static int sum_of_all_probabilities=100; //we keep this value so we don't have to recalculate it every time we need it. It may not be 100 because we use integers (for instance, if we start with 6 scheduling algorithms, each one of them will receive probability 100/6 = 16, which sums up to 96)
 
 struct scheduler_info_t
 {
@@ -48,10 +25,10 @@ static int current_sched=0; //current scheduling algorithm in use
 int randomly_pick_algorithm()
 {
 	int aggregated_prob=0;
-	int i;
+	int i=scheduler_nb;
 
-	//randomly pick a number between 0 and 99
-	int result = rand() % 100;
+	//randomly pick a number between 0 and 99 (or less, depending on the sum of all probabilities)
+	int result = rand() % sum_of_all_probabilities;
 
 	//figure to which scheduling algorithm this number corresponds
 	//each scheduling algorithm receives a range of values inside [0,100) according to its probability
@@ -64,11 +41,6 @@ int randomly_pick_algorithm()
 			if(result < aggregated_prob)
 				break;
 		}
-	}
-	if(i == scheduler_nb) //sanity check
-	{
-		agios_print("PANIC! Could not randomly pick an scheduling algorithm... the random number was %d, aggregated probability is %d", result, aggregated_prob);
-		return -1;
 	}
 	return i;
 }
@@ -107,10 +79,14 @@ int ARMED_BANDIT_init(void)
 	}
 
 	//give initial probabilities to all scheduling algorithms (which can be selected)
+	sum_of_all_probabilities=0;
 	for(i=0; i < scheduler_nb, i++) //this for loop *cannot* be joined with the previous one, since we use here the useful_sched_nb value (calculated in the previous loop)
 	{
 		if(AB_table[i].sched->can_be_dynamically_selected == 1)
+		{
 			AB_table[i].probability = 100 / useful_sched_nb;
+			sum_of_all_probabilities += AB_table[i].probability;
+		}
 	}
 	
 	//start with the starting algorithm (defined in the configuration file), unless it is something we cannot use here
@@ -147,23 +123,17 @@ void recalculate_AB_probabilities(void)
 	}
 
 	//calculate probabilities according to bandwidth
-	i = 0;
-	while(i < scheduler_nb)
+	sum_of_all_probabilities = 0;
+	for(i=0; i< scheduler_nb; i++)
 	{
 		if(AB_table[i].sched->can_be_dynamically_selected == 1)
 		{
 			AB_table[i].probability = AB_table[i].bandwidth / sum_of_bands;
-			//check if we have met the minimum probability
-			if(AB_table[i].probability < MIN_AB_PROBABILITY)
-			{
-				//TODO
-			}	
+			sum_of_all_probabilities += AB_table[i].probability;
 		}
-		i++;
 	}
-	
-
-	//TODO	
+	//TODO here we are giving probabilities with are proportional to performance, instead of just increasing the probability of the best scheduling algorithm. Is this how we are supposed to do it? Should we use a more complicated distribution (such as Gibbs)?
+	//TODO also, we need to be sure no scheduling algorithm receives probability smaller than MIN_AP_PROBABILITY...
 }
 
 //update the observed bandwidth for a scheduling algorithm after using it for a period of time
@@ -198,9 +168,9 @@ void update_bandwidth(void)
 			best_bandwidth = current_sched;
 	}
 	//finally, update the value
-	//TODO should/can we use other metrics?
-	//TODO should we combine most recently observed value with previous ones, instead of just replacing?
 	AB_table[current_sched].bandwidth = new_band;
+	//TODO should/can we use other metrics?
+	//TODO should we combine the most recently observed value with previous ones, instead of just replacing? We could use, for instance, a weighted average, or an average or the last N observations.
 }
 
 //this function is called periodically to select a new scheduling algorithm
@@ -245,6 +215,7 @@ int ARMED_BANDIT_select_next_algorithm(void)
 
 	return next_alg;
 }
+//cleanup function
 int ARMED_BANDIT_exit(void)
 {
 	if(AB_table)
