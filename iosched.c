@@ -58,7 +58,7 @@
 #include "AIOLI.h"
 #include "NOOP.h"
 #include "DYN_TREE.h"
-
+#include "ARMED_BANDIT.h"
 
 
 /**********************************************************************************************************************/
@@ -297,7 +297,7 @@ int get_io_schedulers_size(void)
 		return 0;
 
 	//get the last scheduler (because they have ordered indexes)
-	last_scheduler = agios_list_entry(last_scheduler, struct io_scheduler_instance_t, list);
+	last_scheduler = agios_list_entry(io_schedulers.prev, struct io_scheduler_instance_t, list);
 	return last_scheduler->index + 1;	//+1 because indexes start at 0
 }
 //finds and returns the current scheduler indicated by index. If this scheduler needs an initialization function, calls it

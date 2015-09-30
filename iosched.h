@@ -103,6 +103,7 @@ char *get_algorithm_name_from_index(int index);
 void register_static_io_schedulers(void);
 struct io_scheduler_instance_t *find_io_scheduler(int index);
 struct io_scheduler_instance_t *initialize_scheduler(int index);
+int get_io_schedulers_size(void);
 
 //generic functions to be used by multiple scheduling algorithms
 void generic_post_process(struct request_t *req);
