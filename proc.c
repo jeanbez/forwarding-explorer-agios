@@ -71,7 +71,8 @@ static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER;
  ***********************************************************************************************************/
 static short int proc_needs_hashtable=1;
 static int *proc_algs; //the list of the last PROC_ALGS_SIZE selected scheduling algorithms
-#define PROC_ALGS_SIZE 100 //how many should we keep (we actually keep PROC_ALGS_SIZE - 1)
+static unsigned long int *proc_algs_timestamps; //the timestamps of the last PROC_ALGS_SIZE algorithms selections
+#define PROC_ALGS_SIZE 1000 //how many should we keep (we actually keep PROC_ALGS_SIZE - 1)
 static int proc_algs_start, proc_algs_end; //indexes to access the proc_algs list 
 
 inline void proc_set_needs_hashtable(short int value)
@@ -80,7 +81,11 @@ inline void proc_set_needs_hashtable(short int value)
 }
 inline void proc_set_new_algorithm(int alg)
 {
+	struct timespec now;
+
+	agios_gettime(&now);
 	proc_algs[proc_algs_end] = alg;
+	proc_algs_timestamps[proc_algs_end] = get_timespec2llu(now);
 	proc_algs_end++;
 	if(proc_algs_end >= PROC_ALGS_SIZE)
 		proc_algs_end=0; //circular list
@@ -393,8 +398,12 @@ void print_selected_algs(void)
 	i = proc_algs_start;
 	while(i != proc_algs_end)
 	{
-		print_something(get_algorithm_name_from_index(proc_algs[i]));
-		print_something("\n");
+#ifdef AGIOS_KERNEL_MODULE
+		seq_printf(stats_file, 
+#else
+		fprintf(stats_file, 
+#endif
+			"%lu\t%s\n", proc_algs_timestamps[i], get_algorithm_name_from_index(proc_algs[i]));
 		i++;
 		if(i >= PROC_ALGS_SIZE)
 			i =0;
@@ -856,6 +865,7 @@ void agios_print_stats_file(char *filename)
 void proc_stats_init(void)
 {
 	proc_algs = agios_alloc(sizeof(int)*(PROC_ALGS_SIZE+1));
+	proc_algs_timestamps = agios_alloc(sizeof(unsigned long int)*(PROC_ALGS_SIZE+1));
 	proc_algs_start = proc_algs_end = 0;
 	
 #ifdef AGIOS_KERNEL_MODULE
@@ -896,6 +906,7 @@ void proc_stats_exit(void)
 	remove_proc_entry("agios", NULL);	
 #endif
 	free(proc_algs);
+	free(proc_algs_timestamps);
 }
 
 /***********************************************************************************

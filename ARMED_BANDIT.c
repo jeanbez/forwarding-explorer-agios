@@ -72,7 +72,6 @@ int ARMED_BANDIT_init(void)
 
 	//find out how many scheduling algorithms do we have
 	scheduler_nb = get_io_schedulers_size();
-	debug("Initializing Armed Bandit approach with %d scheduling algorithms", scheduler_nb);
 
 	//initialize a table so we can keep information separated by algorithm
 	AB_table = malloc(sizeof(struct scheduler_info_t)*(scheduler_nb+1));
@@ -91,6 +90,7 @@ int ARMED_BANDIT_init(void)
 		AB_table[i].bandwidth_measurements = (struct performance_info_t *)malloc(sizeof(struct performance_info_t)*PERFORMANCE_WINDOW);
 		AB_table[i].measurements_start = AB_table[i].measurements_end = 0;
 	}
+	debug("Initializing Armed Bandit approach with %d scheduling algorithms, %d of them can be selected", scheduler_nb, useful_sched_nb );
 
 	//give initial probabilities to all scheduling algorithms (which can be selected)
 	sum_of_all_probabilities=0;
@@ -143,6 +143,7 @@ void recalculate_AB_probabilities(void)
 	//adjust all other algorithms' probabilities uniformly
 	if(useful_sched_nb > 1)
 	{
+		debug("bandwidth for scheduler %s changed to %.2f, changing probability to %d. Other algorithms will receive probability %d\n", AB_table[best_bandwidth].sched->name, AB_table[best_bandwidth].bandwidth, AB_table[best_bandwidth].probability, available_probability / (useful_sched_nb - 1););
 		available_probability = available_probability / (useful_sched_nb - 1);
 		for(i=0; i< scheduler_nb; i++)
 		{
@@ -186,6 +187,8 @@ void update_current_measurement_list(void)
 
 	//bandwidth
 	AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth = get_performance_bandwidth();
+
+	debug("most recent performance measurement: %.2f with scheduler %s", AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth, AB_table[current_sched].sched->name);
 
 	//update indexes
 	AB_table[current_sched].measurements_end++;
