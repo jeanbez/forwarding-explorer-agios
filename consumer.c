@@ -304,6 +304,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 	processed_reqnb += head_req->reqnb; //TODO when we overflow this variable, we will have problems, check this
 	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
 		update_time=1;
+	debug("scheduler is dynamic? %d, algorithm_selection_period = %lu, processed_reqnb = %lu, last_selection_processed_renb = %lu, algorithm_selection_reqnumber = %lu", dynamic_scheduler->is_dynamic, algorithm_selection_period, processed_reqnb, last_selection_processed_reqnb, algorithm_selection_reqnumber);
 	if((dynamic_scheduler->is_dynamic) && (algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber))
 	{
 		if(get_nanoelapsed(last_algorithm_update) >= algorithm_selection_period)

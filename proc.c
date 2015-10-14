@@ -392,8 +392,6 @@ void print_selected_algs(void)
 {
 	int i;
 
-	PRINT_FUNCTION_NAME;
-
 	print_something("Scheduling algorithms:\n");
 	i = proc_algs_start;
 	while(i != proc_algs_end)
@@ -418,8 +416,6 @@ void *print_stats_start(struct seq_file *s, loff_t *pos)
 void print_stats_start(void)
 #endif
 {
-	PRINT_FUNCTION_NAME;
-
 #ifdef AGIOS_KERNEL_MODULE
 	stats_file = s;
 #endif
@@ -638,8 +634,6 @@ void stats_show_one(struct request_file_t *req_file)
 	struct request_file_t *req_file = (struct request_file_t *)v;
 	stats_file = s;
 #endif
-	PRINT_FUNCTION_NAME;
-
 	if((req_file->related_reads.stats_file.receivedreq_nb + req_file->related_writes.stats_file.receivedreq_nb) <= 0)
 #ifndef AGIOS_KERNEL_MODULE
 			return;
@@ -710,8 +704,6 @@ void stats_show(void)
 	struct request_file_t *req_file;
 	int i;
 	struct agios_list_head *reqfile_l;
-
-	PRINT_FUNCTION_NAME;
 
 	if(proc_needs_hashtable)
 	{

@@ -57,8 +57,8 @@ static int config_starting_algorithm;
 inline void config_set_select_algorithm_period(int value)
 {
 	config_select_algorithm_period = value;
-	if(config_select_algorithm_period > 0)
-		config_select_algorithm_period = config_select_algorithm_period*1000000; //convert it to nanoseconds
+//	if(config_select_algorithm_period > 0)
+//		config_select_algorithm_period = config_select_algorithm_period*1000000; //convert it to nanoseconds
 	if(config_select_algorithm_period >= 0)
 		set_DYN_TREE_dynamic_scheduler(1);
 	else

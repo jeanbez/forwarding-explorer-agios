@@ -143,7 +143,7 @@ void recalculate_AB_probabilities(void)
 	//adjust all other algorithms' probabilities uniformly
 	if(useful_sched_nb > 1)
 	{
-		debug("bandwidth for scheduler %s changed to %.2f, changing probability to %d. Other algorithms will receive probability %d\n", AB_table[best_bandwidth].sched->name, AB_table[best_bandwidth].bandwidth, AB_table[best_bandwidth].probability, available_probability / (useful_sched_nb - 1););
+		debug("bandwidth for scheduler %s changed to %.2f, changing probability to %d. Other algorithms will receive probability %d\n", AB_table[best_bandwidth].sched->name, AB_table[best_bandwidth].bandwidth, AB_table[best_bandwidth].probability, available_probability / (useful_sched_nb - 1));
 		available_probability = available_probability / (useful_sched_nb - 1);
 		for(i=0; i< scheduler_nb; i++)
 		{

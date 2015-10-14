@@ -78,7 +78,7 @@ struct related_list_t *SJF_get_shortest_job(int *current_hash)
 		{
 			if((!agios_list_empty(&req_file->related_writes.list)) || (!agios_list_empty(&req_file->related_reads.list)))
 			{	 
-				debug("file %s, related_reads com %lu e related_writes com %lu, min_size is %lu\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size, min_size);
+				//debug("file %s, related_reads com %lu e related_writes com %lu, min_size is %lu\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size, min_size);
 				if((req_file->related_reads.current_size < 0) || (req_file->related_writes.current_size < 0))
 				{
 					printf("PANIC! current_size for file %s is %lu and %lu\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size);
@@ -87,14 +87,14 @@ struct related_list_t *SJF_get_shortest_job(int *current_hash)
 				evaluated_reqfiles++; //we count only files that have requests (others could have predicted requests but no actual ones)
 				if((req_file->related_reads.current_size > 0) && (req_file->related_reads.current_size < min_size))
 				{
-					debug("selecting from reads\n");
+				//	debug("selecting from reads\n");
 					min_size = req_file->related_reads.current_size;
 					chosen_queue = &req_file->related_reads;
 					chosen_hash = i;
 				}
 				if((req_file->related_writes.current_size > 0) && (req_file->related_writes.current_size < min_size)) //TODO shouldn't it be else if?
 				{
-					debug("selecting from writes\n");
+				//	debug("selecting from writes\n");
 					min_size = req_file->related_writes.current_size;
 					chosen_queue = &req_file->related_writes;
 					chosen_hash = i;
@@ -104,7 +104,7 @@ struct related_list_t *SJF_get_shortest_job(int *current_hash)
 		hashtable_unlock(i);
 		if(evaluated_reqfiles >= reqfilenb)
 		{
-			debug("went through all reqfiles, stopping \n");
+		//	debug("went through all reqfiles, stopping \n");
 			break;
 		}
 
