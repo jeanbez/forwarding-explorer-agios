@@ -178,7 +178,7 @@ short int check_validity_window(int sched, unsigned long int now)
 
 //update the performance measurement list of the current scheduling algorithm by adding a new value and removing the ones which are too old
 void update_current_measurement_list(void)
-{
+{ //TODO it is possible that we have sent requests to be processed, but any of them called release yet, so we won't have performance information (it will be 0). We need to not consider this as a performance measurement as it can harm an algorithm for no reason. Maybe the best way of preventing this is changing the way we decide to select a new (test for actually processed requests, not for scheduled ones)
 	struct timespec this_time;
 	
 	//timestamp

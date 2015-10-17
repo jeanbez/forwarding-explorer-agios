@@ -392,7 +392,7 @@ config_select_algorithm_period, config_select_algorithm_min_reqnumber, get_algor
 		config_print_flag(config_write_simplified_traces, "\tWill the Prediction Module create simplified traces with the obtained information? ");
 	}
 	agios_just_print("File with access time functions: %s\n", config_access_times_file);
-	agios_just_print("AGIOS' user uses stripe size of %d\n", config_stripe_size);	
+	agios_just_print("AGIOS thinks its user has stripe size of %d\n", config_stripe_size);	
 }
 
 

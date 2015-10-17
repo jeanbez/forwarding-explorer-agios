@@ -73,7 +73,7 @@ static short int proc_needs_hashtable=1;
 static int *proc_algs; //the list of the last PROC_ALGS_SIZE selected scheduling algorithms
 static unsigned long int *proc_algs_timestamps; //the timestamps of the last PROC_ALGS_SIZE algorithms selections
 #define PROC_ALGS_SIZE 1000 //how many should we keep (we actually keep PROC_ALGS_SIZE - 1)
-static int proc_algs_start, proc_algs_end; //indexes to access the proc_algs list 
+static int proc_algs_start, proc_algs_end=0; //indexes to access the proc_algs list 
 
 inline void proc_set_needs_hashtable(short int value)
 {
