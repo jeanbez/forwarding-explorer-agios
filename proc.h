@@ -41,4 +41,5 @@ void proc_stats_exit(void);
 
 void proc_set_needs_hashtable(short int value);
 inline void proc_set_new_algorithm(int alg);
+inline unsigned long int *proc_get_alg_timestamps(int *start, int *end);
 #endif

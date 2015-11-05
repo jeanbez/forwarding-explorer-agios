@@ -186,7 +186,7 @@ void update_current_measurement_list(void)
 	AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].timestamp = get_timespec2llu(this_time);
 
 	//bandwidth
-	AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth = get_performance_bandwidth();
+	AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth = get_current_performance_bandwidth(); 
 
 	debug("most recent performance measurement: %.2f with scheduler %s", AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth, AB_table[current_sched].sched->name);
 

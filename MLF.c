@@ -153,8 +153,6 @@ void MLF(void *clnt)
 
 			if(get_hashlist_reqcounter(MLF_current_hash) > 0) //see if we have requests for this line of the hashtable
 			{
-				debug("got the lock for hash %d", MLF_current_hash);
-
 		                agios_list_for_each_entry(req_file, reqfile_l, hashlist)
 				{
 					/*do a MLF step to this file, potentially selecting a request to be processed*/
@@ -177,10 +175,7 @@ void MLF(void *clnt)
 						if(update_time)
 							break; //get out of the agios_list_for_each_entry loop
 					}
-					else if(req_file->waiting_time > 0)
-						debug("this file is waiting for now, so no processing");
 				}
-				debug("freeing the lock for hash %d", MLF_current_hash);
 			}
 			hashtable_unlock(MLF_current_hash);
 		}	

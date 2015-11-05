@@ -87,40 +87,23 @@ void NOOP(void *clnt)
 	struct request_file_t *req_file;
 	struct request_t *req;
 	short int update_time=0;
+	short int stop_processing=0;
 
-	if(previous_needs_hashtable) //the previous scheduling algorithm uses hashtable, so that's where we need to take requests from
-	{
-		for(i=0; i < AGIOS_HASH_ENTRIES; i++)
-		{
-			list = hashtable_lock(i);
-			agios_list_for_each_entry(req_file, list, hashlist)
-			{
-				update_time = process_all_requests_from_related_list(&req_file->related_writes, clnt, i);
-				if(!update_time)
-					update_time = process_all_requests_from_related_list(&req_file->related_reads, clnt, i);
-				if(update_time)
-				{
-					debug("NOOP cleanup exiting without finishing because it of some refresh period");
-					break; //we've changed to NOOP and then started cleaning the current data structures (that we are no longer feeding). But it is time to refresh something so we will stop
-				}
-			}
-			hashtable_unlock(i);	
-		}
-	}
-	else //we are going to take requests from the timeline
+//	PRINT_FUNCTION_NAME;
+	while(!stop_processing) //we give a change to new requests by locking and unlocking to every rquest
 	{
 		list = timeline_lock();
-		if(!agios_list_empty(list)) 
+		stop_processing = agios_list_empty(list);
+		if(!stop_processing) 
 		{
-			agios_list_for_each_entry(req, list, related)
+			req = timeline_oldest_req();
+			debug("NOOP is processing leftover requests %s %lu %lu", req->file_id, req->io_data.offset, req->io_data.len);
+			update_time = process_requests(req, clnt, -1);
+			generic_post_process(req);
+			if(update_time)
 			{
-				update_time = process_requests(req, clnt, -1);
-				generic_post_process(req);
-				if(update_time)
-				{
-					debug("NOOP cleanup exiting without finishing because it of some refresh period");
-					break; //we've changed to NOOP and then started cleaning the current data structures (that we are no longer feeding). But it is time to refresh something so we will stop
-				}
+				debug("NOOP cleanup exiting without finishing because of some refresh period");
+				break; //we've changed to NOOP and then started cleaning the current data structures (that we are no longer feeding). But it is time to refresh something so we will stop
 			}
 		}
 		timeline_unlock();	

@@ -234,12 +234,15 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 	struct request_t *req;
 	struct request_file_t *req_file; 
 	short int update_time=0;	
+	struct timespec now;
+	unsigned long int this_time;
 	
 	if(!head_req)
 		return 0; /*whaaaat?*/
 
 	PRINT_FUNCTION_NAME;
 	req_file = head_req->globalinfo->req_file;
+	agios_gettime(&now);
 
 
 	if(tracing)
@@ -247,6 +250,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 
 	if((clnt->process_requests) && (head_req->reqnb > 1)) //if the user has a function capable of processing a list of requests at once and this is an aggregated request
 	{
+		this_time = get_timespec2llu(now);
 #ifdef ORANGEFS_AGIOS
 		int64_t *reqs = (int64_t *)malloc(sizeof(int64_t)*(head_req->reqnb+1));
 #else
@@ -256,6 +260,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 		agios_list_for_each_entry(req, &head_req->reqs_list, aggregation_element)
 		{
 			agios_list_add_tail(&req->related, &head_req->globalinfo->dispatch);
+			req->dispatch_timestamp = this_time;
 			debug("request - size %lu, offset %lu, file %s - going back to the file system", req->io_data.len, req->io_data.offset, req->file_id);
 			reqs[reqs_index]=req->data;
 			reqs_index++;
@@ -274,6 +279,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 		if(head_req->reqnb == 1)
 		{
 			agios_list_add_tail(&head_req->related, &head_req->globalinfo->dispatch);
+			head_req->dispatch_timestamp = get_timespec2llu(now);
 			debug("request - size %lu, offset %lu, file %s - going back to the file system", head_req->io_data.len, head_req->io_data.offset, head_req->file_id);
 			head_req->globalinfo->current_size -= head_req->io_data.len; 
 			head_req->globalinfo->req_file->timeline_reqnb--;
@@ -285,9 +291,11 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 		}
 		else
 		{
+			this_time = get_timespec2llu(now);
 			agios_list_for_each_entry(req, &head_req->reqs_list, aggregation_element)
 			{	
 				agios_list_add_tail(&req->related, &head_req->globalinfo->dispatch);
+				req->dispatch_timestamp = this_time;
 				debug("request - size %lu, offset %lu, file %s - going back to the file system", req->io_data.len, req->io_data.offset, req->file_id);
 				req->globalinfo->current_size -= req->io_data.len; 
 				req->globalinfo->req_file->timeline_reqnb--;
@@ -304,7 +312,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 	processed_reqnb += head_req->reqnb; //TODO when we overflow this variable, we will have problems, check this
 	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
 		update_time=1;
-	debug("scheduler is dynamic? %d, algorithm_selection_period = %lu, processed_reqnb = %lu, last_selection_processed_renb = %lu, algorithm_selection_reqnumber = %lu", dynamic_scheduler->is_dynamic, algorithm_selection_period, processed_reqnb, last_selection_processed_reqnb, algorithm_selection_reqnumber);
+//	debug("scheduler is dynamic? %d, algorithm_selection_period = %lu, processed_reqnb = %lu, last_selection_processed_renb = %lu, algorithm_selection_reqnumber = %lu", dynamic_scheduler->is_dynamic, algorithm_selection_period, processed_reqnb, last_selection_processed_reqnb, algorithm_selection_reqnumber);
 	if((dynamic_scheduler->is_dynamic) && (algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber))
 	{
 		if(get_nanoelapsed(last_algorithm_update) >= algorithm_selection_period)
@@ -315,9 +323,11 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 
 	if(hash >= 0)
 		debug("current status. hashtable[%d] has %d requests, there are %d requests in the scheduler to %d files.", hash, get_hashlist_reqcounter(hash), get_current_reqnb(), get_current_reqfilenb());
+	else
+		debug("current status: there are %d requests in the scheduler to %d files",get_current_reqnb(), get_current_reqfilenb()); 
 
 	//if the current scheduling algorithm follows the synchronous approach, we need to wait until the request was processed
-	if(current_scheduler->sync)
+	if((current_scheduler->sync) && (!update_time))
 	{
 		//we need to release the hashtable/timeline mutex while waiting because otherwise other thread will not be able to acquire it in the release_request function and signal us
 		unlock_structure_mutex(hash); 

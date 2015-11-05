@@ -25,8 +25,12 @@
 #ifndef _PERFORMANCE_H_
 #define _PERFORMANCE_H_
 
+#define PERFORMANCE_VALUES 5
 void reset_performance_counters(void);
 unsigned long long int get_performance_size(void);
-double get_performance_bandwidth(void);
+unsigned long long int get_performance_time(void);
+double *get_performance_bandwidth(int *start, int *end, int **algs);
+double get_current_performance_bandwidth(void);
 inline void performance_set_needs_hashtable(short int value);
+void performance_set_new_algorithm(int alg);
 #endif

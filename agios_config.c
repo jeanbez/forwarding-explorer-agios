@@ -256,6 +256,7 @@ void config_gossip_algorithm_parameters(int alg, struct io_scheduler_instance_t 
 	set_max_aggregation_size(scheduler->max_aggreg_size);
 	set_needs_hashtable(scheduler->needs_hashtable);
 	proc_set_new_algorithm(alg);
+	performance_set_new_algorithm(alg);
 	performance_set_needs_hashtable(scheduler->needs_hashtable);
 	set_iosched_is_synchronous(scheduler->sync);
 }

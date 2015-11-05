@@ -37,38 +37,143 @@
 /************************************************************************************************************
  * GLOBAL PERFORMANCE METRICS
  ************************************************************************************************************/
-static unsigned long long int performance_time; 
-static unsigned long long int performance_size;
+static unsigned long long int performance_time[PERFORMANCE_VALUES]; 
+static unsigned long long int performance_size[PERFORMANCE_VALUES];
+static unsigned long int performance_timestamps[PERFORMANCE_VALUES];
+static int performance_algs[PERFORMANCE_VALUES];
+static int performance_start, performance_end;
 static pthread_mutex_t performance_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 unsigned long long int get_performance_size(void)
 {
-	unsigned long long int ret;
+	unsigned long long int ret=0;
+	int i;
 	agios_mutex_lock(&performance_mutex);
-	ret = performance_size;
-	agios_mutex_unlock(&performance_mutex);
-	return ret;
-}
-double get_performance_bandwidth(void)
-{
-	double ret=0.0;
-	long double tmp_time;
-	agios_mutex_lock(&performance_mutex);
-	if(performance_time > 0)
+	i = performance_start;
+	while(i != performance_end)
 	{
-		tmp_time = get_ns2s(performance_time);
-		if(tmp_time > 0)
-			ret = (performance_size) / tmp_time;
+		ret += performance_size[i];
+		i++;
+		if(i >= PERFORMANCE_VALUES)
+			i=0;
 	}
 	agios_mutex_unlock(&performance_mutex);
 	return ret;
 }
+unsigned long long int get_performance_time(void)
+{
+	unsigned long long int ret=0;
+	int i;
+	agios_mutex_lock(&performance_mutex);
+	i = performance_start;
+	while(i != performance_end)
+	{
+		ret += performance_time[i];
+		i++;
+		if(i >= PERFORMANCE_VALUES)
+			i=0;
+	}
+	agios_mutex_unlock(&performance_mutex);
+	return ret;
+}
+
+double * get_performance_bandwidth(int *start, int *end, int **algs) 
+{
+	double *ret = malloc(sizeof(double)*PERFORMANCE_VALUES);
+	long double tmp_time;
+	int i;
+
+	agios_mutex_lock(&performance_mutex);
+
+	for(i = 0; i< PERFORMANCE_VALUES; i++)
+	{
+		ret[i] = 0.0;
+		
+		if(performance_time[i] > 0)
+		{
+			tmp_time = get_ns2s(performance_time[i]);
+			if(tmp_time > 0)
+				ret[i] = (performance_size[i]) / tmp_time;
+		}
+	}
+	*start = performance_start;
+	*end = performance_end;
+	*algs = performance_algs;
+	agios_mutex_unlock(&performance_mutex);
+	return ret;
+}
+double get_current_performance_bandwidth(void)
+{
+	double ret;
+	int i;
+	long double tmp_time;
+
+	agios_mutex_lock(&performance_mutex);
+	i = performance_end-1;
+	if(i < 0)
+		i =0;
+	tmp_time = get_ns2s(performance_time[i]);
+	if(tmp_time > 0)
+		ret = (performance_size[i])/tmp_time;
+	else
+		ret = 0;
+	agios_mutex_unlock(&performance_mutex);	
+	return ret;
+}
 void reset_performance_counters(void)
 {
+	int i;
 	agios_mutex_lock(&performance_mutex);
-	performance_time = 0;
-	performance_size = 0;
+	for(i=0; i< PERFORMANCE_VALUES; i++)
+	{
+		performance_time[i] = 0;
+		performance_size[i] = 0;
+		performance_timestamps[i] = 0;
+		performance_algs[i] = -1;
+	}
+	performance_start = performance_end = 0;
 	agios_mutex_unlock(&performance_mutex);
+}
+void increment_performance_index()
+{
+	performance_end++;
+	if(performance_end >= PERFORMANCE_VALUES)
+		performance_end = 0;
+	if(performance_end == performance_start)
+	{
+		performance_start++;
+		if(performance_start >= PERFORMANCE_VALUES)
+			performance_start = 0;
+	}
+	
+}
+void performance_set_new_algorithm(int alg)
+{
+	struct timespec now;
+
+	agios_mutex_lock(&performance_mutex);
+	agios_gettime(&now);
+	performance_timestamps[performance_end] = get_timespec2llu(now);
+	performance_algs[performance_end] = alg;
+	increment_performance_index();
+	agios_mutex_unlock(&performance_mutex);
+}
+int get_request_timestamp_index(struct request_t *req)
+{
+	int i;
+	
+	i = performance_end-1;
+	if(i <0)
+		i = 0;
+	while(i != performance_start)
+	{
+		i--;
+		if(req->dispatch_timestamp > performance_timestamps[i])
+			break;
+		if(i < 0)
+			i = 0;
+	}
+	return i;
 }
 
 /************************************************************************************************************
@@ -83,6 +188,7 @@ inline void performance_set_needs_hashtable(short int value)
 /************************************************************************************************************
  * RELEASE FUNCTION, CALLED BY THE USER AFTER PROCESSING A REQUEST
  ************************************************************************************************************/
+static int release_count=0;
 int agios_release_request(char *file_id, short int type, unsigned long int len, unsigned long int offset)
 {
 	struct request_file_t *req_file;
@@ -92,9 +198,14 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 	struct request_t *req;
 	short int found=0;
 	unsigned long int elapsed_time;
+	int index;
 
 	PRINT_FUNCTION_NAME;
 
+	lock_algorithm_migration_mutex();
+
+	release_count++;
+	debug("%d requests came back to us", release_count);
 	//find the structure for this file (and acquire lock)
 	if(performance_needs_hashtable)
 	{
@@ -117,6 +228,7 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 	if(found == 0)
 	{
 		//that makes no sense, we are trying to release a request which was never added!!!
+		unlock_algorithm_migration_mutex();
 		return 0;
 	}
 	found = 0;
@@ -146,8 +258,10 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 		related->stats_file.processed_req_time += elapsed_time;
 
 		//update global performance information
-		performance_time += elapsed_time;
-		performance_size += req->io_data.len;
+		//we need to figure out to each time slice this request belongs
+		index = get_request_timestamp_index(req); //we use the timestamp from when the request was sent for processing, because we want to relate its performance to the scheduling algorithm who choose to process the request
+		performance_time[index] += elapsed_time;
+		performance_size[index] += req->io_data.len;
 
 		generic_cleanup(req);
 	}
@@ -161,6 +275,8 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 
 	//if the current scheduling algorithm follows synchronous approach, we need to allow it to continue
 	iosched_signal_synchronous();
+	unlock_algorithm_migration_mutex();
+	PRINT_FUNCTION_EXIT;
 
 	return 1;
 }

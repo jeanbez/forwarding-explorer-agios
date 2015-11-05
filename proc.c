@@ -96,6 +96,13 @@ inline void proc_set_new_algorithm(int alg)
 			proc_algs_start = 0;
 	}
 }
+inline unsigned long int *proc_get_alg_timestamps(int *start, int *end)
+{
+	*start = proc_algs_start;
+	*end = proc_algs_end;
+	return proc_algs_timestamps;
+}
+
 
 
 /***********************************************************************************************************
@@ -656,6 +663,10 @@ void stats_show_ending(void)
 {
 	unsigned long int global_avg_time;
 	unsigned long int global_avg_size;
+	double *bandwidth;
+	int start, end, len;
+	int *dummy;
+	char *band_str = malloc(sizeof(char)*50*PERFORMANCE_VALUES);
 
 	agios_mutex_lock(&global_statistics_mutex);
 
@@ -686,14 +697,26 @@ void stats_show_ending(void)
 
 	agios_mutex_unlock(&global_statistics_mutex);
 
+	bandwidth = get_performance_bandwidth(&start, &end, &dummy);
+	band_str[0]='\n';
+	band_str[1]='\0';
+	while(start != end)
+	{
+		len = strlen(band_str);
+		sprintf(band_str+len, "%.2f\n", bandwidth[start]/1024.0);
+		start++;
+		if(start >= PERFORMANCE_VALUES)
+			start = 0;
+	}
 #ifndef AGIOS_KERNEL_MODULE
 	fprintf(stats_file,  
 #else
 	seq_printf(stats_file,
 #endif
-	"served an amount of %llu bytes, bandwidth was %.2f KB/s",
+	"served an amount of %llu bytes in a total of %llu ns, bandwidth was:%s",
 	get_performance_size(),
-	get_performance_bandwidth()/1024.0);
+	get_performance_time(),
+	band_str);
 
 
 }

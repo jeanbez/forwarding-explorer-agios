@@ -232,6 +232,7 @@ struct request_t { //TODO rethink data types, we probably do not need to have lo
 	/*parameters*/
 	char *file_id;  //name of the file
 	unsigned long int jiffies_64; //arrival time 
+	unsigned long int dispatch_timestamp; //dispatch time 
 	short int type; //read or write
 	struct io_data io_data; //offset and datasize
 	short int state; //used to differentiate between real and predicted requests

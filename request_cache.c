@@ -187,16 +187,17 @@ void change_selected_alg(int new_alg, short int new_needs_hashtable, int new_max
 	//TODO what about predict??
 
 	//if we are moving to NOOP, we won't migrate data structures, we just need to process all requests already in the scheduler
-	if(new_alg == NOOP_SCHEDULER)
-	{
+//	if(new_alg == NOOP_SCHEDULER)
+//	{
 		//we are not going to process all requests from here because this would take a long time. The scheduler thread will take care of that, we just need to set the parameters
-		set_noop_previous_needs_hashtable(scheduler_needs_hashtable);
-	}
+//		set_noop_previous_needs_hashtable(scheduler_needs_hashtable);
+//	}
 	//first situation: both algorithms use hashtable
-	else if(scheduler_needs_hashtable && new_needs_hashtable)
+//	else 
+	if(scheduler_needs_hashtable && new_needs_hashtable)
 	{
 		//the only problem here is if we decreased the maximum aggregation
-		//For now we chose to do nothing. If we no longer tolerate aggregations of a certain size, we are not spliting already performed aggregations since this would not benefit us at all. We could revisit this topic at the future
+		//For now we chose to do nothing. If we no longer tolerate aggregations of a certain size, we are not spliting already performed aggregations since this would not benefit us at all. We could rethink that at some point
 	}
 	//second situation: from hashtable to timeline
 	else if (scheduler_needs_hashtable && !new_needs_hashtable)
@@ -212,7 +213,7 @@ void change_selected_alg(int new_alg, short int new_needs_hashtable, int new_max
 	else 
 	{
 		//now it depends on the algorithms. If we are going between the two timeorders, we don't have to do anything, since we have decided we will not split already performed aggregations. However, if we are going to or from the time window algorithm, we will need to reorder the whole list.
-		if((selected_alg == TIME_WINDOW_SCHEDULER) || (new_alg == TIME_WINDOW_SCHEDULER))
+		if((new_alg != NOOP_SCHEDULER) && ((selected_alg == TIME_WINDOW_SCHEDULER) || (new_alg == TIME_WINDOW_SCHEDULER)))
 		{
 			reorder_timeline(new_alg, new_max_aggregation_size);
 		}
@@ -796,10 +797,15 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 		if(selected_alg != NOOP_SCHEDULER)
 			consumer_signal_new_reqs();
 
+		debug("current status: there are %d requests in the scheduler to %d files",get_current_reqnb(), get_current_reqfilenb());
+
 		//if we are running the NOOP scheduler, we just process it already
 		if(selected_alg == NOOP_SCHEDULER)
 		{
-			short int update_time = process_requests(req, clnt, hash);
+			short int update_time;
+
+			debug("NOOP is directly processing this request");
+			update_time = process_requests(req, clnt, hash);
 			generic_post_process(req);
 			if(update_time)
 				consumer_signal_new_reqs(); //if it is time to refresh something (change the scheduling algorithm or recalculate alpha), we wake up the scheduling thread
