@@ -82,9 +82,7 @@ short int process_all_requests_from_related_list(struct related_list_t *related_
 //Usually NOOP means not having a schedule function. However, when we dynamically change from another algorithm to NOOP, we may still have requests on queue. So we just process all of them.
 void NOOP(void *clnt)
 {
-	int i;
 	struct agios_list_head *list;
-	struct request_file_t *req_file;
 	struct request_t *req;
 	short int update_time=0;
 	short int stop_processing=0;
@@ -103,6 +101,7 @@ void NOOP(void *clnt)
 			if(update_time)
 			{
 				debug("NOOP cleanup exiting without finishing because of some refresh period");
+				timeline_unlock();	
 				break; //we've changed to NOOP and then started cleaning the current data structures (that we are no longer feeding). But it is time to refresh something so we will stop
 			}
 		}

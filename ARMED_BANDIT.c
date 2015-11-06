@@ -29,9 +29,9 @@ static struct scheduler_info_t *AB_table=NULL; //all the information we have abo
 static int current_sched=0; //current scheduling algorithm in use
 
 //TODO change these values so they are defined in the configuration file instead of constants here
-#define MIN_AB_PROBABILITY 5 //we define a minimum probability to give scheduling algorithms. Without it, we cannot adapt to changes in the workload which could lead to other scheduling algorithm becomes the most adequate. No need to define a maximum probability, since it will be (100 - (useful_sched_nb * MIN_AB_PROBABILITY))
-#define VALIDITY_WINDOW 5000000000L //for how long (nanoseconds) do we consider performance measurements to be still valid (anything older than that will be discarded) 
-#define PERFORMANCE_WINDOW 5 //how many performance measurements we keep per scheduling algorithms.
+#define MIN_AB_PROBABILITY 3 //we define a minimum probability to give scheduling algorithms. Without it, we cannot adapt to changes in the workload which could lead to other scheduling algorithm becomes the most adequate. No need to define a maximum probability, since it will be (100 - (useful_sched_nb * MIN_AB_PROBABILITY))
+#define VALIDITY_WINDOW 360000000000L //for how long (nanoseconds) do we consider performance measurements to be still valid (anything older than that will be discarded) 
+#define PERFORMANCE_WINDOW 10 //how many performance measurements we keep per scheduling algorithms.
 
 //randomly pick a scheduling algorithm using their probabilities defined in AB table. Returns -1 on error
 int randomly_pick_algorithm()
@@ -168,6 +168,7 @@ short int check_validity_window(int sched, unsigned long int now)
 	      &&
 	      ((now - AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp) >= VALIDITY_WINDOW))
 	{
+		debug("we will discard a measurement to schedulre %s with timestamp %lu because now we have a timestamp %lu, and the difference %lu is larger than the validity window %lu", AB_table[sched].sched->name, AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp, now, (now - AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp), VALIDITY_WINDOW);
 		AB_table[sched].measurements_start++; //discard this measurement, it's too old
 		changed=1;
 		if(AB_table[sched].measurements_start == PERFORMANCE_WINDOW)
@@ -190,6 +191,9 @@ void update_current_measurement_list(void)
 
 	debug("most recent performance measurement: %.2f with scheduler %s", AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth, AB_table[current_sched].sched->name);
 
+	//check for anything older than the validity window
+	check_validity_window(current_sched, AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].timestamp);
+
 	//update indexes
 	AB_table[current_sched].measurements_end++;
 	if(AB_table[current_sched].measurements_end == PERFORMANCE_WINDOW)
@@ -201,8 +205,6 @@ void update_current_measurement_list(void)
 			AB_table[current_sched].measurements_start = 0;
 	}
 
-	//check for anything older than the validity window
-	check_validity_window(current_sched, AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].timestamp);
 }
 
 //updates bandwidth information for a scheduling algorithm by taking the average of its measurements
@@ -259,6 +261,7 @@ void update_bandwidth(void)
 					update_average_bandwidth(i);
 				if(AB_table[i].measurements_start == AB_table[i].measurements_end) //by discarding old results, we may end up without measurements for an algorithm
 				{
+					debug("we've discarded old results to algorithm %s, so it is untested again", AB_table[i].sched->name);
 					benchmarked_scheds--;
 					AB_table[i].selection_counter=0;
 					continue;
@@ -284,10 +287,11 @@ int ARMED_BANDIT_select_next_algorithm(void)
 	//update bandwidth observed for the current scheduling algorithm
 	update_bandwidth();
 
-	benchmarked_scheds++;
+	debug("we've already tried %d algorithms!", benchmarked_scheds+1);
 	//if we haven't tested all algorithms yet, just select one not yet selected
-	if(benchmarked_scheds < useful_sched_nb)
+	if(benchmarked_scheds < (useful_sched_nb - 1))
 	{
+		benchmarked_scheds++;
 		//randomly take one of the useful schedulers (without considering their probabilities for now)
 		next_alg = rand() % scheduler_nb;
 		while( !((AB_table[next_alg].sched->can_be_dynamically_selected == 1) && (AB_table[next_alg].selection_counter == 0))) 
@@ -296,6 +300,7 @@ int ARMED_BANDIT_select_next_algorithm(void)
 			if(next_alg == scheduler_nb)
 				next_alg = 0;
 		}
+		debug("selecting %s because it has not been tried yet", AB_table[next_alg].sched->name);
 	}
 	//we have tested all algorithms at least once, we can use probabilities now
 	else
@@ -305,6 +310,7 @@ int ARMED_BANDIT_select_next_algorithm(void)
 
 		//select next one following these probabilities
 		next_alg = randomly_pick_algorithm();
+		debug("randomly decided to select %s", AB_table[next_alg].sched->name);
 	}
 
 	//if we were able to select a new algorithm, update its selection counter and our current_sched variable

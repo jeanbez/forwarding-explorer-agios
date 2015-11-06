@@ -42,12 +42,15 @@
 #include "request_cache.h"
 #include "consumer.h"
 #include "iosched.h"
+#include "common_functions.h"
 
 //simple timeorder: requests are processed in the order they were received (it is the same as the timeorder with aggregation, the only difference between them is in the add_request part
 void timeorder(void *clnt)
 {
 	struct request_t *req;	
 	short int update_time = 0;
+
+	PRINT_FUNCTION_NAME;
 	
 	while((get_current_reqnb() > 0) && (update_time == 0))
 	{
@@ -58,8 +61,11 @@ void timeorder(void *clnt)
 			update_time = process_requests(req, (struct client *)clnt, -1); //we give -1 as the hash so the process_requests function will realize we are taking requests from the timeline, not from the hashtable	
 			generic_post_process(req);
 		}
+		else
+			debug("PANIC! We believe there are %d requests in timeline, but we cannot get one", get_current_reqnb());
 		timeline_unlock();
 	}
+	PRINT_FUNCTION_EXIT;
 }
 
 void simple_timeorder(void *clnt)

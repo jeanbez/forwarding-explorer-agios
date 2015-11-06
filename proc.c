@@ -310,7 +310,6 @@ void reset_stats_window(void)
 		}
 	}
 	reset_global_reqstats_window();
-	reset_performance_counters();
 }
 
 /*updates the stats after an aggregation*/

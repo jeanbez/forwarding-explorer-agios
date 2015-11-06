@@ -108,7 +108,10 @@ double get_current_performance_bandwidth(void)
 	int i;
 	long double tmp_time;
 
+	PRINT_FUNCTION_NAME;
+
 	agios_mutex_lock(&performance_mutex);
+	debug("going to calculate current bandwidth. start = %d, end = %d", performance_start, performance_end);
 	i = performance_end-1;
 	if(i < 0)
 		i =0;
@@ -118,6 +121,7 @@ double get_current_performance_bandwidth(void)
 	else
 		ret = 0;
 	agios_mutex_unlock(&performance_mutex);	
+	debug("returning performance %.2f", ret);
 	return ret;
 }
 void reset_performance_counters(void)
@@ -162,17 +166,19 @@ int get_request_timestamp_index(struct request_t *req)
 {
 	int i;
 	
+	PRINT_FUNCTION_NAME;
 	i = performance_end-1;
 	if(i <0)
-		i = 0;
+		i = PERFORMANCE_VALUES-1;
 	while(i != performance_start)
 	{
-		i--;
 		if(req->dispatch_timestamp > performance_timestamps[i])
 			break;
+		i--;
 		if(i < 0)
-			i = 0;
+			i = PERFORMANCE_VALUES-1;
 	}
+	PRINT_FUNCTION_EXIT;
 	return i;
 }
 
@@ -228,6 +234,7 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 	if(found == 0)
 	{
 		//that makes no sense, we are trying to release a request which was never added!!!
+		debug("PANIC! We cannot find the file structure for this request %s", file_id);
 		unlock_algorithm_migration_mutex();
 		return 0;
 	}
@@ -258,13 +265,17 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 		related->stats_file.processed_req_time += elapsed_time;
 
 		//update global performance information
+//		agios_mutex_lock(&performance_mutex);
 		//we need to figure out to each time slice this request belongs
 		index = get_request_timestamp_index(req); //we use the timestamp from when the request was sent for processing, because we want to relate its performance to the scheduling algorithm who choose to process the request
 		performance_time[index] += elapsed_time;
 		performance_size[index] += req->io_data.len;
+//		agios_mutex_unlock(&performance_mutex);
 
 		generic_cleanup(req);
 	}
+	else
+		debug("PANIC! Could not find the request %lu %lu to file %s\n", offset, len, file_id);
 	//else //what to do if we can't find the request???? is this possible????
 
 	//release data structure lock

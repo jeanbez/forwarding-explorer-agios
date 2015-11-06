@@ -178,22 +178,67 @@ inline void lock_algorithm_migration_mutex(void)
 
 void migrate_from_hashtable_to_timeline(int new_alg);
 void migrate_from_timeline_to_hashtable(int new_alg);
+void print_hashtable(void)
+{
+	int i;
+	struct agios_list_head *hash_list;
+	struct request_file_t *req_file;
+	struct request_t *req;
+
+	debug("Current hashtable status:");
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //go through the whole hashtable, one position at a time
+	{
+		hash_list = get_hashlist(i);
+		if(!agios_list_empty(hash_list))
+			debug("[%d]", i);
+		agios_list_for_each_entry(req_file, hash_list, hashlist)
+		{	
+			debug("\t%s", req_file->file_id);
+			if(!agios_list_empty(&req_file->related_reads.list))
+			{
+				debug("\t\tread");
+				agios_list_for_each_entry(req, &req_file->related_reads.list, related)
+					debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
+			}
+			if(!agios_list_empty(&req_file->related_writes.list))
+			{
+				debug("\t\twrite");
+				agios_list_for_each_entry(req, &req_file->related_writes.list, related)
+					debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
+			}
+		}
+	}
+}
+void print_timeline(void)
+{
+	struct agios_list_head *timeline, *timeline_files;
+	struct request_file_t *req_file;
+	struct request_t *req;
+
+	timeline = get_timeline();
+	timeline_files = get_timeline_files();
+	debug("Current timeline status:");
+	debug("Files:");
+	agios_list_for_each_entry(req_file, timeline_files, hashlist)
+	{
+		debug("\t%s (%lu requests)", req_file->file_id, req_file->timeline_reqnb);
+	}
+	debug("Requests:");
+	agios_list_for_each_entry(req, timeline, related)
+	{
+		debug("\t%lu %lu (to file %s)", req->io_data.offset, req->io_data.len, req->file_id);
+	}
+}
 //change the current scheduling algorithm and update local parameters
 //here we assume the scheduling thread is NOT running, so it won't mess with the structures
 //must hold the migration mutex
 //must be called before config_gossip_algorithm_parameters (otherwise we won't know that something changed)
 void change_selected_alg(int new_alg, short int new_needs_hashtable, int new_max_aggregation_size)
 {	
+	PRINT_FUNCTION_NAME;
 	//TODO what about predict??
 
-	//if we are moving to NOOP, we won't migrate data structures, we just need to process all requests already in the scheduler
-//	if(new_alg == NOOP_SCHEDULER)
-//	{
-		//we are not going to process all requests from here because this would take a long time. The scheduler thread will take care of that, we just need to set the parameters
-//		set_noop_previous_needs_hashtable(scheduler_needs_hashtable);
-//	}
 	//first situation: both algorithms use hashtable
-//	else 
 	if(scheduler_needs_hashtable && new_needs_hashtable)
 	{
 		//the only problem here is if we decreased the maximum aggregation
@@ -202,12 +247,16 @@ void change_selected_alg(int new_alg, short int new_needs_hashtable, int new_max
 	//second situation: from hashtable to timeline
 	else if (scheduler_needs_hashtable && !new_needs_hashtable)
 	{
+		print_hashtable();
 		migrate_from_hashtable_to_timeline(new_alg);		
+		print_timeline();
 	}
 	//third situation: from timeline to hashtable
 	else if (!scheduler_needs_hashtable && new_needs_hashtable)
 	{
+		print_timeline();
 		migrate_from_timeline_to_hashtable(new_alg);
+		print_hashtable();
 	}
 	//fouth situation, both algorithms use timeline
 	else 
@@ -251,10 +300,12 @@ void put_all_requests_in_timeline(struct agios_list_head *related_list, int new_
 void put_req_in_hashtable(struct request_t *req)
 {
 	unsigned long hash;
+	int i;
 
 	agios_list_del(&req->related);
 	hash = hashtable_add_req(req, req->globalinfo->req_file);
-	inc_hashlist_reqcounter(hash);
+	for(i=0; i< req->reqnb; i++) //it could be an aggregated request
+		inc_hashlist_reqcounter(hash);
 	
 }
 void put_req_file_in_timeline(struct request_file_t *req_file, struct agios_list_head *timeline_files)
@@ -293,7 +344,7 @@ void put_req_file_in_hashtable(struct request_file_t *req_file)
 	insertion_place = hash_list;
 	agios_list_for_each_entry(tmp_req_file, hash_list, hashlist)
 	{
-		if(strcmp(req_file->file_id, tmp_req_file->file_id) >= 0)
+		if(strcmp(tmp_req_file->file_id, req_file->file_id) >= 0)
 		{
 			insertion_place = &tmp_req_file->hashlist;
 			break;
@@ -633,27 +684,27 @@ void include_in_aggregation(struct request_t *req, struct request_t **agg_req)
 	req->agg_head = (*agg_req);
 }
 //we have two virtual requests which are going to become one because we've added a new one which fills the gap between them
-void join_aggregations(struct request_t *head, struct request_t *tail)
+void join_aggregations(struct request_t **head, struct request_t **tail)
 {
 	struct agios_list_head *aux;
 	int i;
 	struct request_t *aux_req;
 
 	/*removes the tail from the list*/
-	agios_list_del(&tail->related);
+	agios_list_del(&((*tail)->related));
 
-	if(tail->reqnb == 1) /*it is not a virtual request*/
-		include_in_aggregation(tail, &head);
+	if((*tail)->reqnb == 1) /*it is not a virtual request*/
+		include_in_aggregation(*tail, head);
 	else /*it is a virtual request*/
 	{
 		/*transfers all requests from this virtual request to the first one*/
-		aux = tail->reqs_list.next;
-		for(i=0; i<tail->reqnb; i++)
+		aux = (*tail)->reqs_list.next;
+		for(i=0; i<(*tail)->reqnb; i++)
 		{
 			aux_req = agios_list_entry(aux, struct request_t, aggregation_element);
 			aux = aux->next;
 			
-			include_in_aggregation(aux_req, &head);
+			include_in_aggregation(aux_req, head);
 		}	
 		free(tail);	/*we dont need this anymore*/	
 	}
@@ -672,18 +723,21 @@ int insert_aggregations(struct request_t *req, struct agios_list_head *insertion
 	if(insertion_place != list_head)
 	{
 		prev_req = agios_list_entry(insertion_place, struct request_t, related);
-		if(CHECK_AGGREGATE(prev_req, req) && (prev_req->reqnb < max_aggregation_size)) //TODO  also check if it is worth it considering the required times? does it make sense, since requests are already here anyway, and that's why we have max_aggregation_size anyway...
+		if(CHECK_AGGREGATE(prev_req, req) && ((prev_req->reqnb + req->reqnb) <= max_aggregation_size)) //TODO  also check if it is worth it considering the required times? does it make sense, since requests are already here anyway, and that's why we have max_aggregation_size anyway...
 		{
-			include_in_aggregation(req,&prev_req);
+			if(req->reqnb > 1)
+				join_aggregations(&prev_req, &req);
+			else
+				include_in_aggregation(req,&prev_req);
 			insertion_place = &(prev_req->related);
 			aggregated=1;
 			/*maybe this request is also contiguous to the next one, so we will join everything*/
 			if(insertion_place->next != list_head) /*if the request was not to be the last of the queue*/
 			{
 				next_req = agios_list_entry(insertion_place->next, struct request_t, related);
-				if(CHECK_AGGREGATE(req, next_req) && (next_req->reqnb + prev_req->reqnb <= max_aggregation_size)) 
+				if(CHECK_AGGREGATE(req, next_req) && ((next_req->reqnb + prev_req->reqnb) <= max_aggregation_size)) 
 				{
-					join_aggregations(prev_req, next_req);
+					join_aggregations(&prev_req, &next_req);
 				}
 			}
 		}
@@ -693,7 +747,10 @@ int insert_aggregations(struct request_t *req, struct agios_list_head *insertion
 		next_req = agios_list_entry(insertion_place->next, struct request_t, related);
 		if(CHECK_AGGREGATE(req, next_req) && (next_req->reqnb < max_aggregation_size)) 
 		{
-			include_in_aggregation(req, &next_req);
+			if(req->reqnb > 1)
+				join_aggregations(&req, &next_req);
+			else
+				include_in_aggregation(req, &next_req);
 			aggregated=1;
 		}
 	}

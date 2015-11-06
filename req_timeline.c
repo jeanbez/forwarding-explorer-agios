@@ -92,13 +92,16 @@ void __timeline_add_req(struct request_t *req, int max_aggregation_size, int sel
 	struct request_t *tmp;
 	int aggregated=0;
 	int tw_priority;
+	struct agios_list_head *insertion_place;
 
 	if(!req_file) //if a req_file structure has been give, we are actually migrating from hashtable to timeline and will copy the request_file_t structures, so no need to create new. Also the request pointers are already set, and we don't need to use locks here
 	{
 		PRINT_FUNCTION_NAME;
 		VERIFY_REQUEST(req);
-	
+
 		agios_mutex_lock(&timeline_mutex);
+
+		debug("adding request %lu %lu to file %s", req->io_data.offset, req->io_data.len, req->file_id);	
 
 		/*find the file and update its informations if needed*/
 		req_file = find_req_file(&timeline_files, req->file_id, req->state); //its the same function that adds a file to the hashtable. What happens is that a hashtable entry is actually a list of files (ordered by file name), just like timeline_files
@@ -108,11 +111,12 @@ void __timeline_add_req(struct request_t *req, int max_aggregation_size, int sel
 			req->globalinfo = &req_file->related_reads;
 		else
 			req->globalinfo = &req_file->related_writes;
+
+		if(selected_alg == NOOP_SCHEDULER) //we don't really include requests when using the NOOP scheduler, we just go through this function because we want request_file_t  structures for statistics
+			return;  
+
 	}
 	
-	if(selected_alg == NOOP_SCHEDULER) //we don't really include requests when using the NOOP scheduler, we just go through this function because we want request_file_t  structures for statistics
-		return;  
-
 	//the time window scheduling algorithm separates requests into windows
 	if (selected_alg == TIME_WINDOW_SCHEDULER) 
 	{
@@ -136,7 +140,7 @@ void __timeline_add_req(struct request_t *req, int max_aggregation_size, int sel
 	} 
 
 	//the TO-agg scheduling algorithm searches the queue for contiguous requests. If it finds any, then aggregate them.	
-	if(selected_alg == TIMEORDER_SCHEDULER)
+	if((selected_alg == TIMEORDER_SCHEDULER) && (max_aggregation_size > 1))
 	{	
 		agios_list_for_each_entry(tmp, this_timeline, related)
 		{
@@ -155,8 +159,27 @@ void __timeline_add_req(struct request_t *req, int max_aggregation_size, int sel
 		}  
 	}
 
-	if(!aggregated) //if not aggregated, possibly because this is the simple timeorder algorithm
-		agios_list_add_tail(&req->related, this_timeline); //we use the related list structure so we can reuse several (like include_in_aggregation) functions from the hashtable implementation
+	if(!req_file)
+	{
+		if(!aggregated) //if not aggregated, possibly because this is the simple timeorder algorithm
+			agios_list_add_tail(&req->related, this_timeline); //we use the related list structure so we can reuse several (like include_in_aggregation) functions from the hashtable implementation
+	}
+	else //we are rebuilding this queue from the hashtable, so we need to make sure requests are ordered by time (and we are not using the time window algorithm, otherwise it would have called return already (see above)
+	{
+		insertion_place = this_timeline;
+		if(!agios_list_empty(this_timeline))
+		{
+			agios_list_for_each_entry(tmp, this_timeline, related)
+			{
+				if(tmp->timestamp > req->timestamp)
+				{
+					insertion_place = &(tmp->related);
+					break;	
+				}
+			}
+		}
+		agios_list_add(&req->related, insertion_place->prev);
+	}
 
 }
 
@@ -177,14 +200,14 @@ void reorder_timeline(int new_alg, int new_max_aggregation_size)
 		if(aux_req)
 		{
 			agios_list_del(&aux_req->related);
-			__timeline_add_req(aux_req, new_max_aggregation_size, new_alg, aux_req->globalinfo->req_file, new_timeline);	
+			__timeline_add_req(aux_req, 1, new_alg, aux_req->globalinfo->req_file, new_timeline);	
 		}
 		aux_req = req;
 	}	
 	if(aux_req)
 	{
 		agios_list_del(&aux_req->related);
-		__timeline_add_req(aux_req, new_max_aggregation_size, new_alg, aux_req->globalinfo->req_file, new_timeline);	
+		__timeline_add_req(aux_req, 1, new_alg, aux_req->globalinfo->req_file, new_timeline);	
 	}
 
 	//redefine the pointers
