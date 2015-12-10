@@ -105,7 +105,7 @@ void agios_trace_better(char *file)
 
 	agios_mutex_lock(&agios_trace_mutex);
 	
-	snprintf(aux_buf, aux_buf_size, "[BETTER AGGREGATION]\t%llu\t%s\t%d\n", get_nanoelapsed(agios_trace_t0), file, WAIT_AGGREG_CONST);
+	snprintf(aux_buf, aux_buf_size, "[BETTER AGGREGATION]\t%llu\t%s\t%d\n", get_nanoelapsed(agios_trace_t0), file, config_waiting_time);
 	agios_trace_write_to_buffer();
 
 	agios_mutex_unlock(&agios_trace_mutex);

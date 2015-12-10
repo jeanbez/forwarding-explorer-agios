@@ -200,11 +200,11 @@ void * agios_thread(void *arg)
                          * also because we have to check once in a while to see if we should end the execution.
 			 */
 #ifdef AGIOS_KERNEL_MODULE
-			wait_for_completion_timeout(&consumer->request_added, WAIT_SHIFT_CONST);
+			wait_for_completion_timeout(&consumer->request_added, config_waiting_time);
 #else
 			/*fill the timeout structure*/
-			timeout_tspec.tv_sec =  WAIT_SHIFT_CONST / 1000000000L;
-			timeout_tspec.tv_nsec = WAIT_SHIFT_CONST % 1000000000L;
+			timeout_tspec.tv_sec =  config_waiting_time / 1000000000L;
+			timeout_tspec.tv_nsec = config_waiting_time % 1000000000L;
 			
  			pthread_mutex_lock(&consumer->request_added_mutex);
 			pthread_cond_timedwait(&consumer->request_added_cond, &consumer->request_added_mutex, &timeout_tspec);

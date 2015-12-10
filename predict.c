@@ -404,16 +404,16 @@ unsigned long long int agios_predict_should_we_wait(struct request_t *req)
 		if(pmax > max)
 		{
 			waiting_time = pmax - max;	
-			if(waiting_time > WAIT_PREDICTED_BETTER)
+			if(waiting_time > config_waiting_time)
 			{
 #ifdef AGIOS_DEBUG
-				agios_print("was going to wait for %llu, but changed it to %d\n", waiting_time, WAIT_PREDICTED_BETTER);
+				agios_print("was going to wait for %llu, but changed it to %d\n", waiting_time, config_waiting_time);
 #endif
-				waiting_time = WAIT_PREDICTED_BETTER;
+				waiting_time = config_waiting_time;
 			}
 		}
 		else /*it does not make sense, all the requests should be here by now!*/
-			waiting_time = WAIT_PREDICTED_BETTER;  /*TODO or maybe change it to a smaller waiting_time since we should not even be waiting*/
+			waiting_time = config_waiting_time;  /*TODO or maybe change it to a smaller waiting_time since we should not even be waiting*/
 		
 	}
 	if(waiting_time > 0)
@@ -476,13 +476,13 @@ void calculate_prediction_alpha(unsigned long long int time_spent_waiting, unsig
 				if(CHECK_AGGREGATE(req, req_next))
 				{
 					/*we found the next contiguous request, the search is over for this one*/
-					A += AVERAGE_WAITING_TIME;
+					A += config_waiting_time;
 					if(time_between > 0)
 					{
-						if(time_between >= AVERAGE_WAITING_TIME)
+						if(time_between >= config_waiting_time)
 						{
 							/*full overlapping*/
-							B+= AVERAGE_WAITING_TIME; 	
+							B+= config_waiting_time; 	
 						}
 						else
 						{

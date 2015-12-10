@@ -57,4 +57,8 @@ inline void config_set_max_trace_buffer_size(int value);
 inline long config_get_max_trace_buffer_size(void);
 
 void config_print(void);
+
+
+//variables
+extern int config_waiting_time;
 #endif

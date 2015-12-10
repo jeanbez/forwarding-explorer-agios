@@ -45,10 +45,11 @@
 #define ANTICIPATORY_VALUE(op) (2*get_access_time(AIOLI_QUANTUM,op)) /*the initial quantum given to the requests (usually twice the necessary time to process a request of size MLF_QUANTUM)*/
 #define MAX_AGGREG_SIZE   16
 #define MAX_AGGREG_SIZE_MLF   200
-#define WAIT_AGGREG_CONST 900000   //now in nanoseconds!!!
-#define WAIT_SHIFT_CONST 1350000    //now in nanoseconds!!!
-#define WAIT_PREDICTED_BETTER 500000 
-#define AVERAGE_WAITING_TIME (WAIT_AGGREG_CONST + WAIT_SHIFT_CONST + WAIT_PREDICTED_BETTER)/3.0
+//now a configuration file parameter
+//#define WAIT_AGGREG_CONST 900000   //now in nanoseconds!!!
+//#define WAIT_SHIFT_CONST 1350000    //now in nanoseconds!!!
+//#define WAIT_PREDICTED_BETTER 500000 
+//#define AVERAGE_WAITING_TIME (WAIT_AGGREG_CONST + WAIT_SHIFT_CONST + WAIT_PREDICTED_BETTER)/3.0
 #define AGIOS_HASH_SHIFT 6						/* 64 slots in */
 #define AGIOS_HASH_ENTRIES		(1 << AGIOS_HASH_SHIFT)		/* hash table  */
 #define AGIOS_HASH_FN(inode)	 	(agios_hash_str(inode, AGIOS_HASH_SHIFT))

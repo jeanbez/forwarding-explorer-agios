@@ -185,10 +185,10 @@ inline struct request_t *checkSelection(struct request_t *req, struct request_fi
 	{
 		if(req->io_data.offset > req->globalinfo->predictedoff)
 		{
-			req_file->waiting_time = WAIT_SHIFT_CONST;
+			req_file->waiting_time = config_waiting_time;
 			stats_shift_phenomenon(req->globalinfo);
 			if(config_get_trace())
-			 	agios_trace_shift(WAIT_SHIFT_CONST, req->file_id);	
+			 	agios_trace_shift(config_waiting_time, req->file_id);	
 		}
 		/*set to 0 to avoid starvation*/
 		req->globalinfo->predictedoff = 0;
@@ -199,7 +199,7 @@ inline struct request_t *checkSelection(struct request_t *req, struct request_fi
 	{
 		/*set to zero to avoid starvation*/
 		req->globalinfo->lastaggregation = 0;
-		req_file->waiting_time = WAIT_AGGREG_CONST;
+		req_file->waiting_time = config_waiting_time;
 		stats_better_aggregation(req->globalinfo);
 		if(config_get_trace())
 			agios_trace_better(req->file_id);
