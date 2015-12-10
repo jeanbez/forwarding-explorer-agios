@@ -45,10 +45,20 @@ static int config_prediction_recalculate_alpha_period = -1;
 static short int config_write_simplified_traces=0;
 static char *config_access_times_file=NULL;
 int config_waiting_time = 900000;
+int config_aioli_quantum = 8192;
+int config_mlf_quantum = 8192;
 
 inline void config_set_waiting_time(int value)
 {
 	config_waiting_time = value;
+}
+inline void config_set_aioli_quantum(int value)
+{
+	config_aioli_quantum = value;
+}
+inline void config_set_mlf_quantum(int value)
+{
+	config_mlf_quantum = value;
 }
 inline void config_set_trace(short int value)
 {
@@ -252,6 +262,11 @@ inline short int read_configuration_file(char *config_file)
 	config_set_access_times_file(ret_str);
 	config_lookup_int(&agios_config, "library_options.waiting_time", &ret);
 	config_set_waiting_time(ret);
+	config_lookup_int(&agios_config, "library_options.aioli_quantum", &ret);
+	config_set_aioli_quantum(ret);
+	config_lookup_int(&agios_config, "library_options.mlf_quantum", &ret);
+	config_set_mlf_quantum(ret);
+	
 	
 	
 

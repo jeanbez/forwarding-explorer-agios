@@ -35,14 +35,14 @@
 
 //scheduling algorithm options 
 #define MAX_MLF_LOCK_TRIES	2
-#ifdef ORANGEFS_AGIOS
-#define AIOLI_QUANTUM 65536
-#else
-#define AIOLI_QUANTUM 8192
-#endif
-#define MLF_QUANTUM 65536   	/*the size of the quantum given to requests when using the qt-mlf scheduling algorithm. 	                 	  *must be set to the expected average size of requests to this server*/
+//#ifdef ORANGEFS_AGIOS
+//#define AIOLI_QUANTUM 65536
+//#else
+//#define AIOLI_QUANTUM 8192
+//#endif
+//#define MLF_QUANTUM 65536   	/*the size of the quantum given to requests when using the qt-mlf scheduling algorithm. 	                 	  *must be set to the expected average size of requests to this server*/
 #define TIME_WINDOW_SIZE 1000 // Time window size must be in miliseconds
-#define ANTICIPATORY_VALUE(op) (2*get_access_time(AIOLI_QUANTUM,op)) /*the initial quantum given to the requests (usually twice the necessary time to process a request of size MLF_QUANTUM)*/
+#define ANTICIPATORY_VALUE(qt,op) (2*get_access_time(qt,op)) /*the initial quantum given to the requests (usually twice the necessary time to process a request of size MLF_QUANTUM)*/
 #define MAX_AGGREG_SIZE   16
 #define MAX_AGGREG_SIZE_MLF   200
 //now a configuration file parameter

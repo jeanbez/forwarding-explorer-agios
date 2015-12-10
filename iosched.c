@@ -162,7 +162,7 @@ struct request_t *applyMLFonlist(struct related_list_t *reqlist)
 		if(!found)
 		{
 			/*see if the request's quantum is large enough to allow its execution*/
-			if((req->sched_factor*MLF_QUANTUM) >= req->io_data.len)
+			if((req->sched_factor*config_mlf_quantum) >= req->io_data.len)
 			{
 				selectedreq = req; 
 				found = 1; /*we select the first possible request because we want to process them by offset order, and the list is ordered by offset. However, we do not stop the for loop here because we still have to increment the sched_factor of all requests (which is equivalent to increase their quanta)*/
@@ -438,7 +438,7 @@ int AIOLI_select_from_list(struct related_list_t *related_list, struct related_l
 		increment_sched_factor(req);
 		if(&(req->related) == related_list->list.next) //we only try to select the first request from the queue (to respect offset order), but we don't break the loop because we want all requests to have their sched_factor incremented.
 		{
-			if(req->io_data.len <= req->sched_factor*AIOLI_QUANTUM) //all requests start by a fixed size quantum (AIOLI_QUANTUM), which is increased every step (by increasing the sched_factor). The request can only be processed when its quantum is large enough to fit its size.
+			if(req->io_data.len <= req->sched_factor*config_aioli_quantum) //all requests start by a fixed size quantum (AIOLI_QUANTUM), which is increased every step (by increasing the sched_factor). The request can only be processed when its quantum is large enough to fit its size.
 			{
 				reqnb = req->reqnb;
 				*selected_queue = related_list;
@@ -561,10 +561,12 @@ inline unsigned long long int adjust_quantum(unsigned long long int elapsed_time
 	}
 		
 	if(requiredqt <= 0)
-		requiredqt = ANTICIPATORY_VALUE(type);
+	{
+		requiredqt = ANTICIPATORY_VALUE(config_aioli_quantum,type);
+	}
 	else	
 	{
-		max_bound = (get_access_time(AIOLI_QUANTUM,type)*MAX_AGGREG_SIZE);
+		max_bound = (get_access_time(config_aioli_quantum,type)*MAX_AGGREG_SIZE);
 		if(requiredqt > max_bound)
 			requiredqt = max_bound;
 	}
@@ -622,7 +624,7 @@ void AIOLI(void *clnt)
 			{		
 				if(aioli_quantum == 0) //it was the first time executing from this queue, we don't have information enough to decide the next quantum this file should receive, so let's just give it a default value
 				{
-					AIOLI_selected_queue->nextquantum = ANTICIPATORY_VALUE(type);
+					AIOLI_selected_queue->nextquantum = ANTICIPATORY_VALUE(config_aioli_quantum,type);
 				}
 				else //we had a quantum and it was enough
 				{

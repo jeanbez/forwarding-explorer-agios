@@ -61,4 +61,6 @@ void config_print(void);
 
 //variables
 extern int config_waiting_time;
+extern int config_aioli_quantum;
+extern int config_mlf_quantum;
 #endif
