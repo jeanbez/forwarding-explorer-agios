@@ -104,7 +104,7 @@ int ARMED_BANDIT_init(void)
 	}
 	
 	//start with the starting algorithm (defined in the configuration file), unless it is something we cannot use here
-	current_sched = config_get_starting_algorithm();
+	current_sched = config_agios_starting_algorithm;
 	if(AB_table[current_sched].sched->can_be_dynamically_selected != 1)
 	{
 		agios_print("Error! Starting algorithm with Armed Bandit approach needs to be dynamically selectable.");

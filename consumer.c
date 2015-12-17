@@ -148,8 +148,6 @@ static struct io_scheduler_instance_t *dynamic_scheduler=NULL;
 static int dynamic_alg = 0;
 static struct io_scheduler_instance_t *current_scheduler=NULL;
 static int current_alg = 0;
-static unsigned long int algorithm_selection_period=-1;
-static int algorithm_selection_reqnumber=1;
 static struct timespec last_algorithm_update; //the time at the last time we've selected an algorithm
 static unsigned long int last_selection_processed_reqnb=0; //the processed requests counter at the last time we've selected an algorithm
 struct io_scheduler_instance_t *consumer_get_current_scheduler(void)
@@ -182,17 +180,8 @@ inline void unlock_processed_reqnb_mutex()
 }
 
 /***********************************************************************************************************
- * LOCAL COPIES OF CONFIGURATION FILE PARAMETERS 	   *
- ***********************************************************************************************************/
-static short int tracing=0;
-inline void set_consumer_tracing(short int value)
-{
-	tracing = value;
-}
-/***********************************************************************************************************
  * REFRESH OF PREDICTION MODULE'S ALPHA FACTOR 	   *
  ***********************************************************************************************************/
-static int recalculate_alpha_period = -1;
 static unsigned long int last_alpha_processed_reqnb=0; //the processed requests counter at the last time we've recalculated alpha
 
 /***********************************************************************************************************
@@ -245,7 +234,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 	agios_gettime(&now);
 
 
-	if(tracing)
+	if(config_trace_agios)
 		agios_trace_process_requests(head_req);
 
 	if((clnt->process_requests) && (head_req->reqnb > 1)) //if the user has a function capable of processing a list of requests at once and this is an aggregated request
@@ -310,12 +299,12 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 
 	lock_processed_reqnb_mutex();
 	processed_reqnb += head_req->reqnb; //TODO when we overflow this variable, we will have problems, check this
-	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
+	if((config_predict_agios_recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= config_predict_agios_recalculate_alpha_period))
 		update_time=1;
 //	debug("scheduler is dynamic? %d, algorithm_selection_period = %lu, processed_reqnb = %lu, last_selection_processed_renb = %lu, algorithm_selection_reqnumber = %lu", dynamic_scheduler->is_dynamic, algorithm_selection_period, processed_reqnb, last_selection_processed_reqnb, algorithm_selection_reqnumber);
-	if((dynamic_scheduler->is_dynamic) && (algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber))
+	if((dynamic_scheduler->is_dynamic) && (config_agios_select_algorithm_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= config_agios_select_algorithm_min_reqnumber))
 	{
-		if(get_nanoelapsed(last_algorithm_update) >= algorithm_selection_period)
+		if(get_nanoelapsed(last_algorithm_update) >= config_agios_select_algorithm_period)
 			update_time=1;
 	}
 	unlock_processed_reqnb_mutex();
@@ -347,7 +336,7 @@ void check_update_time()
 	lock_processed_reqnb_mutex();
 	//is it time to change the scheduling algorithm?
 	//TODO it is possible that at this moment the prediction thread is reading traces and making predictions, i.e., accessing the hashtable. This could lead to awful problems. If we want to test with recalculate_alpha_period, we need to take care of that!
-	if((dynamic_scheduler->is_dynamic) && (algorithm_selection_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= algorithm_selection_reqnumber) && (get_nanoelapsed(last_algorithm_update) >= algorithm_selection_period))
+	if((dynamic_scheduler->is_dynamic) && (config_agios_select_algorithm_period >= 0) && ((processed_reqnb - last_selection_processed_reqnb) >= config_agios_select_algorithm_min_reqnumber) && (get_nanoelapsed(last_algorithm_update) >= config_agios_select_algorithm_period))
 	{
 		last_selection_processed_reqnb = processed_reqnb;
 		unlock_processed_reqnb_mutex(); //we release this lock before changing the scheduling algorithm because that will require acquiring the migration mutex, which the other thread could he holding while waiting for this lock (leading to a deadlock)
@@ -370,7 +359,7 @@ void check_update_time()
 		unlock_processed_reqnb_mutex(); 
 	//is it time to recalculate the alpha factor and review all predicted requests aggregations?
 	//we check for this AFTER the change of scheduling algorithm (despite the fact that making it before would potentially allow for new information to be considered in the algorithm selection) because the refresh_predictions() only signals the prediction thread, that will then start reading traces, which may take a long time and access the hashtable. This is not to be made possible during scheduling algorithm migration. We could wait for the prediction thread to finish its operation, but this could mean keeping AGIOS frozen while making predictions, which would impair performance 
-	if((recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= recalculate_alpha_period))
+	if((config_predict_agios_recalculate_alpha_period >= 0) && ((processed_reqnb - last_alpha_processed_reqnb) >= config_predict_agios_recalculate_alpha_period))
 	{
 		refresh_predictions();
 		last_alpha_processed_reqnb = processed_reqnb;
@@ -393,7 +382,7 @@ void * agios_thread(void *arg)
 	PRINT_FUNCTION_NAME;
 
 	//let's find out which I/O scheduling algorithm we need to use
-	dynamic_alg = config_get_default_algorithm();
+	dynamic_alg = config_agios_default_algorithm;
 	dynamic_scheduler = initialize_scheduler(dynamic_alg);
 	if(!dynamic_scheduler->is_dynamic) //we are NOT using a dynamic scheduling algorithm
 	{
@@ -403,11 +392,9 @@ void * agios_thread(void *arg)
 	else //we are using a dynamic scheduler
 	{
 		//with which algorithm should we start?
-		current_alg = config_get_starting_algorithm(); //if we are using DYN_TREE and it selected a scheduling algorithm at its initialization phase, the parameter was updated and we can access it here. If not, we will use the provided starting algorithm
+		current_alg = config_agios_starting_algorithm; //if we are using DYN_TREE and it selected a scheduling algorithm at its initialization phase, the parameter was updated and we can access it here. If not, we will use the provided starting algorithm
 		current_scheduler = initialize_scheduler(current_alg);
-		algorithm_selection_period = config_get_select_algorithm_period();
-		algorithm_selection_reqnumber = config_get_select_algorithm_min_reqnumber();
-		if(algorithm_selection_period > 0)
+		if(config_agios_select_algorithm_period > 0)
 		{
 			agios_gettime(&last_algorithm_update);			
 			last_selection_processed_reqnb=0;
@@ -418,7 +405,6 @@ void * agios_thread(void *arg)
 	//since the current algorithm is decided, we can allow requests to be included
 	unlock_algorithm_migration_mutex();	
 	
-	recalculate_alpha_period = config_get_prediction_recalculate_alpha_period();
 	last_alpha_processed_reqnb=0;
 
 

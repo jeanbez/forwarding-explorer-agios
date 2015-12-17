@@ -44,22 +44,6 @@ static unsigned long int agios_tracefile_buffer_size=0; //occupancy of the buffe
 static char *aux_buf = NULL; //this smaller buffer is used by the functions to write a line at a time to the main buffer. We keep it global to avoid having to allocate it multiple times (it is allocated during initialization)
 static int aux_buf_size = 300*sizeof(char); //hard coded
 
-/*these parameters are obtained from the configuration file. We keep local copies for performance reasons (to avoid calling functions to get them)*/
-static short int agios_config_trace_full=0;
-static unsigned long int agios_config_max_trace_buffer_size = 1*1024*1024;
-static short int trace_predict=0;
-void set_trace_agios_config_trace_full(short int value)
-{
-	agios_config_trace_full=value;
-}
-void set_trace_agios_config_max_trace_buffer_size(unsigned long int value)
-{
-	agios_config_max_trace_buffer_size=value;
-}
-void set_trace_config_trace_predict(short int value)
-{
-	trace_predict=value;	
-}
 
 //must have trace lock
 void agios_tracefile_flush_buffer()
@@ -77,7 +61,7 @@ void agios_tracefile_flush_buffer()
 void agios_trace_write_to_buffer()
 {
 	int size = strlen(aux_buf);
-	if((agios_tracefile_buffer_size + size) >= agios_config_max_trace_buffer_size)
+	if((agios_tracefile_buffer_size + size) >= config_agios_max_trace_buffer_size)
 	{
 		agios_tracefile_flush_buffer();
 	}
@@ -88,7 +72,7 @@ void agios_trace_write_to_buffer()
 //a shift phenomenon was detected and the scheduler decided to wait for a file (for aIOLi and MLF only)
 void agios_trace_shift(unsigned int wait_time, char *file)
 {
-	if(!agios_config_trace_full)
+	if(!config_trace_agios_full)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -102,7 +86,7 @@ void agios_trace_shift(unsigned int wait_time, char *file)
 //schedulerr is going to wait for a file
 void agios_trace_wait(unsigned int wait_time, char *file)
 {
-	if(!agios_config_trace_full)
+	if(!config_trace_agios_full)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -115,7 +99,7 @@ void agios_trace_wait(unsigned int wait_time, char *file)
 //it was detected that a better aggregation to a file was already performed, so the scheduler decided to wait 
 void agios_trace_better(char *file)
 {
-	if(!agios_config_trace_full)
+	if(!config_trace_agios_full)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -128,7 +112,7 @@ void agios_trace_better(char *file)
 //a better aggregation was predicted, so the scheduler decided to wait
 void agios_trace_predicted_better_aggregation(unsigned int wait_time, char *file)
 {
-	if(!agios_config_trace_full)
+	if(!config_trace_agios_full)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -170,7 +154,7 @@ void agios_trace_add_request(struct request_t *req)
 //a predicted request was added to the queues
 void agios_trace_predict_addreq(struct request_t *req)
 {
-	if(!trace_predict)
+	if(!config_trace_agios_predict)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -187,7 +171,7 @@ void agios_trace_process_requests(struct request_t *head_req)
 	struct request_t *req;
 	int size;
 
-	if(!agios_config_trace_full)
+	if(!config_trace_agios_full)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -251,7 +235,7 @@ void agios_trace_print_predicted_aggregations(struct request_file_t *req_file)
 {
 	int size;
 
-	if(!trace_predict)
+	if(!config_trace_agios_predict)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -288,14 +272,14 @@ int agios_trace_init()
 				fclose(agios_tracefile_fd);
 
 			agios_trace_counter++;
-			sprintf(filename, "%s.%d.%s", config_get_trace_file_name(1), agios_trace_counter, config_get_trace_file_name(2));	
+			sprintf(filename, "%s.%d.%s", config_trace_agios_file_prefix, agios_trace_counter, config_trace_agios_file_sufix);	
 			agios_tracefile_fd = fopen(filename, "r");
 		} while(agios_tracefile_fd);
 	}
 	else
 	{
 		agios_trace_counter++;
-		sprintf(filename, "%s.%d.%s", config_get_trace_file_name(1), agios_trace_counter, config_get_trace_file_name(2));
+		sprintf(filename, "%s.%d.%s", config_trace_agios_file_prefix, agios_trace_counter, config_trace_agios_file_sufix);
 	}
 		
 	/*create and open the new trace file*/
@@ -308,7 +292,7 @@ int agios_trace_init()
 			agios_tracefile_buffer_size=0; //we already have a buffer, just have to reset it
 		else
 		{
-			agios_tracefile_buffer = (char *)malloc(agios_config_max_trace_buffer_size); 
+			agios_tracefile_buffer = (char *)malloc(config_agios_max_trace_buffer_size); 
 		}
 		ret =  agios_trace_counter;
 	}

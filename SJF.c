@@ -45,6 +45,7 @@
 #include "common_functions.h"
 #include "estimate_access_times.h"
 #include "iosched.h"
+#include "agios_config.h"
 
 inline int SJF_check_queue(struct related_list_t *related_list, unsigned long int min_size)
 {

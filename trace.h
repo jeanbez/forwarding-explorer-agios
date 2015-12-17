@@ -41,10 +41,6 @@ void agios_trace_wait(unsigned int wait_time, char *file);
 void agios_trace_predict_addreq(struct request_t *req);
 void agios_trace_print_predicted_aggregations(struct request_file_t *req_file);
 
-void set_trace_config_trace_predict(short int value);
-void set_trace_agios_config_trace_full(short int value);
-void set_trace_agios_config_max_trace_buffer_size(unsigned long int value);
-
 #endif //ifndef _TRACE_AGIOS_H_
 
 

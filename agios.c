@@ -110,7 +110,7 @@ int agios_init(struct client *clnt, char *config_file)
 		return ret;
 
 	//read the access times file
-	read_access_times_functions(config_get_access_times_file());
+	read_access_times_functions(config_agios_access_times_file);
 
 	/*init the memory structures*/
 	if ((ret = request_cache_init()))
@@ -120,11 +120,11 @@ int agios_init(struct client *clnt, char *config_file)
 
 	proc_stats_init();
 
-	if(config_get_trace())
+	if(config_trace_agios)
 	{
 		if((file_counter = agios_trace_init()) == -1)
 		{
-			agios_print("Error opening trace file %s.%d.%s!\n", config_get_trace_file_name(1), file_counter, config_get_trace_file_name(2));
+			agios_print("Error opening trace file %s.%d.%s!\n", config_trace_agios_file_prefix, file_counter, config_trace_agios_file_sufix);
 			file_counter = 0;
 			request_cache_cleanup(); /*clean up cache structures already allocated*/
 			proc_stats_exit();
@@ -189,7 +189,7 @@ void agios_exit(void)
 	}
 
 	request_cache_cleanup();
-	if(config_get_trace())
+	if(config_trace_agios)
 		agios_trace_close();
 	proc_stats_exit();
 	agios_print("stopped for this client. It can already be used by calling agios_init\n");

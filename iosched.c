@@ -62,21 +62,6 @@
 
 
 /**********************************************************************************************************************/
-/*	LOCAL COPIES OF CONFIGURATION FILE PARAMETERS	*/
-/**********************************************************************************************************************/
-//these parameters are obtained from the configuration file at the beginning of the execution. We keep copies for performance reasons
-static short int predict_request_aggregation=0;
-static short int trace=0;
-inline void set_iosched_predict_request_aggregation(short int value)
-{
-	predict_request_aggregation=value;
-}
-inline void set_iosched_trace(short int value)
-{
-	trace = value;
-}
-
-/**********************************************************************************************************************/
 /*	FOR ALGORITHMS WITH THE SYNCHRONOUS APPROACH	*/
 /**********************************************************************************************************************/
 static short int is_synchronous=0; //to know if the current scheduling algorithm follows the synchronous approach
@@ -192,7 +177,7 @@ inline struct request_t *checkSelection(struct request_t *req, struct request_fi
 		{
 			req_file->waiting_time = WAIT_SHIFT_CONST;
 			stats_shift_phenomenon(req->globalinfo);
-			if(trace)
+			if(config_trace_agios)
 			 	agios_trace_shift(WAIT_SHIFT_CONST, req->file_id);	
 		}
 		/*set to 0 to avoid starvation*/
@@ -206,14 +191,14 @@ inline struct request_t *checkSelection(struct request_t *req, struct request_fi
 		req->globalinfo->lastaggregation = 0;
 		req_file->waiting_time = WAIT_AGGREG_CONST;
 		stats_better_aggregation(req->globalinfo);
-		if(trace)
+		if(config_trace_agios)
 			agios_trace_better(req->file_id);
 	}
 	/*3. we predicted that a better aggregation could be done to this request*/
-	else if((predict_request_aggregation) && ((req_file->waiting_time = agios_predict_should_we_wait(req)) > 0))
+	else if((config_predict_agios_request_aggregation) && ((req_file->waiting_time = agios_predict_should_we_wait(req)) > 0))
 	{
 		stats_predicted_better_aggregation(req->globalinfo);
-		if(trace)
+		if(config_trace_agios)
 			agios_trace_predicted_better_aggregation(req_file->waiting_time, req->file_id);
 	} 
 
@@ -235,7 +220,7 @@ void agios_wait(unsigned int timeout, char *file)
 #endif
 
 
-	if(trace)
+	if(config_trace_agios)
 		agios_trace_wait(timeout,file);
 	
 	debug("going to sleep for %u\n", timeout);

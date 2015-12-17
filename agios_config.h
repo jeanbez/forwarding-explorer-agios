@@ -26,47 +26,36 @@
 inline short int read_configuration_file(char *config_file);
 
 //library options
-inline void config_set_select_algorithm_period(int value);
-inline long int config_get_select_algorithm_period(void);
-inline void config_set_select_algorithm_min_reqnumber(int value);
-inline int config_get_select_algorithm_min_reqnumber(void);
+// 1. trace
+extern short int config_trace_agios;
+extern short int config_trace_agios_predict;
+extern short int config_trace_agios_full;
+extern char *config_trace_agios_file_prefix;
+extern char *config_trace_agios_file_sufix;
+extern char *config_simple_trace_agios_file_prefix;
+// 2. prediction module
+extern short int config_predict_agios_read_traces;
+extern short int config_predict_agios_request_aggregation;
+extern int config_predict_agios_time_error;
+extern int config_predict_agios_recalculate_alpha_period;
+extern short int config_agios_write_simplified_traces;
+// 3. scheduling
+extern int config_agios_default_algorithm;
+extern long int config_agios_select_algorithm_period;
+extern int config_agios_select_algorithm_min_reqnumber;
+extern int config_agios_starting_algorithm;
 inline void config_set_starting_algorithm(int value);
-inline int config_get_starting_algorithm(void);
-inline void config_set_trace(short int value);
-inline short int config_get_trace(void);
-inline void config_set_trace_predict(short int value);
-inline short int config_get_trace_predict(void);
-inline void config_set_trace_full(short int value);
-inline short int config_get_trace_full(void);
-inline void config_set_predict_read_traces(short int value);
-inline short int config_get_predict_read_traces(void);
-inline void config_set_predict_request_aggregation(short int value);
-inline short int config_get_predict_request_aggregation(void);
-inline void config_set_trace_file_name(short int index, const char *value);
-inline char *config_get_trace_file_name(short int index);
-inline void config_set_select_algorithm(short int value);
-inline short int config_get_select_algorithm(void);
-inline void config_set_default_algorithm(int value);
-inline int config_get_default_algorithm(void);
-inline void config_set_prediction_time_error(int value);
-inline int config_get_prediction_time_error(void);
-inline void config_set_prediction_recalculate_alpha_period(int value);
-inline int config_get_prediction_recalculate_alpha_period(void);
-inline void config_set_simple_trace_file_prefix(const char *value);
-inline char * config_get_simple_trace_file_prefix(void);
-inline void config_set_write_simplified_traces(short int value);
-inline short int config_get_write_simplified_traces(void);
-inline char *config_get_access_times_file(void);
-
+// 4. access times estimation
+extern char *config_agios_access_times_file;
 
 //user info
-inline void config_set_stripesize(int value);
-inline int config_get_stripesize(void);
-inline void config_set_max_trace_buffer_size(int value);
-inline unsigned long int config_get_max_trace_buffer_size(void);
+extern int config_agios_stripe_size;
+extern unsigned long int config_agios_max_trace_buffer_size;
+ 
 
 //to spread configuration parameters to all modules
 void config_gossip_algorithm_parameters(int alg, struct io_scheduler_instance_t *scheduler);
 
 void config_print(void);
+
 #endif

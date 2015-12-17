@@ -193,9 +193,9 @@ inline struct request_t *predicted_request_constructor(char *file_id, int type, 
  *this is used to deciding if predictions are for the same request*/
 inline int request_time_is_close_enough(unsigned long long int time1, unsigned long long int time2)
 {
-	if(time1 >= (time2 - (time2 * config_get_prediction_time_error())/100))
+	if(time1 >= (time2 - (time2 * config_predict_agios_time_error)/100))
 	{
-		if(time1 <= (time2 + (time2 * config_get_prediction_time_error())/100))
+		if(time1 <= (time2 + (time2 * config_predict_agios_time_error)/100))
 			return 1;
 		else
 			return 0;
@@ -641,7 +641,7 @@ void predict_aggregations(short int cleanup)
 					/*the predicted writes list*/
 					predict_aggregations_onlist(&req_file->predicted_writes, cleanup);
 				}
-				if((config_get_trace_predict()) && (!(agios_list_empty(&(req_file->predicted_writes.list)) && agios_list_empty(&(req_file->predicted_reads.list)))))
+				if((config_trace_agios_predict) && (!(agios_list_empty(&(req_file->predicted_writes.list)) && agios_list_empty(&(req_file->predicted_reads.list)))))
 					agios_trace_print_predicted_aggregations(req_file);
 			}
 		}
@@ -672,10 +672,10 @@ void calculate_average_stripe_access_time_difference(struct related_list_t *rela
 		stripes_count=0;
 		agios_list_for_each_entry(req, &related_list->list, related)
 		{
-			if((req->io_data.offset / config_get_stripesize()) != current_stripe)
+			if((req->io_data.offset / config_agios_stripe_size) != current_stripe)
 			{
 				//since requests are ordered by offset, we know we already went through all requests from the current stripe
-				current_stripe = (req->io_data.offset / config_get_stripesize());
+				current_stripe = (req->io_data.offset / config_agios_stripe_size);
 				if(current_count > 1)
 				{
 					arrival_times_differences_sum = max_arrival_time - min_arrival_time; //get the difference from the last stripe if we had at least two requests in it
@@ -928,7 +928,7 @@ void read_predictions_from_traces(int last, int files_nb)
 
 	for(i=last+1; i<= files_nb; i++)
 	{
-		snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_get_trace_file_name(1), i, config_get_trace_file_name(2));
+		snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_trace_agios_file_prefix, i, config_trace_agios_file_sufix);
 
 		input_file = fopen(filename, "r");
 
@@ -946,7 +946,7 @@ void read_predictions_from_traces(int last, int files_nb)
 			add_prediction(filename, type, offset, len, timestamp);
 		}
 		if(ret > 0)
-			agios_print("Error while reading the trace file %s.%d.%s. Stopping for this file.\n", config_get_trace_file_name(1), i, config_get_trace_file_name(2));
+			agios_print("Error while reading the trace file %s.%d.%s. Stopping for this file.\n", config_trace_agios_file_prefix, i, config_trace_agios_file_sufix);
 	
 		/*we have to reset the first arrival times for the files because the next trace can have accesses to the same file, and it would be harder to identify duplicate predictions*/
 		reset_files_first_arrival_time();
@@ -965,7 +965,7 @@ int how_many_tracefiles_there_are(int start)
 	int ret=start+1;
 
 	do{
-		snprintf(filename, 300*sizeof(char),  "%s.%d.%s", config_get_trace_file_name(1), ret, config_get_trace_file_name(2));
+		snprintf(filename, 300*sizeof(char),  "%s.%d.%s", config_trace_agios_file_prefix, ret, config_trace_agios_file_sufix);
 		input_file = fopen(filename, "r");
 		if(input_file)
 		{
@@ -1000,11 +1000,11 @@ int read_predictions_from_simple_traces(void)
 	
 
 	PRINT_FUNCTION_NAME;
-	if((config_get_simple_trace_file_prefix() == NULL) || (config_get_trace_file_name(2) == NULL))
+	if((config_simple_trace_agios_file_prefix == NULL) || (config_trace_agios_file_sufix == NULL))
 		return 0;
 	do{
 		simple_tracefile_counter++;
-		snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_get_simple_trace_file_prefix(), simple_tracefile_counter, config_get_trace_file_name(2));
+		snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_simple_trace_agios_file_prefix, simple_tracefile_counter, config_trace_agios_file_sufix);
 		input_file = fopen(filename, "r");
 		if(input_file)
 		{
@@ -1067,7 +1067,7 @@ void write_simplified_trace_files(void)
 				{
 					if((!agios_list_empty(&(req_file->predicted_reads.list))) || (!agios_list_empty(&(req_file->predicted_writes.list)))) //if we have any predicted requests. we are not generating simplified trace files from information we got from simplified trace files...
 					{
-						snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_get_simple_trace_file_prefix(), simple_tracefile_counter, config_get_trace_file_name(2));
+						snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_simple_trace_agios_file_prefix, simple_tracefile_counter, config_trace_agios_file_sufix);
 						output_file = fopen(filename, "w");
 						if(!output_file)
 						{
@@ -1115,17 +1115,17 @@ void *prediction_thr(void *arg)
 
 	init_agios_list_head(&predict_timeline); //we used to have both a timeline and a hashtable for the schedulers, but it led to race conditions, since you could have the lock to a line of the hashtable and with it change the timeline, where there are requests from other lines. I'm still not 100% positive it will not be a problem for the prediction module... it's probably ok, because we'll never erase predictions (unlike requests which are processed and then go away)
 
-	if((tracefile_counter > 0) && (config_get_predict_read_traces()))
+	if((tracefile_counter > 0) && (config_predict_agios_read_traces))
 	{
 		read_predictions_from_traces(0,tracefile_counter);
 		read_predictions_from_simple_traces();
 		update_traced_access_pattern();
-		if(config_get_predict_request_aggregation())
+		if(config_predict_agios_request_aggregation)
 		{
 			calculate_prediction_alpha(0, 0, 1); /*necessary to the prediction of aggregations*/
 			predict_aggregations(0);  /*go through all the predictions to evaluate possible aggregations*/
 		}
-		if(config_get_write_simplified_traces())
+		if(config_agios_write_simplified_traces)
 			write_simplified_trace_files();
 	}
 	else
@@ -1155,16 +1155,16 @@ void *prediction_thr(void *arg)
 				new_tracefile_counter = how_many_tracefiles_there_are(tracefile_counter);
 				new_tracefile_counter--; //we take one out, because it's the one the Trace Module is using right now.
 				
-				if(config_get_predict_read_traces())
+				if(config_predict_agios_read_traces)
 				{
 					read_predictions_from_traces(tracefile_counter, new_tracefile_counter);
 					update_traced_access_pattern();
-					if(config_get_write_simplified_traces())
+					if(config_agios_write_simplified_traces)
 						write_simplified_trace_files();
 				}
 				tracefile_counter = new_tracefile_counter;
 			}
-			if(config_get_predict_request_aggregation())
+			if(config_predict_agios_request_aggregation)
 			{
 				/*re-calculate alpha and re-do all agregations predictions*/
 				calculate_prediction_alpha(get_time_spent_waiting(), get_waiting_time_overlapped(), 0);

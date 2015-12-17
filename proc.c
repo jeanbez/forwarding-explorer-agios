@@ -447,7 +447,7 @@ void print_predicted_stats_start(void)
 #else
 	fprintf(stats_file, 
 #endif
-	"\nPREDICTED_STATISTICS\n\ntracefile_counter: %d\nprediction_thread_init_time: %llu\nprediction_time_accepted_error: %d\ncurrent_predicted_reqfilenb: %d\n", get_predict_tracefile_counter(), get_predict_init_time(), config_get_prediction_time_error(), get_current_predicted_reqfilenb());
+	"\nPREDICTED_STATISTICS\n\ntracefile_counter: %d\nprediction_thread_init_time: %llu\nprediction_time_accepted_error: %d\ncurrent_predicted_reqfilenb: %d\n", get_predict_tracefile_counter(), get_predict_init_time(), config_predict_agios_time_error, get_current_predicted_reqfilenb());
 	
 	print_something("\t\treqs\tsize\tsize_avg\tsize_min\tsize_max\tsum_/_aggs\tagg_bigg\ttbr_avg\ttbr_min\ttbr_max\n");
 
@@ -805,7 +805,7 @@ void agios_reset_stats()
 
 	reset_global_reqstats_file();
 #ifndef AGIOS_KERNEL_MODULE
-	if(config_get_trace())
+	if(config_trace_agios)
 		agios_trace_reset();	
 #endif
 

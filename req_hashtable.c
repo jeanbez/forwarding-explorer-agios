@@ -27,6 +27,7 @@
 #include "hash.h"
 #include "request_cache.h"
 #include "trace.h"
+#include "agios_config.h"
 
 
 static struct agios_list_head *hashlist; //a contiguous list of fixed size. Files are distributed among the positions in this list according to a hash function
@@ -37,12 +38,6 @@ static struct mutex *hashlist_locks;
 #else
 static pthread_mutex_t *hashlist_locks;
 #endif
-
-static short int trace_predict=0; //this parameter is obtained in the beginning of the execution from the configuration file. We keep a copy here for performance reasons
-inline void set_hashtable_trace_predict(short int value)
-{
-	trace_predict = value;
-}
 
 //MUST HOLD MUTEX TO THE HASHTABLE LINE
 inline void dec_hashlist_reqcounter(int hash)
@@ -193,7 +188,7 @@ void __hashtable_add_req(struct request_t *req, unsigned long hash_val, struct r
 		agios_list_add(&req->related, insertion_place->prev); //predicted requests are not really aggregated into virtual requests
 		
 	if(req->state == RS_PREDICTED)
-		if(trace_predict)
+		if(config_trace_agios_predict)
 			agios_trace_predict_addreq(req);
 
 }

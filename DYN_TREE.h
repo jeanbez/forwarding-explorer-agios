@@ -22,7 +22,6 @@
 #ifndef _DYN_TREE_H_
 #define _DYN_TREE_H_
 
-inline void set_DYN_TREE_dynamic_scheduler(short int value);
 int DYN_TREE_init(void);
 int DYN_TREE_select_next_algorithm(void);
 #endif

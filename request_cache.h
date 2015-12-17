@@ -40,11 +40,6 @@ inline void dec_many_current_reqnb(int hash, int value);
 inline void inc_current_reqfilenb(void);
 inline void dec_current_reqfilenb(void);
 
-/* to set the local copies of configuration file parameters */
-inline void set_request_cache_predict_request_aggregation(short int value);
-inline void set_request_cache_trace(short int value);
-inline void set_default_stripe_size(int value);
-
 /* to access the scheduling algorithms management parameters and functions */
 inline int get_selected_alg(void);
 inline void set_selected_alg(int value); //use it only at first, when setting the parameters. DON'T use it for changing the current scheduling algorithm (use change_selected_alg instead)

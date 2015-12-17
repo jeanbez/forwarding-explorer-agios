@@ -34,7 +34,6 @@ void consumer_init(struct client *clnt_value, int task_value);
 void consumer_set_task(int value);
 int consumer_get_task(void);
 #endif
-void set_consumer_tracing(short int value);
 
 struct io_scheduler_instance_t *consumer_get_current_scheduler(void);
 

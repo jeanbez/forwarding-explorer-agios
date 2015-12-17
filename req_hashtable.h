@@ -25,9 +25,6 @@
 #ifndef _REQ_HASHTABLE_H_
 #define _REQ_HASHTABLE_H_
 
-/*to set local copies of configuration file parameters*/
-void set_hashtable_trace_predict(short int value);
-
 /*to access internal counters*/
 void dec_hashlist_reqcounter(int hash);
 void dec_many_hashlist_reqcounter(int hash, int value);

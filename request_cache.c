@@ -114,26 +114,6 @@ inline void dec_current_reqfilenb()
 
 
 /**********************************************************************************************************************/
-/*	LOCAL COPIES OF CONFIGURATION FILE PARAMETERS	*/
-/**********************************************************************************************************************/
-//these parameters are obtained from the configuration file at the beginning of the execution. We keep copies for performance reasons
-static short int predict_request_aggregation=0;
-static short int trace=0;
-static unsigned int default_stripe_size=1;
-inline void set_request_cache_predict_request_aggregation(short int value)
-{
-	predict_request_aggregation=value;
-}
-inline void set_request_cache_trace(short int value)
-{
-	trace = value;
-}
-inline void set_default_stripe_size(int value)
-{
-	default_stripe_size = value;
-}
-
-/**********************************************************************************************************************/
 /*	SCHEDULING ALGORITHM PARAMETERS	*/
 /**********************************************************************************************************************/
 //parameters related to the current scheduling algorithm. 
@@ -552,7 +532,7 @@ static void request_file_init(struct request_file_t *req_file, char *file_id)
 	req_file->wrote_simplified_trace=0;
 	req_file->timeline_reqnb=0;
 
-	req_file->stripe_size = default_stripe_size;
+	req_file->stripe_size = config_agios_stripe_size;
 
 	request_file_init_related_list(&req_file->related_reads, req_file);
 	request_file_init_related_list(&req_file->related_writes, req_file);
@@ -745,7 +725,7 @@ int insert_aggregations(struct request_t *req, struct agios_list_head *insertion
 	if((!aggregated) && (insertion_place->next != list_head)) /*if we could not aggregated with the previous one, or there is no previous one, and this request is not to be the last of the queue, lets try with the next one*/
 	{
 		next_req = agios_list_entry(insertion_place->next, struct request_t, related);
-		if(CHECK_AGGREGATE(req, next_req) && (next_req->reqnb < max_aggregation_size)) 
+		if(CHECK_AGGREGATE(req, next_req) && ((next_req->reqnb + req->reqnb) <= max_aggregation_size)) 
 		{
 			if(req->reqnb > 1)
 				join_aggregations(&req, &next_req);
@@ -834,7 +814,7 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 		{
 			hash = hashtable_add_req(req, NULL);
 			inc_hashlist_reqcounter(hash); //had to remove it from inside __hashtable_add_req because that function is also used for prediction requests. we do not want to count them as requests for the scheduling algorithms
-			if(predict_request_aggregation)
+			if(config_predict_agios_request_aggregation)
 				prediction_newreq(req);
 		}
 		else
@@ -846,7 +826,7 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 		req->globalinfo->req_file->timeline_reqnb++;
 
 		proc_stats_newreq(req);  //update statistics
-		if(trace)
+		if(config_trace_agios)
 			agios_trace_add_request(req);  //trace this request arrival
 		inc_current_reqnb(); //increase the number of current requests on the scheduler
 
