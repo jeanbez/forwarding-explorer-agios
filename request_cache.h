@@ -30,28 +30,19 @@ struct request_t;
 struct request_file_t;
 
 /* to access the counters*/
-inline int get_current_reqnb(void);
-inline int get_current_reqfilenb(void);
-inline void set_current_reqnb(int value);
-inline void set_current_reqfilenb(int value);
+extern int current_reqnb;
+extern int current_reqfilenb;
+extern pthread_mutex_t current_reqnb_lock;
+inline int get_current_reqnb(void); //this version uses the mutex to access the current_reqnb variable, use only if critical to have updated version
 inline void inc_current_reqnb(void);
 inline void dec_current_reqnb(int hash);
 inline void dec_many_current_reqnb(int hash, int value);
 inline void inc_current_reqfilenb(void);
 inline void dec_current_reqfilenb(void);
 
-/* to access the scheduling algorithms management parameters and functions */
-inline int get_selected_alg(void);
-inline void set_selected_alg(int value); //use it only at first, when setting the parameters. DON'T use it for changing the current scheduling algorithm (use change_selected_alg instead)
-inline void set_max_aggregation_size(int value); //use it only at first, when setting the parameters. DON'T use it for changing the current scheduling algorithm (use change_selected_alg instead)
-inline int get_max_aggregation_size(void);
-inline short int get_needs_hashtable(void);
-inline void set_needs_hashtable(short int value);
-void change_selected_alg(int new_alg, short int new_needs_hashtable, int new_max_aggregation_size);
-inline void unlock_algorithm_migration_mutex(void);
-inline void lock_algorithm_migration_mutex(void);
-
 /* data structures management functions */
+void lock_all_data_structures();
+void unlock_all_data_structures();
 void request_cache_free(struct request_t *req);
 #ifdef ORANGEFS_AGIOS
 struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, unsigned long int arrival_time, short int state);
@@ -59,6 +50,12 @@ struct request_t * request_constructor(char *file_id, short int type, unsigned l
 struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, unsigned long int arrival_time, short int state); 
 #endif
 struct request_file_t * request_file_constructor(char *file_id);
+void migrate_from_hashtable_to_timeline();
+void migrate_from_timeline_to_hashtable();
+
+/* for debug */
+void print_hashtable(void);
+void print_timeline(void);
 
 /* init and exit functions*/
 int request_cache_init(void);

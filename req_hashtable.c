@@ -30,34 +30,14 @@
 #include "agios_config.h"
 
 
-static struct agios_list_head *hashlist; //a contiguous list of fixed size. Files are distributed among the positions in this list according to a hash function
-static int *hashlist_reqcounter = NULL; //how many requests are present in each position from the hashtable (used to speed the search for requests in the scheduling algorithms)
+struct agios_list_head *hashlist; //a contiguous list of fixed size. Files are distributed among the positions in this list according to a hash function
+int *hashlist_reqcounter = NULL; //how many requests are present in each position from the hashtable (used to speed the search for requests in the scheduling algorithms)
 //one lock per hash position
 #ifdef AGIOS_KERNEL_MODULE
 static struct mutex *hashlist_locks;
 #else
 static pthread_mutex_t *hashlist_locks;
 #endif
-
-//MUST HOLD MUTEX TO THE HASHTABLE LINE
-inline void dec_hashlist_reqcounter(int hash)
-{
-	hashlist_reqcounter[hash]--;
-}
-//MUST HOLD MUTEX TO THE HASHTABLE LINE
-inline void dec_many_hashlist_reqcounter(int hash, int value)
-{
-	hashlist_reqcounter[hash]-=value;
-}
-/*must hold the hashtable line mutex*/
-inline int get_hashlist_reqcounter(int hash)
-{
-	return hashlist_reqcounter[hash];
-}
-inline void inc_hashlist_reqcounter(int hash)
-{
-	hashlist_reqcounter[hash]++;
-}
 
 //initializes data structures and locks. returns 0 if success
 int hashtable_init(void)
@@ -103,20 +83,19 @@ void hashtable_cleanup(void)
 	agios_free(hashlist_reqcounter);
 	
 }
+
 /*
- * This is internal function which adds @req to hash table and places it
- * according to @hash_val.
+ * Function adds @req to hash table.
  *
  * Locking:
  * 	Must be holding hashlist_locks[hash_val]
  */
-void __hashtable_add_req(struct request_t *req, unsigned long hash_val, struct request_file_t *given_req_file)
+void hashtable_add_req(struct request_t *req, unsigned long hash_val, struct request_file_t *given_req_file)
 {
 	struct agios_list_head *hash_list = &hashlist[hash_val];
 	struct request_file_t *req_file = given_req_file;
 	struct request_t *tmp;
 	struct agios_list_head *insertion_place;
-
 
 #ifdef AGIOS_DEBUG
 	if(req->state == RS_HASHTABLE)
@@ -193,35 +172,6 @@ void __hashtable_add_req(struct request_t *req, unsigned long hash_val, struct r
 
 }
 
-/*
- * Function adds @req to hash table.
- *
- * Arguments:
- *	@req	- request to be added.
- *	@clnt	- structure describing calling client.
- *
- * Locking:
- *	Must NOT hold hastlist_locks[hash_val]
- *	it will lock it, but will not unlock it before returning, so be sure to unlock it at some point
- */
-unsigned long hashtable_add_req(struct request_t *req, struct request_file_t *given_req_file)
-{
-	unsigned long hash_val;
-
-	hash_val = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES;	
-	
-	if(!given_req_file) //if a request_file_t structure was given, it's not a new request but we are migrating from timeline to hashtable. In this case, we don't need locks
-	{
-		VERIFY_REQUEST(req);
-	
-		agios_mutex_lock(&hashlist_locks[hash_val]);
-	}
-
-	__hashtable_add_req(req, hash_val, given_req_file);
-
-	return hash_val;
-}
-
 /* Internal function (but called by I/O scheduler)
  * that removes @req from hash table.
  *
@@ -271,11 +221,6 @@ struct agios_list_head *hashtable_trylock(int index)
 		return &hashlist[index];
 	else
 		return NULL;
-}
-/*must hold the lock*/
-struct agios_list_head *get_hashlist(int index)
-{
-	return &hashlist[index];	
 }
 
 /*

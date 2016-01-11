@@ -133,7 +133,7 @@ void MLF(void *clnt)
 	PRINT_FUNCTION_NAME;
 
 	/*search through all the files for requests to process*/
-	while((get_current_reqnb() > 0) && (update_time == 0))
+	while((current_reqnb > 0) && (update_time == 0)) //attention: it could be outdated info (current_reqnb) since we are not using the mutex
 	{
 		/*try to lock the line of the hashtable*/
 		reqfile_l = hashtable_trylock(MLF_current_hash);
@@ -151,7 +151,7 @@ void MLF(void *clnt)
 		{
 			MLF_lock_tries[MLF_current_hash]=0;
 
-			if(get_hashlist_reqcounter(MLF_current_hash) > 0) //see if we have requests for this line of the hashtable
+			if(hashlist_reqcounter[MLF_current_hash] > 0) //see if we have requests for this line of the hashtable
 			{
 		                agios_list_for_each_entry(req_file, reqfile_l, hashlist)
 				{

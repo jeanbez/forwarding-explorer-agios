@@ -34,6 +34,8 @@
 #include "performance.h"
 #include "common_functions.h"
 
+unsigned long int processed_reqnb; //processed requests counter. I've decided not to protect it with a mutex although it is used by two threads. The library's user calls the release function, where this variable is modified. The scheduling thread reads it in the process_requests function. Since it is not critical to have the most recent value there, no mutex.
+
 /************************************************************************************************************
  * GLOBAL PERFORMANCE METRICS
  ************************************************************************************************************/
@@ -183,18 +185,8 @@ int get_request_timestamp_index(struct request_t *req)
 }
 
 /************************************************************************************************************
- * LOCAL COPIES OF SCHEDULING ALGORITHM PARAMETERS
- ************************************************************************************************************/
-static short int performance_needs_hashtable=0;
-inline void performance_set_needs_hashtable(short int value)
-{
-	performance_needs_hashtable = value;
-}
-
-/************************************************************************************************************
  * RELEASE FUNCTION, CALLED BY THE USER AFTER PROCESSING A REQUEST
  ************************************************************************************************************/
-static int release_count=0;
 int agios_release_request(char *file_id, short int type, unsigned long int len, unsigned long int offset)
 {
 	struct request_file_t *req_file;
@@ -205,24 +197,36 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 	short int found=0;
 	unsigned long int elapsed_time;
 	int index;
+	short int previous_needs_hashtable;
 
 	PRINT_FUNCTION_NAME;
 
-	lock_algorithm_migration_mutex();
+	processed_reqnb++;
 
-	release_count++;
-	debug("%d requests came back to us", release_count);
-	//find the structure for this file (and acquire lock)
-	if(performance_needs_hashtable)
-	{
-		hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;	
-		list = hashtable_lock(hash_val);
+	//first acquire lock
+	hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;
+	while(1)
+	{	
+		previous_needs_hashtable = current_scheduler->needs_hashtable;
+		if(previous_needs_hashtable)
+			hashtable_lock(hash_val);
+		else
+			timeline_lock();
+
+		if(previous_needs_hashtable != current_scheduler->needs_hashtable) //acquiring the lock means a memory wall, so we are sure to get the latest version of current_scheduler
+		{
+			//the other thread has migrated scheduling algorithms (and data structure) while we were waiting for the lock (so the lock is no longer the adequate one)
+			if(previous_needs_hashtable)
+				hashtable_unlock(hash_val);
+			else
+				timeline_unlock();
+		}
+		else
+			break;
 	}
-	else
-	{
-		timeline_lock();
-		list = get_timeline_files();
-	}
+	list = &hashlist[hash_val];
+
+	//find the structure for this file (first acquire lock)
 	agios_list_for_each_entry(req_file, list, hashlist)
 	{
 		if(strcmp(req_file->file_id, file_id) == 0)
@@ -235,7 +239,6 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 	{
 		//that makes no sense, we are trying to release a request which was never added!!!
 		debug("PANIC! We cannot find the file structure for this request %s", file_id);
-		unlock_algorithm_migration_mutex();
 		return 0;
 	}
 	found = 0;
@@ -265,12 +268,12 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 		related->stats_file.processed_req_time += elapsed_time;
 
 		//update global performance information
-//		agios_mutex_lock(&performance_mutex);
+		agios_mutex_lock(&performance_mutex);
 		//we need to figure out to each time slice this request belongs
 		index = get_request_timestamp_index(req); //we use the timestamp from when the request was sent for processing, because we want to relate its performance to the scheduling algorithm who choose to process the request
 		performance_time[index] += elapsed_time;
 		performance_size[index] += req->io_data.len;
-//		agios_mutex_unlock(&performance_mutex);
+		agios_mutex_unlock(&performance_mutex);
 
 		generic_cleanup(req);
 	}
@@ -279,14 +282,13 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 	//else //what to do if we can't find the request???? is this possible????
 
 	//release data structure lock
-	if(performance_needs_hashtable)
+	if(current_scheduler->needs_hashtable)
 		hashtable_unlock(hash_val);
 	else
 		timeline_unlock();
 
 	//if the current scheduling algorithm follows synchronous approach, we need to allow it to continue
 	iosched_signal_synchronous();
-	unlock_algorithm_migration_mutex();
 	PRINT_FUNCTION_EXIT;
 
 	return 1;

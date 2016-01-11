@@ -26,6 +26,9 @@
 #define _PERFORMANCE_H_
 
 #define PERFORMANCE_VALUES 5
+
+extern unsigned long int processed_reqnb;
+
 void reset_performance_counters(void);
 unsigned long long int get_performance_size(void);
 unsigned long long int get_performance_time(void);

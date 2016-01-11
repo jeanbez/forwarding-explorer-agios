@@ -84,17 +84,19 @@ struct io_scheduler_instance_t {
 
 };
 
-//so configuration options can be updated
-inline void set_iosched_predict_request_aggregation(short int value);
-inline void set_iosched_is_synchronous(short int value);
+//information from the current scheduling algorithm
+extern int current_alg;
+extern struct io_scheduler_instance_t *current_scheduler;
+void change_selected_alg(int new_alg);
 
 //for synchronous scheduling algorithms
 void iosched_signal_synchronous(void);
 void iosched_wait_synchronous(void);
 
 //so other parts can get statistics
-inline unsigned long int get_time_spent_waiting(void);
-inline unsigned long int get_waiting_time_overlapped(void);
+extern unsigned long int time_spent_waiting;
+extern unsigned long int waiting_time_overlapped;
+
 
 //functions to I/O scheduling algorithm management (setting schedulers, initializing, etc)
 int get_algorithm_from_string(const char *alg);

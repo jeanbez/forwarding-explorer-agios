@@ -114,21 +114,6 @@ unsigned long int config_agios_max_trace_buffer_size = 1*1024*1024;
 
 //-------------------------------------------------------------------------------------------------------
 //SPREAD CONFIGURATION PARAMETERS TO OTHER MODULES
-//-------------------------------------------------------------------------------------------------------
-//this function needs to be called when changing the scheduling algorithm. It updates other modules' local copies of configuration paramters
-void config_gossip_algorithm_parameters(int alg, struct io_scheduler_instance_t *scheduler)
-{
-	PRINT_FUNCTION_NAME;
-	proc_set_needs_hashtable(scheduler->needs_hashtable);
-	set_selected_alg(alg);
-	set_max_aggregation_size(scheduler->max_aggreg_size);
-	set_needs_hashtable(scheduler->needs_hashtable);
-	proc_set_new_algorithm(alg);
-	performance_set_new_algorithm(alg);
-	performance_set_needs_hashtable(scheduler->needs_hashtable);
-	set_iosched_is_synchronous(scheduler->sync);
-}
-
 //----------------------------------------------------------------------------------------------------------
 /*returns 0 in case of success*/
 inline short int read_configuration_file(char *config_file)

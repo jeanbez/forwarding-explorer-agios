@@ -41,9 +41,10 @@ static short int scheduler_needs_hashtable=-1; //local copy of a configuration f
 /**********************************************************************************************************************/
 /*	COUNTERS	*/
 /**********************************************************************************************************************/
-static int current_reqnb; //request counter
-static int current_reqfilenb; //files being accessed counter
-static pthread_mutex_t current_reqnb_lock = PTHREAD_MUTEX_INITIALIZER; //lock to protect these counters
+int current_reqnb; //request counter
+int current_reqfilenb; //files being accessed counter
+pthread_mutex_t current_reqnb_lock = PTHREAD_MUTEX_INITIALIZER; //lock to protect these counters
+
 //we increase this number at every new request, just so each one of them has an unique identifier
 static unsigned int last_timestamp=0; 
 
@@ -54,26 +55,6 @@ inline int get_current_reqnb()
 	ret = current_reqnb;
 	pthread_mutex_unlock(&current_reqnb_lock);
 	return ret;
-}
-inline int get_current_reqfilenb()
-{
-	int ret;
-	pthread_mutex_lock(&current_reqnb_lock);
-	ret = current_reqfilenb;
-	pthread_mutex_unlock(&current_reqnb_lock);
-	return ret;
-}
-inline void set_current_reqnb(int value)
-{
-	pthread_mutex_lock(&current_reqnb_lock);
-	current_reqnb = value;
-	pthread_mutex_unlock(&current_reqnb_lock);
-}
-inline void set_current_reqfilenb(int value)
-{
-	pthread_mutex_lock(&current_reqnb_lock);
-	current_reqfilenb = value;
-	pthread_mutex_unlock(&current_reqnb_lock);
 }
 inline void inc_current_reqnb()
 {
@@ -112,52 +93,7 @@ inline void dec_current_reqfilenb()
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
 
-
-/**********************************************************************************************************************/
-/*	SCHEDULING ALGORITHM PARAMETERS	*/
-/**********************************************************************************************************************/
-//parameters related to the current scheduling algorithm. 
-//ATTENTION: these needs to be set up when changing scheduling algorithms
-//TODO these probably belong in the iosched.c file, right? 
-static int selected_alg = -1;
-static int max_aggregation_size=-1;
-static pthread_mutex_t algorithm_migration_mutex= PTHREAD_MUTEX_INITIALIZER; //this lock avoids that new requests are added while we are migrating between data structures because this could cause problems
-
-inline int get_selected_alg()
-{
-	return selected_alg;
-}
-inline void set_selected_alg(int value) //use it only at first, when setting the parameters. DON'T use it for changing the current scheduling algorithm (use change_selected_alg instead)
-{
-	selected_alg = value;
-}
-inline void set_max_aggregation_size(int value) //use it only at first, when setting the parameters. DON'T use it for changing the current scheduling algorithm (use change_selected_alg instead)
-{
-	max_aggregation_size = value;
-}
-inline int get_max_aggregation_size()
-{
-	return max_aggregation_size;
-}
-inline short int get_needs_hashtable()
-{
-	return scheduler_needs_hashtable;
-}
-inline void set_needs_hashtable(short int value)
-{
-	scheduler_needs_hashtable = value;
-}
-inline void unlock_algorithm_migration_mutex(void)
-{
-	agios_mutex_unlock(&algorithm_migration_mutex);
-}
-inline void lock_algorithm_migration_mutex(void)
-{
-	agios_mutex_lock(&algorithm_migration_mutex);
-}
-
-void migrate_from_hashtable_to_timeline(int new_alg);
-void migrate_from_timeline_to_hashtable(int new_alg);
+//debug functions, clean after
 void print_hashtable(void)
 {
 	int i;
@@ -168,7 +104,7 @@ void print_hashtable(void)
 	debug("Current hashtable status:");
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //go through the whole hashtable, one position at a time
 	{
-		hash_list = get_hashlist(i);
+		hash_list = &hashlist[i];
 		if(!agios_list_empty(hash_list))
 			debug("[%d]", i);
 		agios_list_for_each_entry(req_file, hash_list, hashlist)
@@ -191,73 +127,21 @@ void print_hashtable(void)
 }
 void print_timeline(void)
 {
-	struct agios_list_head *timeline, *timeline_files;
-	struct request_file_t *req_file;
 	struct request_t *req;
 
-	timeline = get_timeline();
-	timeline_files = get_timeline_files();
 	debug("Current timeline status:");
-	debug("Files:");
-	agios_list_for_each_entry(req_file, timeline_files, hashlist)
-	{
-		debug("\t%s (%lu requests)", req_file->file_id, req_file->timeline_reqnb);
-	}
 	debug("Requests:");
-	agios_list_for_each_entry(req, timeline, related)
+	agios_list_for_each_entry(req, &timeline, related)
 	{
 		debug("\t%lu %lu (to file %s)", req->io_data.offset, req->io_data.len, req->file_id);
 	}
-}
-//change the current scheduling algorithm and update local parameters
-//here we assume the scheduling thread is NOT running, so it won't mess with the structures
-//must hold the migration mutex
-//must be called before config_gossip_algorithm_parameters (otherwise we won't know that something changed)
-void change_selected_alg(int new_alg, short int new_needs_hashtable, int new_max_aggregation_size)
-{	
-	PRINT_FUNCTION_NAME;
-	//TODO what about predict??
-
-	//first situation: both algorithms use hashtable
-	if(scheduler_needs_hashtable && new_needs_hashtable)
-	{
-		//the only problem here is if we decreased the maximum aggregation
-		//For now we chose to do nothing. If we no longer tolerate aggregations of a certain size, we are not spliting already performed aggregations since this would not benefit us at all. We could rethink that at some point
-	}
-	//second situation: from hashtable to timeline
-	else if (scheduler_needs_hashtable && !new_needs_hashtable)
-	{
-		print_hashtable();
-		migrate_from_hashtable_to_timeline(new_alg);		
-		print_timeline();
-	}
-	//third situation: from timeline to hashtable
-	else if (!scheduler_needs_hashtable && new_needs_hashtable)
-	{
-		print_timeline();
-		migrate_from_timeline_to_hashtable(new_alg);
-		print_hashtable();
-	}
-	//fouth situation, both algorithms use timeline
-	else 
-	{
-		//now it depends on the algorithms. If we are going between the two timeorders, we don't have to do anything, since we have decided we will not split already performed aggregations. However, if we are going to or from the time window algorithm, we will need to reorder the whole list.
-		if((new_alg != NOOP_SCHEDULER) && ((selected_alg == TIME_WINDOW_SCHEDULER) || (new_alg == TIME_WINDOW_SCHEDULER)))
-		{
-			reorder_timeline(new_alg, new_max_aggregation_size);
-		}
-	}
-
-	selected_alg = new_alg;
-	scheduler_needs_hashtable = new_needs_hashtable;
-	max_aggregation_size = new_max_aggregation_size;
 }
 
 /**********************************************************************************************************************/
 /*	FUNCTIONS TO CHANGE THE CURRENT DATA STRUCTURE BETWEEN HASHTABLE AND TIMELINE	*/
 /**********************************************************************************************************************/
-//re
-void put_all_requests_in_timeline(struct agios_list_head *related_list, int new_alg, struct request_file_t *req_file, unsigned long hash)
+//take all requests from a list and place them in the timeline
+void put_all_requests_in_timeline(struct agios_list_head *related_list, struct request_file_t *req_file, unsigned long hash)
 {
 	struct request_t *req, *aux_req=NULL;
 	
@@ -266,127 +150,51 @@ void put_all_requests_in_timeline(struct agios_list_head *related_list, int new_
 		if(aux_req)
 		{
 			agios_list_del(&aux_req->related);	
-			timeline_add_req(aux_req, 1, new_alg, req_file); //we give 1 as max aggregation size because it is not necessary to try to aggregate requests, as they are already aggregated. We could have a difference in max_aggregation_size, but we have decided to make this change soft, i.e., it will affect new requests only 
+			timeline_add_req(aux_req, hash, req_file); 
 		}
 		aux_req = req;
-		dec_hashlist_reqcounter(hash);
 	}
 	if(aux_req)
 	{
 		agios_list_del(&aux_req->related);
-		timeline_add_req(aux_req, 1, new_alg, req_file);
+		timeline_add_req(aux_req, hash, req_file);
 	}
 }
 void put_req_in_hashtable(struct request_t *req)
 {
 	unsigned long hash;
-	int i;
 
+	hash = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES;
 	agios_list_del(&req->related);
-	hash = hashtable_add_req(req, req->globalinfo->req_file);
-	for(i=0; i< req->reqnb; i++) //it could be an aggregated request
-		inc_hashlist_reqcounter(hash);
-	
+	hashtable_add_req(req, hash, req->globalinfo->req_file);
 }
-void put_req_file_in_timeline(struct request_file_t *req_file, struct agios_list_head *timeline_files)
-{
-	//TODO when using predict, we will continue to use the request_file_t structures in the hashtable, so maybe we cannot remove them, but just copy the used parts
-	struct agios_list_head *insertion_place;
-	struct request_file_t *other_req_file;
-
-	agios_list_del(&req_file->hashlist); //remove from hashtable
-	//find the right place in the timeline_files list (sorted by file_id)
-	insertion_place = timeline_files; 
-	agios_list_for_each_entry(other_req_file, timeline_files, hashlist)
-		if(strcmp(other_req_file->file_id, req_file->file_id) >= 0)
-		{
-			insertion_place = &other_req_file->hashlist;	
-			break;
-		}
-	//add it to timeline_files
-	agios_list_add_tail(&req_file->hashlist, insertion_place);
-}
-void put_req_file_in_hashtable(struct request_file_t *req_file)
-{
-	//TODO when using predict, we will have request_file_t structures at the hashtable already. So when copying, we need to check if it already exists and then merge them
-	unsigned long hash;
-	struct agios_list_head *hash_list;
-	struct agios_list_head *insertion_place;
-	struct request_file_t *tmp_req_file;
-
-	//remove from current location
-	agios_list_del(&req_file->hashlist);
-
-	hash = AGIOS_HASH_STR(req_file->file_id) % AGIOS_HASH_ENTRIES;
-	hash_list = get_hashlist(hash);
-	
-	//find the position to put new req_file structure
-	insertion_place = hash_list;
-	agios_list_for_each_entry(tmp_req_file, hash_list, hashlist)
-	{
-		if(strcmp(tmp_req_file->file_id, req_file->file_id) >= 0)
-		{
-			insertion_place = &tmp_req_file->hashlist;
-			break;
-		}
-	}
-	agios_list_add_tail(&req_file->hashlist, insertion_place);
-}
-void put_all_req_file_in_hashtable(struct agios_list_head *timeline_files)
-{
-	struct request_file_t *req_file, *aux_req_file=NULL;
-	agios_list_for_each_entry(req_file, timeline_files, hashlist)
-	{
-		if(aux_req_file)
-			put_req_file_in_hashtable(aux_req_file);
-		aux_req_file = req_file;
-	}
-	if(aux_req_file)
-		put_req_file_in_hashtable(aux_req_file);
-}
-//gets all requests from hashtable and move them to the timeline. Also move all request_file_t structures to the timeline_files list. No need to hold mutexes, but NO OTHER THREAD may be using any of these data structures.
-void migrate_from_hashtable_to_timeline(int new_alg)
+//gets all requests from hashtable and move them to the timeline. 
+//No need to hold mutexes, but NO OTHER THREAD may be using any of these data structures.
+void migrate_from_hashtable_to_timeline()
 {	
 	int i;
 	struct agios_list_head *hash_list;
-	struct request_file_t *req_file, *aux_req_file=NULL;
-	struct agios_list_head *timeline_files;
+	struct request_file_t *req_file;
 
 	//we will mess with the data structures and don't even use locks, since here we are certain no one else is messing with them
-	timeline_files = get_timeline_files();
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //go through the whole hashtable, one position at a time
 	{
-		hash_list = get_hashlist(i);
+		hash_list = &hashlist[i];
 		agios_list_for_each_entry(req_file, hash_list, hashlist)
 		{	
-			if(aux_req_file)
-				//move the request_file_t structure from the hashtable to the timeline
-				put_req_file_in_timeline(aux_req_file, timeline_files);
-		
 			//get all requests from it and put them in the timeline
-			put_all_requests_in_timeline(&req_file->related_writes.list, new_alg, req_file, i);
-			put_all_requests_in_timeline(&req_file->related_reads.list, new_alg, req_file, i);
-
-			aux_req_file = req_file;
+			put_all_requests_in_timeline(&req_file->related_writes.list, req_file, i);
+			put_all_requests_in_timeline(&req_file->related_reads.list, req_file, i);
 		}
-		if(aux_req_file)
-			put_req_file_in_timeline(aux_req_file, timeline_files);
 	}
 }
 //gets al requests from timeline and move them to the hashtable. Also move all request_file_t structures to the hashtable to we keep statistics. No need to hold mutexes, but NO OTHER THREAD may be using any of these data structures
-void migrate_from_timeline_to_hashtable(int new_alg)
+void migrate_from_timeline_to_hashtable()
 {
-	struct agios_list_head *timeline, *timeline_files;
 	struct request_t *req, *aux_req=NULL;
 
-	timeline = get_timeline();
-	timeline_files = get_timeline_files();
-
-	//move all request_file_t structures to the hashtable so they will already be there when we move the requests
-	put_all_req_file_in_hashtable(timeline_files);
-
-	//move all requests
-	agios_list_for_each_entry(req, timeline, related)
+	//move all requests from timeline to hashtable
+	agios_list_for_each_entry(req, &timeline, related)
 	{
 		if(aux_req)
 		{
@@ -563,6 +371,30 @@ struct request_file_t * request_file_constructor(char *file_id)
 }
 
 /*
+ * locks (and unlocks) all data structures used for requests and files
+ * It is not supposed to be used for normal library functions. 
+ * We only use them at initialization, to guarantee the user won't try
+ * to add new requests while we did not decide on the scheduling algorithm
+ * yet. Moreover, we use these functions while migrating between scheduling 
+ * algorithms
+ */
+void lock_all_data_structures()
+{
+	int i;
+
+	timeline_lock();
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
+		hashtable_lock(i);
+}
+void unlock_all_data_structures()
+{
+	int i;
+	for(i=0; i<AGIOS_HASH_ENTRIES; i++)
+		hashtable_unlock(i);
+	timeline_unlock();
+}
+
+/*
  * This function allocates memory and initializes related locks 
  */
 int request_cache_init(void)
@@ -593,12 +425,12 @@ int request_cache_init(void)
 	//put request and file counters to 0
 	if(ret == 0)
 	{
-		set_current_reqnb(0);
-		set_current_reqfilenb(0);
+		current_reqnb = 0;
+		current_reqfilenb=0;
 	}
 
-	agios_mutex_lock(&algorithm_migration_mutex); //so we won't try to add requests until the library finishes initializing and the scheduling algorithm is selected
-	
+	lock_all_data_structures();
+
 	return ret;
 }
 
@@ -703,7 +535,7 @@ int insert_aggregations(struct request_t *req, struct agios_list_head *insertion
 	if(insertion_place != list_head)
 	{
 		prev_req = agios_list_entry(insertion_place, struct request_t, related);
-		if(CHECK_AGGREGATE(prev_req, req) && ((prev_req->reqnb + req->reqnb) <= max_aggregation_size)) //TODO  also check if it is worth it considering the required times? does it make sense, since requests are already here anyway, and that's why we have max_aggregation_size anyway...
+		if(CHECK_AGGREGATE(prev_req, req) && ((prev_req->reqnb + req->reqnb) <= current_scheduler->max_aggreg_size)) //TODO  also check if it is worth it considering the required times? does it make sense, since requests are already here anyway, and that's why we have max_aggregation_size anyway...
 		{
 			if(req->reqnb > 1)
 				join_aggregations(&prev_req, &req);
@@ -715,7 +547,7 @@ int insert_aggregations(struct request_t *req, struct agios_list_head *insertion
 			if(insertion_place->next != list_head) /*if the request was not to be the last of the queue*/
 			{
 				next_req = agios_list_entry(insertion_place->next, struct request_t, related);
-				if(CHECK_AGGREGATE(req, next_req) && ((next_req->reqnb + prev_req->reqnb) <= max_aggregation_size)) 
+				if(CHECK_AGGREGATE(req, next_req) && ((next_req->reqnb + prev_req->reqnb) <= current_scheduler->max_aggreg_size)) 
 				{
 					join_aggregations(&prev_req, &next_req);
 				}
@@ -725,7 +557,7 @@ int insert_aggregations(struct request_t *req, struct agios_list_head *insertion
 	if((!aggregated) && (insertion_place->next != list_head)) /*if we could not aggregated with the previous one, or there is no previous one, and this request is not to be the last of the queue, lets try with the next one*/
 	{
 		next_req = agios_list_entry(insertion_place->next, struct request_t, related);
-		if(CHECK_AGGREGATE(req, next_req) && ((next_req->reqnb + req->reqnb) <= max_aggregation_size)) 
+		if(CHECK_AGGREGATE(req, next_req) && ((next_req->reqnb + req->reqnb) <= current_scheduler->max_aggreg_size)) 
 		{
 			if(req->reqnb > 1)
 				join_aggregations(&req, &next_req);
@@ -802,65 +634,82 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 	struct request_t *req;
 	struct timespec arrival_time;
 	unsigned long hash;
+	short int previous_needs_hashtable; 
 	
 	PRINT_FUNCTION_NAME;
-	agios_mutex_lock(&algorithm_migration_mutex);
 
+	//build request_t structure and fill it for the new request
 	agios_gettime(&(arrival_time));  	
-
 	req = request_constructor(file_id, type, offset, len, data, get_timespec2llu(arrival_time), RS_HASHTABLE);
-	if (req) {
-		if(scheduler_needs_hashtable)
-		{
-			hash = hashtable_add_req(req, NULL);
-			inc_hashlist_reqcounter(hash); //had to remove it from inside __hashtable_add_req because that function is also used for prediction requests. we do not want to count them as requests for the scheduling algorithms
-			if(config_predict_agios_request_aggregation)
-				prediction_newreq(req);
-		}
-		else
-		{
-			hash = -1;
-			timeline_add_req(req, max_aggregation_size, selected_alg, NULL);
-		}
-		req->globalinfo->current_size += req->io_data.len;
-		req->globalinfo->req_file->timeline_reqnb++;
-
-		proc_stats_newreq(req);  //update statistics
-		if(config_trace_agios)
-			agios_trace_add_request(req);  //trace this request arrival
-		inc_current_reqnb(); //increase the number of current requests on the scheduler
-
-		/* Signalize to the consumer thread that new request was added. */
-		if(selected_alg != NOOP_SCHEDULER)
-			consumer_signal_new_reqs();
-
-		debug("current status: there are %d requests in the scheduler to %d files",get_current_reqnb(), get_current_reqfilenb());
-
-		//if we are running the NOOP scheduler, we just process it already
-		if(selected_alg == NOOP_SCHEDULER)
-		{
-			short int update_time;
-
-			debug("NOOP is directly processing this request");
-			update_time = process_requests(req, clnt, hash);
-			generic_post_process(req);
-			if(update_time)
-				consumer_signal_new_reqs(); //if it is time to refresh something (change the scheduling algorithm or recalculate alpha), we wake up the scheduling thread
-		}
-
-		//free the lock
-		if(scheduler_needs_hashtable)
-			hashtable_unlock(hash);
-		else
-			timeline_unlock();	
-		
 	
+	if(!req)
+		return -ENOMEM;
+	
+	//first acquire lock	
+	hash = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES; 
+	while(1)
+	{
+		previous_needs_hashtable = current_scheduler->needs_hashtable;
+		if(previous_needs_hashtable)
+			hashtable_lock(hash);
+		else
+			timeline_lock();
+		if(previous_needs_hashtable != current_scheduler->needs_hashtable) //acquiring the lock means a memory wall, so we are sure to get the latest version of current_scheduler
+		{
+			//the other thread has migrated scheduling algorithms (and data structure) while we were waiting for the lock (so the lock is no longer the adequate one)
+			if(previous_needs_hashtable)
+				hashtable_unlock(hash);
+			else
+				timeline_unlock();
+		}
+		else
+			break;	
+	}
 
-		agios_mutex_unlock(&algorithm_migration_mutex);
-		return 0;		
-	}		
-	agios_mutex_unlock(&algorithm_migration_mutex);
-	return -ENOMEM;
+	//add request to the right data structure
+	if(current_scheduler->needs_hashtable)
+		hashtable_add_req(req,hash,NULL);
+	else
+		timeline_add_req(req, hash, NULL);
+
+	//if(config_predict_agios_request_aggregation)
+	//	prediction_newreq(req);
+//TODO predict
+
+
+	inc_hashlist_reqcounter(hash); 
+	req->globalinfo->current_size += req->io_data.len;
+	req->globalinfo->req_file->timeline_reqnb++;
+
+	proc_stats_newreq(req);  //update statistics
+	if(config_trace_agios)
+		agios_trace_add_request(req);  //trace this request arrival
+	inc_current_reqnb(); //increase the number of current requests on the scheduler
+
+	/* Signalize to the consumer thread that new request was added. */
+	if(current_alg != NOOP_SCHEDULER)
+		consumer_signal_new_reqs();
+
+	debug("current status: there are %d requests in the scheduler to %d files",current_reqnb, current_reqfilenb);
+
+	//if we are running the NOOP scheduler, we just process it already
+	if(current_alg == NOOP_SCHEDULER)
+	{
+		short int update_time;
+
+		debug("NOOP is directly processing this request");
+		update_time = process_requests(req, clnt, hash);
+		generic_post_process(req);
+		if(update_time)
+			consumer_signal_new_reqs(); //if it is time to refresh something (change the scheduling algorithm or recalculate alpha), we wake up the scheduling thread
+	}
+
+	//free the lock
+	if(current_scheduler->needs_hashtable)
+		hashtable_unlock(hash);
+	else
+		timeline_unlock();	
+	return 0;		
 }
 
 //when agios is used to schedule requests to a parallel file system server, the stripe size is relevant to some calculations (specially for algorithm selection). A default value is provided through the configuration file, but many file systems (like PVFS) allow for each file to have different configurations. In this situation, the user could call this function to update a specific file's stripe size

@@ -42,8 +42,6 @@ static struct task_struct *agios_pthread;
 static short int agios_in_use=0;
 #else
 static pthread_t agios_pthread;
-extern int agios_thread_stop;
-extern pthread_mutex_t agios_thread_stop_mutex;
 #endif
 
 //start the scheduling thread

@@ -320,7 +320,8 @@ int add_prediction(char *file_id, int type, long long offset, long len, unsigned
 
 	if(req)
 	{
-		hash = hashtable_add_req(req, NULL);
+		hashtable_lock(hash);
+		hashtable_add_req(req, hash, NULL);
 		proc_stats_newreq(req);  //update statistics
 		update_average_distance(req->globalinfo, offset, len);
 		hashtable_unlock(hash);
@@ -1167,7 +1168,7 @@ void *prediction_thr(void *arg)
 			if(config_predict_agios_request_aggregation)
 			{
 				/*re-calculate alpha and re-do all agregations predictions*/
-				calculate_prediction_alpha(get_time_spent_waiting(), get_waiting_time_overlapped(), 0);
+				calculate_prediction_alpha(time_spent_waiting, waiting_time_overlapped, 0);
 				predict_aggregations(1);
 			}
 			pthread_mutex_unlock(&prediction_thr_refresh_mutex);

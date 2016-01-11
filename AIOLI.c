@@ -214,7 +214,8 @@ void AIOLI(void *clnt)
 	short int update_time=0;
 
 	PRINT_FUNCTION_NAME;
-	while((get_current_reqnb() > 0) && (update_time == 0))
+	//we are not locking the current_reqnb_mutex, so we could be using outdated information. We have chosen to do this for performance reasons
+	while((current_reqnb > 0) && (update_time == 0))
 	{
 		/*1. select a request*/
 		AIOLI_selected_queue = AIOLI_select_queue(&selected_hash);

@@ -52,7 +52,7 @@ void timeorder(void *clnt)
 
 	PRINT_FUNCTION_NAME;
 	
-	while((get_current_reqnb() > 0) && (update_time == 0))
+	while((current_reqnb > 0) && (update_time == 0))
 	{
 		timeline_lock();
 		req = timeline_oldest_req();

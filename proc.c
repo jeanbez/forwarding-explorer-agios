@@ -69,16 +69,11 @@ static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER;
 /***********************************************************************************************************
  * LOCAL COPIES OF PARAMETERS *
  ***********************************************************************************************************/
-static short int proc_needs_hashtable=1;
 static int *proc_algs; //the list of the last PROC_ALGS_SIZE selected scheduling algorithms
 static unsigned long int *proc_algs_timestamps; //the timestamps of the last PROC_ALGS_SIZE algorithms selections
 #define PROC_ALGS_SIZE 1000 //how many should we keep (we actually keep PROC_ALGS_SIZE - 1)
 static int proc_algs_start, proc_algs_end=0; //indexes to access the proc_algs list 
 
-inline void proc_set_needs_hashtable(short int value)
-{
-	proc_needs_hashtable=value;
-}
 inline void proc_set_new_algorithm(int alg)
 {
 	struct timespec now;
@@ -288,21 +283,9 @@ void reset_stats_window(void)
 	struct agios_list_head *list;
 	struct request_file_t *req_file;
 
-	if(proc_needs_hashtable)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
-		for(i=0; i< AGIOS_HASH_ENTRIES; i++)
-		{
-			list = get_hashlist(i);
-			agios_list_for_each_entry(req_file, list, hashlist)
-			{
-				reset_stats_window_related_list(&req_file->related_reads);
-				reset_stats_window_related_list(&req_file->related_writes);
-			}
-		}
-	}
-	else
-	{
-		list = get_timeline_files();
+		list = &hashlist[i];
 		agios_list_for_each_entry(req_file, list, hashlist)
 		{
 			reset_stats_window_related_list(&req_file->related_reads);
@@ -352,13 +335,9 @@ struct request_file_t *get_first(short int predicted_stats)
 
 	while(!req_file)
 	{
-		if((proc_needs_hashtable) || (predicted_stats))
-			reqfile_l = hashtable_lock(hash_position);	
-		else
-		{
-			timeline_lock();
-			reqfile_l = get_timeline_files();
-		}
+		if((current_scheduler->needs_hashtable) || (predicted_stats))
+			hashtable_lock(hash_position);	
+		reqfile_l = &hashlist[hash_position];
 
 		if(!agios_list_empty(reqfile_l))
 		{ //take the first element of the list
@@ -367,14 +346,12 @@ struct request_file_t *get_first(short int predicted_stats)
 		}	
 		else
 		{//list is empty, nothing to show, unlock the mutex
-			if((proc_needs_hashtable) || (predicted_stats))
+			if((current_scheduler->needs_hashtable) || (predicted_stats))
 			{
 				hashtable_unlock(hash_position);
-				hash_position++;
-				if(hash_position >= AGIOS_HASH_ENTRIES)
-					break;
 			}
-			else
+			hash_position++;
+			if(hash_position >= AGIOS_HASH_ENTRIES)
 			{
 				timeline_unlock();
 				break;
@@ -431,6 +408,9 @@ void print_stats_start(void)
 
 #ifdef AGIOS_KERNEL_MODULE
 	hash_position=0;
+
+	if(!current_scheduler->needs_hashtable)
+		timeline_lock();
 	return get_first(0);
 #endif
 }
@@ -727,37 +707,29 @@ void stats_show(void)
 	int i;
 	struct agios_list_head *reqfile_l;
 
-	if(proc_needs_hashtable)
-	{
-		for(i = 0; i < AGIOS_HASH_ENTRIES; i++)
-		{
-			reqfile_l = hashtable_lock(i);
-			
-			if(!agios_list_empty(reqfile_l))
-			{
-				agios_list_for_each_entry(req_file, reqfile_l, hashlist)
-				{
-					stats_show_one(req_file);
-				}
-			}		
-
-			hashtable_unlock(i);
-		}
-	}
-	else
-	{
-		debug("printing statistics to file from timeline");
+	if(!current_scheduler->needs_hashtable)
 		timeline_lock();
-		reqfile_l = get_timeline_files();
+
+	for(i = 0; i < AGIOS_HASH_ENTRIES; i++)
+	{
+		if(current_scheduler->needs_hashtable)
+			reqfile_l = hashtable_lock(i);
+		else
+			reqfile_l = &hashlist[i];
+			
 		if(!agios_list_empty(reqfile_l))
 		{
 			agios_list_for_each_entry(req_file, reqfile_l, hashlist)
 			{
 				stats_show_one(req_file);
 			}
-		}
-		timeline_unlock();
+		}		
+		if(current_scheduler->needs_hashtable)	
+			hashtable_unlock(i);
 	}
+
+	if(!current_scheduler->needs_hashtable)
+		timeline_unlock();
 
 	stats_show_ending();
 }
@@ -809,15 +781,14 @@ void agios_reset_stats()
 		agios_trace_reset();	
 #endif
 
+	if(!current_scheduler->needs_hashtable)
+		timeline_lock();
+
 	for(i = 0; i < AGIOS_HASH_ENTRIES; i++)
 	{
-		if(proc_needs_hashtable)
-			reqfile_l = hashtable_lock(i);
-		else
-		{
-			timeline_lock();
-			reqfile_l = get_timeline_files();
-		}
+		if(current_scheduler->needs_hashtable)
+			hashtable_lock(i);
+		reqfile_l = &hashlist[i];
 		
 		if(!agios_list_empty(reqfile_l))
 		{
@@ -828,14 +799,12 @@ void agios_reset_stats()
 
 			}
 		}
-		if(proc_needs_hashtable)
+		if(current_scheduler->needs_hashtable)
 			hashtable_unlock(i);
-		else
-		{
-			timeline_unlock();
-			break;
-		}
 	}
+	if(!current_scheduler->needs_hashtable)
+		timeline_unlock();
+
 }
 
 #ifndef AGIOS_KERNEL_MODULE
@@ -932,29 +901,25 @@ static void *stats_seq_next(struct seq_file *s, void *v, loff_t *pos)
 	struct request_file_t *req_file;
 	
 	(*pos)++;
-	if (*pos >= get_current_reqfilenb()) 
+	if (*pos >= current_reqfilenb) 
 		return NULL;
 	
 	req_file = (struct request_file_t *)v;
 
-	if(proc_needs_hashtable)
+	if(req_file->hashlist.next == &hashlist[hash_position]) //we finished printing this hash position
 	{
-		if(req_file->hashlist.next == get_hashlist(hash_position)) //we finished printing this hash position
-		{
+		if(current_scheduler->needs_hashtable)
 			hashtable_unlock(hash_position);
-			hash_position++;
-			if(hash_position >= AGIOS_HASH_ENTRIES) //we are done with the whole hashtable
-				return NULL;
-			else
-				return get_first(0);
-		}
-	}
-	else
-	{
-		if(req_file->hashlist.next == get_timeline_files()) //we finished printing all files from the timeline
+
+		hash_position++;
+		if(hash_position >= AGIOS_HASH_ENTRIES) //we are done with the whole hashtable
 		{
-			timeline_unlock();
+			if(!current_scheduler->needs_hashtable)
+				timeline_unlock();
 			return NULL;
+		}
+		else
+			return get_first(0);
 		}
 	}
 	return agios_list_entry(req_file->hashlist.next, struct request_file_t, hashlist);
@@ -969,7 +934,7 @@ static void *predicted_stats_seq_next(struct seq_file *s, void *v, loff_t *pos)
 	
 	req_file = (struct request_file_t *)v;
 
-	if(req_file->hashlist.next == get_hashlist(hash_position)) //we finished printing this hash position
+	if(req_file->hashlist.next == &hashlist[hash_position]) //we finished printing this hash position
 	{
 		hashtable_unlock(hash_position);
 		hash_position++;
@@ -1047,13 +1012,11 @@ static int hashtable_proc_index=0;
 void *hashtable_start(struct seq_file *s, loff_t *pos) 
 {
 	hashtable_proc_index=0;
-	if(proc_needs_hashtable)
-		return hashtable_lock(hashtable_proc_index);
-	else 
-	{
+	if(current_scheduler->needs_hashtable)
+		hashtable_lock(hashtable_proc_index);
+	else
 		timeline_lock();
-		return get_timeline_files();  
-	}
+	return &hashlist[hashtable_proc_index];
 }
 
 static int hashtable_show(struct seq_file *s, void *v) 
@@ -1084,7 +1047,7 @@ static int hashtable_show(struct seq_file *s, void *v)
 		}
 		seq_printf(s, "\n");
 	}
-	if(proc_needs_hashtable)
+	if(current_scheduler->needs_hashtable)
 		hashtable_unlock(hashtable_proc_index);	
 	else
 		timeline_unlock();
@@ -1094,7 +1057,7 @@ static int hashtable_show(struct seq_file *s, void *v)
 static void *hashtable_seq_next(struct seq_file *s, void *v, loff_t *pos) 
 
 {
-	if(proc_needs_hashtable)
+	if(current_scheduler->needs_hashtable)
 	{
 		hashtable_proc_index++;
 		return hashtable_lock(hashtable_proc_index);

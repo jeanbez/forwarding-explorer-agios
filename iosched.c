@@ -49,6 +49,7 @@
 #include "request_cache.h"
 #include "consumer.h"
 #include "agios_config.h"
+#include "req_timeline.h"
 
 #include "TO.h"
 #include "MLF.h"
@@ -64,19 +65,14 @@
 /**********************************************************************************************************************/
 /*	FOR ALGORITHMS WITH THE SYNCHRONOUS APPROACH	*/
 /**********************************************************************************************************************/
-static short int is_synchronous=0; //to know if the current scheduling algorithm follows the synchronous approach
 //control the synchronous approach:
 static short int agios_can_continue=0;
 static pthread_mutex_t request_processed_mutex=PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t request_processed_cond = PTHREAD_COND_INITIALIZER;
 
-inline void set_iosched_is_synchronous(short int value)
-{
-	is_synchronous=value;
-}
 void iosched_signal_synchronous(void)
 {
-	if(is_synchronous)
+	if(current_scheduler->sync)
 	{
 		pthread_mutex_lock(&request_processed_mutex);
 		agios_can_continue=1;
@@ -87,7 +83,7 @@ void iosched_signal_synchronous(void)
 }
 void iosched_wait_synchronous(void)
 {
-	if(is_synchronous) //there is no chance is_synchronous will change while we are waiting and then we will receive no signal, since it is the scheduling thread who calls it (it could be called by the add_request part, but only for NOOP, which is not synchronous), and scheduling algorithms only change when this same thread decides to do so
+	if(current_scheduler->sync) //there is no chance is_synchronous will change while we are waiting and then we will receive no signal, since it is the scheduling thread who calls it (it could be called by the add_request part, but only for NOOP, which is not synchronous), and scheduling algorithms only change when this same thread decides to do so
 	{
 		pthread_mutex_lock(&request_processed_mutex);
 		while(!agios_can_continue)
@@ -100,18 +96,9 @@ void iosched_wait_synchronous(void)
 /*	STATISTICS	*/
 /**********************************************************************************************************************/
 /*for calculating alpha during execution, which represents the ability to overlap waiting time with processing other requests*/
-static unsigned long int time_spent_waiting=0;
-static unsigned long int waiting_time_overlapped=0;
+unsigned long int time_spent_waiting=0;
+unsigned long int waiting_time_overlapped=0;
 
-inline unsigned long int get_time_spent_waiting(void)
-{
-	return time_spent_waiting;
-}
-inline unsigned long int get_waiting_time_overlapped(void)
-{
-	return waiting_time_overlapped;
-
-}
 /**********************************************************************************************************************/
 /*	GENERIC HELPING FUNCTIONS USED BY MULTIPLE I/O SCHEDULING ALGORITHMS	*/
 /**********************************************************************************************************************/
@@ -272,6 +259,68 @@ void generic_init()
 /**********************************************************************************************************************/
 /*	FUNCTIONS TO I/O SCHEDULING ALGORITHMS MANAGEMENT (INITIALIZATION, SETTING, ETC)	*/
 /**********************************************************************************************************************/
+int current_alg = 0;
+struct io_scheduler_instance_t *current_scheduler=NULL;
+
+//change the current scheduling algorithm and update local parameters
+//here we assume the scheduling thread is NOT running, so it won't mess with the structures
+// it will acquire the lock to all data structures, must call unlock afterwards
+void change_selected_alg(int new_alg)
+{
+	int previous_alg;
+	struct io_scheduler_instance_t *previous_scheduler; 
+
+	//TODO handle prediction thread
+
+	PRINT_FUNCTION_NAME;
+
+	//lock all data structures so no one is adding or releasing requests while we migrate
+	lock_all_data_structures();
+
+	//change scheduling algorithm
+	previous_scheduler = current_scheduler;
+	previous_alg = current_alg;
+	current_scheduler = initialize_scheduler(new_alg);
+	current_alg = new_alg;
+
+	//do we need to migrate data structure?
+	//first situation: both use hashtable
+	if(current_scheduler->needs_hashtable && previous_scheduler->needs_hashtable)
+	{
+		//the only problem here is if we decreased the maximum aggregation
+		//For now we chose to do nothing. If we no longer tolerate aggregations of a certain size, we are not spliting already performed aggregations since this would not benefit us at all. We could rethink that at some point
+	}
+	//second situation: from hashtable to timeline
+	else if (previous_scheduler->needs_hashtable && (!current_scheduler->needs_hashtable))
+	{
+		print_hashtable();
+		migrate_from_hashtable_to_timeline();
+		print_timeline();
+	}
+	//third situation: from timeline to hashtable
+	else if ((!previous_scheduler->needs_hashtable) && current_scheduler->needs_hashtable)
+	{
+		print_timeline();
+		migrate_from_timeline_to_hashtable();
+		print_hashtable();
+	}
+	//fourth situation: both algorithms use timeline
+	else
+	{
+		//now it depends on the algorithms. 
+		//if we are changing to NOOP, it does not matter because it does not really use the data structure
+		//if we are changing from or to TIME_WINDOW, we need to reorder the list
+		//if we are changing to the timeorder with aggregation, we need to reorder the list
+		if((current_alg != NOOP_SCHEDULER) && ((previous_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIMEORDER_SCHEDULER)))
+		{
+			reorder_timeline();
+		}
+
+
+	}
+}
+
+
 static AGIOS_LIST_HEAD(io_schedulers); //the list of scheduling algorithms (with their parameters)
 //counts how many scheduling algorithms we have
 int get_io_schedulers_size(void)

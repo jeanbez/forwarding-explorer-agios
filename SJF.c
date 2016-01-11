@@ -69,7 +69,6 @@ struct related_list_t *SJF_get_shortest_job(int *current_hash)
 	int chosen_hash=0;
 	struct request_file_t *req_file;
 	int evaluated_reqfiles=0;
-	int reqfilenb = get_current_reqfilenb();
 	
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
@@ -103,7 +102,7 @@ struct related_list_t *SJF_get_shortest_job(int *current_hash)
 			}
 		}
 		hashtable_unlock(i);
-		if(evaluated_reqfiles >= reqfilenb)
+		if(evaluated_reqfiles >= current_reqfilenb)
 		{
 		//	debug("went through all reqfiles, stopping \n");
 			break;
@@ -112,12 +111,15 @@ struct related_list_t *SJF_get_shortest_job(int *current_hash)
 	}
 	if(!chosen_queue)
 	{
-		printf("PANIC! There are requests to be processed, but SJF cant pick a queue...\n");
-		exit(-1);
+//		printf("PANIC! There are requests to be processed, but SJF cant pick a queue...\n");
+//		exit(-1);
+		return NULL;
 	}
-
-	*current_hash = chosen_hash;
-	return chosen_queue;
+	else
+	{
+		*current_hash = chosen_hash;
+		return chosen_queue;
+	}
 }
 void SJF_postprocess(struct request_t *req)
 {
@@ -134,7 +136,7 @@ void SJF(void *clnt)
 
 
 
-	while((get_current_reqnb() > 0) && (update_time == 0))
+	while((current_reqnb > 0) && (update_time == 0))
 	{
 		/*1. find the shortest queue*/
 		SJF_current_queue = SJF_get_shortest_job(&SJF_current_hash);
