@@ -6,7 +6,7 @@
 
 
 #define REQ_TYPE 0
-#define MAX_SLEEP_TIME 10000000000 //in ns
+#define MAX_SLEEP_TIME 1000000 //in ns
 
 static int processed_reqnb=0;
 static pthread_mutex_t processed_reqnb_mutex=PTHREAD_MUTEX_INITIALIZER;

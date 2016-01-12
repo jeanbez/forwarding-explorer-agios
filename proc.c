@@ -643,8 +643,7 @@ void stats_show_ending(void)
 	unsigned long int global_avg_time;
 	unsigned long int global_avg_size;
 	double *bandwidth;
-	int start, end, len;
-	int *dummy;
+	int i, len;
 	char *band_str = malloc(sizeof(char)*50*PERFORMANCE_VALUES);
 
 	agios_mutex_lock(&global_statistics_mutex);
@@ -676,16 +675,17 @@ void stats_show_ending(void)
 
 	agios_mutex_unlock(&global_statistics_mutex);
 
-	bandwidth = get_performance_bandwidth(&start, &end, &dummy);
+	bandwidth = agios_get_performance_bandwidth();
 	band_str[0]='\n';
 	band_str[1]='\0';
-	while(start != end)
+	i = performance_start;
+	while(i != performance_end)
 	{
 		len = strlen(band_str);
-		sprintf(band_str+len, "%.2f\n", bandwidth[start]/1024.0);
-		start++;
-		if(start >= PERFORMANCE_VALUES)
-			start = 0;
+		sprintf(band_str+len, "%.2f\n", bandwidth[i]/1024.0);
+		i++;
+		if(i >= PERFORMANCE_VALUES)
+			i = 0;
 	}
 #ifndef AGIOS_KERNEL_MODULE
 	fprintf(stats_file,  
@@ -693,8 +693,8 @@ void stats_show_ending(void)
 	seq_printf(stats_file,
 #endif
 	"served an amount of %llu bytes in a total of %llu ns, bandwidth was:%s",
-	get_performance_size(),
-	get_performance_time(),
+	agios_get_performance_size(),
+	agios_get_performance_time(),
 	band_str);
 
 

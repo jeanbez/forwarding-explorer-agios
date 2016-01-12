@@ -313,7 +313,7 @@ void change_selected_alg(int new_alg)
 		//if we are changing to the timeorder with aggregation, we need to reorder the list
 		if((current_alg != NOOP_SCHEDULER) && ((previous_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIMEORDER_SCHEDULER)))
 		{
-			reorder_timeline();
+//			reorder_timeline(); 
 		}
 
 

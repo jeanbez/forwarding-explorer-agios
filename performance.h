@@ -27,13 +27,16 @@
 
 #define PERFORMANCE_VALUES 5
 
-extern unsigned long int processed_reqnb;
+extern unsigned long int agios_processed_reqnb;
 
-void reset_performance_counters(void);
-unsigned long long int get_performance_size(void);
-unsigned long long int get_performance_time(void);
-double *get_performance_bandwidth(int *start, int *end, int **algs);
-double get_current_performance_bandwidth(void);
+extern int performance_algs[PERFORMANCE_VALUES];
+extern int performance_start, performance_end;
+void agios_reset_performance_counters(void);
+unsigned long long int agios_get_performance_size(void);
+unsigned long long int agios_get_performance_time(void);
+double *agios_get_performance_bandwidth();
+double agios_get_current_performance_bandwidth(void);
 inline void performance_set_needs_hashtable(short int value);
 void performance_set_new_algorithm(int alg);
+inline int agios_performance_get_latest_index();
 #endif

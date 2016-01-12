@@ -34,7 +34,7 @@
 #include "performance.h"
 #include "common_functions.h"
 
-unsigned long int processed_reqnb; //processed requests counter. I've decided not to protect it with a mutex although it is used by two threads. The library's user calls the release function, where this variable is modified. The scheduling thread reads it in the process_requests function. Since it is not critical to have the most recent value there, no mutex.
+unsigned long int agios_processed_reqnb; //processed requests counter. I've decided not to protect it with a mutex although it is used by two threads. The library's user calls the release function, where this variable is modified. The scheduling thread reads it in the process_requests function. Since it is not critical to have the most recent value there, no mutex.
 
 /************************************************************************************************************
  * GLOBAL PERFORMANCE METRICS
@@ -42,11 +42,17 @@ unsigned long int processed_reqnb; //processed requests counter. I've decided no
 static unsigned long long int performance_time[PERFORMANCE_VALUES]; 
 static unsigned long long int performance_size[PERFORMANCE_VALUES];
 static unsigned long int performance_timestamps[PERFORMANCE_VALUES];
-static int performance_algs[PERFORMANCE_VALUES];
-static int performance_start, performance_end;
+int performance_algs[PERFORMANCE_VALUES];
+int performance_start, performance_end;
 static pthread_mutex_t performance_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-unsigned long long int get_performance_size(void)
+/* 
+ * returns the total amount of accessed data (in the last PERFORMANCE_VALUES time periods)
+ * each time period corresponds to one scheduling algorithm selection (dynamic).
+ * used by the proc module to write the stats file
+ * must NOT hold performance_mutex
+ */
+unsigned long long int agios_get_performance_size(void)
 {
 	unsigned long long int ret=0;
 	int i;
@@ -62,7 +68,14 @@ unsigned long long int get_performance_size(void)
 	agios_mutex_unlock(&performance_mutex);
 	return ret;
 }
-unsigned long long int get_performance_time(void)
+/* 
+ * returns the total time to process all requests (sum) in the last PERFORMANCE_VALUES
+ * time periods. Each time period corresponds to one scheduling algorithm selection 
+ * (dynamic).
+ * used by the proc module to write the stats file
+ * must NOT hold performance_mutex
+ */
+unsigned long long int agios_get_performance_time(void)
 {
 	unsigned long long int ret=0;
 	int i;
@@ -78,8 +91,15 @@ unsigned long long int get_performance_time(void)
 	agios_mutex_unlock(&performance_mutex);
 	return ret;
 }
-
-double * get_performance_bandwidth(int *start, int *end, int **algs) 
+/*
+ * returns an array with the last PERFORMANCE VALUES performance measurements
+ * additionally, gives pointer to the array with the list of the last
+ * PERFORMANCE_VALUES selected scheduling algorithms (start and end are the
+ * indexes to access the circular arrays) 
+ * used by the proc module to write the stats file
+ * must NOT hold performance mutex
+ */
+double * agios_get_performance_bandwidth() 
 {
 	double *ret = malloc(sizeof(double)*PERFORMANCE_VALUES);
 	long double tmp_time;
@@ -98,13 +118,25 @@ double * get_performance_bandwidth(int *start, int *end, int **algs)
 				ret[i] = (performance_size[i]) / tmp_time;
 		}
 	}
-	*start = performance_start;
-	*end = performance_end;
-	*algs = performance_algs;
 	agios_mutex_unlock(&performance_mutex);
 	return ret;
 }
-double get_current_performance_bandwidth(void)
+/*
+ * returns the index of the most recent scheduling algorithm (the current one)
+ */
+inline int agios_performance_get_latest_index()
+{
+	int i;
+	i = performance_end-1;
+	if(i < 0)
+		i = PERFORMANCE_VALUES-1;
+	return i;
+}
+/*
+ * returns the bandwidth observed so far with the current scheduling algorithm
+ * must NOT hold performance mutex
+ */
+double agios_get_current_performance_bandwidth(void)
 {
 	double ret;
 	int i;
@@ -114,9 +146,7 @@ double get_current_performance_bandwidth(void)
 
 	agios_mutex_lock(&performance_mutex);
 	debug("going to calculate current bandwidth. start = %d, end = %d", performance_start, performance_end);
-	i = performance_end-1;
-	if(i < 0)
-		i =0;
+	i = agios_performance_get_latest_index();
 	tmp_time = get_ns2s(performance_time[i]);
 	if(tmp_time > 0)
 		ret = (performance_size[i])/tmp_time;
@@ -126,7 +156,11 @@ double get_current_performance_bandwidth(void)
 	debug("returning performance %.2f", ret);
 	return ret;
 }
-void reset_performance_counters(void)
+/*
+ * resets all performance counters
+ * must NOT hold performance mutex
+ */
+void agios_reset_performance_counters(void)
 {
 	int i;
 	agios_mutex_lock(&performance_mutex);
@@ -140,6 +174,12 @@ void reset_performance_counters(void)
 	performance_start = performance_end = 0;
 	agios_mutex_unlock(&performance_mutex);
 }
+/*
+ * the arrays used to store performance data are circular, with two indexes to represent where the current
+ * version of the array begins and ends. This is an auxiliar function to increment indexes (because a new
+ * measurement was added) while respecting physical array limits 
+ * must hold performance mutex
+ */
 void increment_performance_index()
 {
 	performance_end++;
@@ -153,6 +193,11 @@ void increment_performance_index()
 	}
 	
 }
+/*
+ * function called when a new scheduling algorithm is selected, to add a slot to it in the performance
+ * data structures.
+ * must NOT hold performance mutex 
+ */
 void performance_set_new_algorithm(int alg)
 {
 	struct timespec now;
@@ -162,16 +207,23 @@ void performance_set_new_algorithm(int alg)
 	performance_timestamps[performance_end] = get_timespec2llu(now);
 	performance_algs[performance_end] = alg;
 	increment_performance_index();
+	agios_processed_reqnb=0; 
 	agios_mutex_unlock(&performance_mutex);
 }
+/* 
+ * function called when a request was released by the user (meaning it was already executed).
+ * it returns the index among the performance arrays corresponding to the scheduling algorithm
+ * which was executing when this request was sent for processing (because it makes no sense to
+ * account this performance measurement to an algorithm which was not responsible for deciding
+ * the execution of this request).
+ * must hold performance mutex
+ */
 int get_request_timestamp_index(struct request_t *req)
 {
 	int i;
 	
 	PRINT_FUNCTION_NAME;
-	i = performance_end-1;
-	if(i <0)
-		i = PERFORMANCE_VALUES-1;
+	i = agios_performance_get_latest_index();
 	while(i != performance_start)
 	{
 		if(req->dispatch_timestamp > performance_timestamps[i])
@@ -183,6 +235,28 @@ int get_request_timestamp_index(struct request_t *req)
 	PRINT_FUNCTION_EXIT;
 	return i;
 }
+/* 
+ * for debug
+ * must hold performance mutex
+ */
+void print_all_performance_data()
+{
+	int i;
+
+	debug("current situation of the performance model:");
+	i = performance_start;
+	while(i != performance_end)
+	{
+		if(performance_time[i] > 0)
+			debug("%s - %llu bytes in %llu ns = %f bytes/s (timestamp %lu)", get_algorithm_name_from_index(performance_algs[i]), performance_size[i], performance_time[i], ((double)performance_size[i])/(((long double)performance_time[1])/1000000000L), performance_timestamps[i]);
+		else
+			debug("%s - %llu bytes in %llu ns (timestamp %lu)", get_algorithm_name_from_index(performance_algs[i]), performance_size[i], performance_time[i], performance_timestamps[i]);
+		i++;
+		if(i == PERFORMANCE_VALUES)
+			i = 0;
+	}
+}
+
 
 /************************************************************************************************************
  * RELEASE FUNCTION, CALLED BY THE USER AFTER PROCESSING A REQUEST
@@ -201,7 +275,6 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 
 	PRINT_FUNCTION_NAME;
 
-	processed_reqnb++;
 
 	//first acquire lock
 	hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;
@@ -273,6 +346,16 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 		index = get_request_timestamp_index(req); //we use the timestamp from when the request was sent for processing, because we want to relate its performance to the scheduling algorithm who choose to process the request
 		performance_time[index] += elapsed_time;
 		performance_size[index] += req->io_data.len;
+
+		if(index == agios_performance_get_latest_index())
+		{
+			agios_processed_reqnb++; //we only count it as a new processed request if it was issued by the current scheduling algorithm
+			debug("a request issued by the current scheduling algorithm has come back! processed_reqnb is %lu", agios_processed_reqnb);
+		}
+#ifdef AGIOS_DEBUG
+		print_all_performance_data();
+#endif
+
 		agios_mutex_unlock(&performance_mutex);
 
 		generic_cleanup(req);

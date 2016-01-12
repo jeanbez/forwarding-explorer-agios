@@ -69,7 +69,7 @@ inline void dec_current_reqnb(int hash)
 	current_reqnb--;
 	pthread_mutex_unlock(&current_reqnb_lock);
 	if(scheduler_needs_hashtable)
-		dec_hashlist_reqcounter(hash);
+		hashlist_reqcounter[hash]--;
 }
 /*must hold mutex to the hashtable line*/
 inline void dec_many_current_reqnb(int hash, int value)
@@ -78,7 +78,7 @@ inline void dec_many_current_reqnb(int hash, int value)
 	current_reqnb-= value;
 	pthread_mutex_unlock(&current_reqnb_lock);
 	if(scheduler_needs_hashtable)
-		dec_many_hashlist_reqcounter(hash, value);
+		hashlist_reqcounter[hash]-= value;
 }
 inline void inc_current_reqfilenb()
 {
@@ -402,7 +402,7 @@ int request_cache_init(void)
 	int ret=0;
 
 	reset_global_reqstats(); //put all statistics to zero
-	reset_performance_counters();
+	agios_reset_performance_counters();
 
 	timeline_init(); //initializes the timeline
 
@@ -677,7 +677,7 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 //TODO predict
 
 
-	inc_hashlist_reqcounter(hash); 
+	hashlist_reqcounter[hash]++; 
 	req->globalinfo->current_size += req->io_data.len;
 	req->globalinfo->req_file->timeline_reqnb++;
 

@@ -25,11 +25,6 @@
 #ifndef _REQ_HASHTABLE_H_
 #define _REQ_HASHTABLE_H_
 
-/*to access internal counters*/
-void dec_hashlist_reqcounter(int hash);
-void dec_many_hashlist_reqcounter(int hash, int value);
-void inc_hashlist_reqcounter(int hash);
-
 /*init and exit functions*/
 int hashtable_init(void);
 void hashtable_cleanup(void);

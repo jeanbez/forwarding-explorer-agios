@@ -147,7 +147,7 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 		}  
 	}
 
-	if(!req_file)
+	if((!req_file) || (current_alg == NOOP_SCHEDULER)) 
 	{
 		if(!aggregated) //if not aggregated, possibly because this is the simple timeorder algorithm
 			agios_list_add_tail(&req->related, this_timeline); 
