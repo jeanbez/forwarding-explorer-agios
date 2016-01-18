@@ -248,7 +248,7 @@ void print_all_performance_data()
 	while(i != performance_end)
 	{
 		if(performance_time[i] > 0)
-			debug("%s - %llu bytes in %llu ns = %f bytes/s (timestamp %lu)", get_algorithm_name_from_index(performance_algs[i]), performance_size[i], performance_time[i], ((double)performance_size[i])/(((long double)performance_time[1])/1000000000L), performance_timestamps[i]);
+			debug("%s - %llu bytes in %llu ns = %Lf bytes/s (timestamp %lu)", get_algorithm_name_from_index(performance_algs[i]), performance_size[i], performance_time[i], ((double)performance_size[i])/(((long double)performance_time[1])/1000000000L), performance_timestamps[i]);
 		else
 			debug("%s - %llu bytes in %llu ns (timestamp %lu)", get_algorithm_name_from_index(performance_algs[i]), performance_size[i], performance_time[i], performance_timestamps[i]);
 		i++;

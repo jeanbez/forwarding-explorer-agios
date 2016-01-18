@@ -239,3 +239,7 @@ inline void timeline_init()
 {
 	init_agios_list_head(&timeline);
 }
+inline void timeline_cleanup()
+{
+	list_of_requests_cleanup(&timeline);
+}

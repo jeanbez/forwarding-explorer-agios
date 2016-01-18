@@ -61,7 +61,7 @@ int start_consumer(struct client *clnt)
         if(ret != 0)
 	{
 #ifndef AGIOS_KERNEL_MODULE
-		consumer_set_task(0);
+		consumer_task = 0;
 #endif
                 agios_print("Unable to start a thread to agios!\n");
 	}
@@ -130,8 +130,11 @@ int agios_init(struct client *clnt, char *config_file)
 		}
 	}
 
-	/*init the prediction module structures*/
-	prediction_module_init(file_counter-1); /*we use (file_counter-1) because file_counter includes the current trace file being written. we don't want to open it to read by the prediction thread*/
+	if(config_predict_agios_read_traces || config_predict_agios_request_aggregation || config_agios_write_simplified_traces) 
+	{
+		/*init the prediction module structures*/
+		prediction_module_init(file_counter-1); /*we use (file_counter-1) because file_counter includes the current trace file being written. we don't want to open it to read by the prediction thread*/
+	}
 
 	ret = start_consumer(clnt);
 	if (ret != 1)
@@ -173,7 +176,7 @@ void agios_exit(void)
 	/*stop the prediction thread*/
 	stop_prediction_thr();
 
-	if (consumer_get_task()) 
+	if (consumer_task != 0) 
 	{
 		consumer_signal_new_reqs();
 #ifdef AGIOS_KERNEL_MODULE
@@ -198,9 +201,12 @@ void agios_exit(void)
 
 void agios_wait_predict_init(void)
 {
-	printf("I am going to wait until the prediction module finished reading traces!\n");
-	predict_init_wait();
-	printf("It's done, you can start using the library now!\n");
+	if(config_predict_agios_read_traces || config_predict_agios_request_aggregation || config_agios_write_simplified_traces) 
+	{
+		printf("I am going to wait until the prediction module finished reading traces!\n");
+		predict_init_wait();
+		printf("It's done, you can start using the library now!\n");
+	}
 }
 
 #ifdef AGIOS_KERNEL_MODULE

@@ -48,9 +48,9 @@
  * PARAMETERS AND FUNCTIONS TO CONTROL THE I/O SCHEDULING THREAD *
  ***********************************************************************************************************/
 #ifdef AGIOS_KERNEL_MODULE
-struct task_struct	*task;
+struct task_struct	*consumer_task;
 #else
-int task;
+int consumer_task;
 #endif
 struct client *client;
 //so we can let the AGIOS thread know we have new requests (so it can schedule them)
@@ -67,22 +67,6 @@ void consumer_wait_completion(void)
 	wait_for_completion(&exited);
 }
 #endif
-#ifdef AGIOS_KERNEL_MODULE
-void consumer_set_task(struct task_struct *value)
-#else
-void consumer_set_task(int value)
-#endif
-{
-	task = value;
-}
-#ifdef AGIOS_KERNEL_MODULE
-struct task_struct * consumer_get_task(void)
-#else
-int consumer_get_task(void)
-#endif
-{
-	return task;
-}
 //signal new requests
 void consumer_signal_new_reqs(void)
 {
@@ -108,7 +92,7 @@ void consumer_init(struct client *clnt_value, int task_value)
 	agios_cond_init(&request_added_cond);
 	agios_mutex_init(&request_added_mutex);
 #endif
-	task = task_value;
+	consumer_task = task_value;
 	client = clnt_value;	
 	agios_processed_reqnb=0;
 }
@@ -179,14 +163,6 @@ inline void lock_structure_mutex(int hash)
 		timeline_lock();
 }
 
-inline void update_filenb_counter(int hash, struct request_file_t *req_file)
-{
-	//if this was the last request for this file, we remove it from the counter that keeps track of the number of files being accessed right now. If requests are being held at the hashtable, we check that through the related lists. If requests are being held at the timeline, we use the counter
-	if((hash >= 0) && (req_file->related_reads.current_size == 0) && (req_file->related_writes.current_size == 0))
-		dec_current_reqfilenb();
-	else if((hash == -1) && (req_file->timeline_reqnb == 0))
-		dec_current_reqfilenb();
-}
 //must hold relevant data structure mutex (it will release and then get it again tough)
 //it will return 1 if some refresh period has expired (it is time to recalculate the alpha factor and redo all predictions, or it is time to change the scheduling algorithm), 0 otherwise
 short int process_requests(struct request_t *head_req, struct client *clnt, int hash)
@@ -228,7 +204,8 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 		}
 		//we have to update the counters before releasing the lock to process requests, otherwise the lock may be obtained by another thread to add a new request and end up in weird behaviors.
 		head_req->globalinfo->req_file->timeline_reqnb-=head_req->reqnb;
-		update_filenb_counter(hash, req_file);
+		if(req_file->timeline_reqnb == 0)
+			dec_current_reqfilenb();
 		dec_many_current_reqnb(hash, head_req->reqnb);
 //		unlock_structure_mutex(hash); //I believe we no longer need to release this lock since we've removed the waiting by synchronous approach from the user callback function
 		clnt->process_requests(reqs, head_req->reqnb);
@@ -243,7 +220,8 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 			debug("request - size %lu, offset %lu, file %s - going back to the file system", head_req->io_data.len, head_req->io_data.offset, head_req->file_id);
 			head_req->globalinfo->current_size -= head_req->io_data.len; 
 			head_req->globalinfo->req_file->timeline_reqnb--;
-			update_filenb_counter(hash, req_file);
+			if(req_file->timeline_reqnb == 0)
+				dec_current_reqfilenb();
 			dec_current_reqnb(hash);
 //			unlock_structure_mutex(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
 			clnt->process_request(head_req->data);
@@ -259,7 +237,8 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 				debug("request - size %lu, offset %lu, file %s - going back to the file system", req->io_data.len, req->io_data.offset, req->file_id);
 				req->globalinfo->current_size -= req->io_data.len; 
 				req->globalinfo->req_file->timeline_reqnb--;
-				update_filenb_counter(hash, req_file);
+				if(req_file->timeline_reqnb == 0)
+					dec_current_reqfilenb();
 				dec_current_reqnb(hash);
 //				unlock_structure_mutex(hash); 
 				clnt->process_request(req->data);
@@ -335,8 +314,6 @@ int agios_thread(void *arg)
 void * agios_thread(void *arg)
 #endif
 {
-	short int stop=0;
-
 #ifndef AGIOS_KERNEL_MODULE
 	struct timespec timeout_tspec;
 #endif
@@ -388,7 +365,7 @@ void * agios_thread(void *arg)
 #endif
 		}
 	
-		if(!(stop = agios_thread_should_stop())) 
+		if(!agios_thread_should_stop()) 
 		{
 			check_update_time();
 
@@ -399,9 +376,9 @@ void * agios_thread(void *arg)
 	
 			check_update_time();
 		}
-        } while (!stop);
+        } while (!agios_thread_should_stop());
 
-	task = 0;
+	consumer_task = 0;
 #ifdef AGIOS_KERNEL_MODULE
 	complete(&exited);
 #endif

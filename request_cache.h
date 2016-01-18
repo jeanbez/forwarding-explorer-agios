@@ -60,6 +60,7 @@ void print_timeline(void);
 /* init and exit functions*/
 int request_cache_init(void);
 void request_cache_cleanup(void);
+void list_of_requests_cleanup(struct agios_list_head *list);
 
 /* to add new requests */
 int insert_aggregations(struct request_t *req, struct agios_list_head *insertion_place, struct agios_list_head *list_head);

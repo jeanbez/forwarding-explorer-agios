@@ -24,14 +24,14 @@
 #define _CONSUMER_H_
 
 #ifdef AGIOS_KERNEL_MODULE
+extern struct task_struct	*consumer_task;
 int agios_thread(void *arg);
 void consumer_init(struct client *clnt_value, struct task_struct *task_value);
-void consumer_set_task(struct task_struct *value);
 struct task_struct * consumer_get_task(void);
 #else
+extern int consumer_task; 
 void * agios_thread(void *arg);
 void consumer_init(struct client *clnt_value, int task_value);
-void consumer_set_task(int value);
 int consumer_get_task(void);
 #endif
 

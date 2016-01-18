@@ -295,9 +295,6 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 int agios_set_stripe_size(char *file_id, unsigned int stripe_size);
 
 
-// Try to add the request directly in the dispatch queue
-//int dispatch_queue_add(struct request_t *req, struct client *clnt);
-
 void agios_print_stats_file(char *filename);
 void agios_reset_stats(void);
 

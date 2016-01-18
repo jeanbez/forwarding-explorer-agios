@@ -37,5 +37,6 @@ struct request_t *timeline_oldest_req(void);
 /* timeline management functions*/
 void reorder_timeline();
 void timeline_init();
+inline void timeline_cleanup();
 
 #endif

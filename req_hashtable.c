@@ -76,8 +76,44 @@ int hashtable_init(void)
 
 	return 0;
 }
+inline void related_list_cleanup(struct related_list_t *related_list)
+{
+	list_of_requests_cleanup(&related_list->list);
+	list_of_requests_cleanup(&related_list->dispatch);
+}
 void hashtable_cleanup(void)
 {
+	int i;
+	struct request_file_t *req_file, *aux_req_file=NULL;
+
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //go through all lines of the hashtable
+	{
+		if(!agios_list_empty(&hashlist[i]))
+		{
+			agios_list_for_each_entry(req_file, &hashlist[i], hashlist) //go through all file structures
+			{
+				//go through all requests in the related lists
+				related_list_cleanup(&req_file->related_reads);
+				related_list_cleanup(&req_file->related_writes);
+				related_list_cleanup(&req_file->predicted_reads);
+				related_list_cleanup(&req_file->predicted_writes);
+				
+				if(aux_req_file)
+				{
+					agios_list_del(&aux_req_file->hashlist);
+					agios_free(aux_req_file);
+				}
+				aux_req_file = req_file;
+			} 
+			if(aux_req_file)
+			{
+				agios_list_del(&aux_req_file->hashlist);
+				agios_free(aux_req_file);
+			}
+
+		}
+	}
+
 	agios_free(hashlist);
 	agios_free(hashlist_locks);
 	agios_free(hashlist_reqcounter);

@@ -41,8 +41,6 @@ struct client {
 	void (*process_requests)(void ** i, int reqnb);
 #endif
 
-	short int sync; //this parameter is decided by AGIOS, after choosing the scheduling algorithm. 
-
 	/*
 	 * aIOLi calls this to check if device holding file is idle.
 	 * Should be supported by FS client

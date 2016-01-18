@@ -380,11 +380,13 @@ struct request_file_t * request_file_constructor(char *file_id)
  */
 void lock_all_data_structures()
 {
+	PRINT_FUNCTION_NAME;
 	int i;
 
 	timeline_lock();
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 		hashtable_lock(i);
+	PRINT_FUNCTION_EXIT;
 }
 void unlock_all_data_structures()
 {
@@ -434,12 +436,40 @@ int request_cache_init(void)
 	return ret;
 }
 
+void list_of_requests_cleanup(struct agios_list_head *list)
+{
+	struct request_t *req, *aux_req = NULL;
+
+	if(!agios_list_empty(list))
+	{
+		agios_list_for_each_entry(req, list, related)
+		{
+			if(aux_req)
+			{
+				agios_list_del(&aux_req->related);
+				agios_free(aux_req);
+			}
+			aux_req = req;
+		}
+		if(aux_req)
+		{
+			agios_list_del(&aux_req->related);
+			agios_free(aux_req);
+		}
+	}
+}
 /*
  * Function destroys all SLAB caches previously created by request_cache_init().
  */
 void request_cache_cleanup(void)
 {
+	PRINT_FUNCTION_NAME;
+	lock_all_data_structures();
+	print_hashtable();
 	hashtable_cleanup();
+	print_timeline();
+	timeline_cleanup();
+	PRINT_FUNCTION_EXIT;
 }
 
 //aggregation_head is a normal request which is about to become a virtual request upon aggregation with another contiguous request.
@@ -616,9 +646,7 @@ struct request_file_t *find_req_file(struct agios_list_head *hash_list, char *fi
 		inc_current_predicted_reqfilenb();
 	else if(state == RS_HASHTABLE) //real request
 	{
-		if((scheduler_needs_hashtable) && (agios_list_empty(&req_file->related_reads.list)) && (agios_list_empty(&req_file->related_writes.list))) //request is being included in the hashtable on req_file->related_reads or req_file->related_writes
-			inc_current_reqfilenb();
-		else if ((!scheduler_needs_hashtable) && (req_file->timeline_reqnb  == 0)) //request is being included in the timeline, req_file->timeline_reqnb keeps track of how many requests are for this file
+		if(req_file->timeline_reqnb == 0)
 			inc_current_reqfilenb();
 	}
 
