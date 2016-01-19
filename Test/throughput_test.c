@@ -56,7 +56,7 @@ void *process_request_thr(void *arg)
 	sleep_time_tsp.tv_nsec = (unsigned int) sleep_time % 1000000000L;
 	nanosleep(&sleep_time_tsp, NULL);
 
-	sprintf(filename, "arquivo.%d.out", req->threadid);
+	snprintf(filename, sizeof(char)*99, "arquivo.%d.out", req->threadid);
 	agios_release_request(filename, REQ_TYPE, req_size, req_offset[req->reqid]);
 
 	inc_processed_reqnb();

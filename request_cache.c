@@ -733,10 +733,11 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 	}
 
 	//free the lock
-	if(current_scheduler->needs_hashtable)
+	if(previous_needs_hashtable)
 		hashtable_unlock(hash);
 	else
-		timeline_unlock();	
+		timeline_unlock();
+	PRINT_FUNCTION_EXIT;	
 	return 0;		
 }
 

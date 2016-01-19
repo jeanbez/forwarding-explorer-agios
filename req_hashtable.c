@@ -114,9 +114,9 @@ void hashtable_cleanup(void)
 		}
 	}
 
-	agios_free(hashlist);
-	agios_free(hashlist_locks);
-	agios_free(hashlist_reqcounter);
+//	agios_free(hashlist);
+//	agios_free(hashlist_locks);
+//	agios_free(hashlist_reqcounter);
 	
 }
 

@@ -104,6 +104,7 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 			return;  
 
 	}
+	debug("got the request_file_t structure");
 	
 	//the time window scheduling algorithm separates requests into windows
 	if (current_alg == TIME_WINDOW_SCHEDULER) 
@@ -144,7 +145,8 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 					}
 				} 
 			}
-		}  
+		} 
+		debug("searched for aggregation"); 
 	}
 
 	if((!req_file) || (current_alg == NOOP_SCHEDULER)) 

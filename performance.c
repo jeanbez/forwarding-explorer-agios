@@ -298,8 +298,9 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 			break;
 	}
 	list = &hashlist[hash_val];
+	debug("got lock for hashlist[%lu]", hash_val);
 
-	//find the structure for this file (first acquire lock)
+	//find the structure for this file 
 	agios_list_for_each_entry(req_file, list, hashlist)
 	{
 		if(strcmp(req_file->file_id, file_id) == 0)
@@ -315,6 +316,7 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 		return 0;
 	}
 	found = 0;
+	debug("got the request_file_t structure");
 
 	//get the relevant list 
 	if(type == RT_WRITE)
