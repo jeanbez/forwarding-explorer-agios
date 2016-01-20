@@ -184,7 +184,7 @@ void agios_trace_process_requests(struct request_t *head_req)
 	}
 	else
 	{
-		agios_list_for_each_entry(req, &head_req->reqs_list, aggregation_element)
+		agios_list_for_each_entry(req, &head_req->reqs_list, related)
 		{
 			agios_trace_print_request(req);
 			agios_trace_write_to_buffer();

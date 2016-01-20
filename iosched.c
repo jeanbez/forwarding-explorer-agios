@@ -277,46 +277,47 @@ void change_selected_alg(int new_alg)
 	//lock all data structures so no one is adding or releasing requests while we migrate
 	lock_all_data_structures();
 
-	//change scheduling algorithm
-	previous_scheduler = current_scheduler;
-	previous_alg = current_alg;
-	current_scheduler = initialize_scheduler(new_alg);
-	current_alg = new_alg;
+	if(current_alg != new_alg)
+	{
+		//change scheduling algorithm
+		previous_scheduler = current_scheduler;
+		previous_alg = current_alg;
+		current_scheduler = initialize_scheduler(new_alg);
+		current_alg = new_alg;
 
-	//do we need to migrate data structure?
-	//first situation: both use hashtable
-	if(current_scheduler->needs_hashtable && previous_scheduler->needs_hashtable)
-	{
-		//the only problem here is if we decreased the maximum aggregation
-		//For now we chose to do nothing. If we no longer tolerate aggregations of a certain size, we are not spliting already performed aggregations since this would not benefit us at all. We could rethink that at some point
-	}
-	//second situation: from hashtable to timeline
-	else if (previous_scheduler->needs_hashtable && (!current_scheduler->needs_hashtable))
-	{
-		print_hashtable();
-		migrate_from_hashtable_to_timeline();
-		print_timeline();
-	}
-	//third situation: from timeline to hashtable
-	else if ((!previous_scheduler->needs_hashtable) && current_scheduler->needs_hashtable)
-	{
-		print_timeline();
-		migrate_from_timeline_to_hashtable();
-		print_hashtable();
-	}
-	//fourth situation: both algorithms use timeline
-	else
-	{
-		//now it depends on the algorithms. 
-		//if we are changing to NOOP, it does not matter because it does not really use the data structure
-		//if we are changing from or to TIME_WINDOW, we need to reorder the list
-		//if we are changing to the timeorder with aggregation, we need to reorder the list
-		if((current_alg != NOOP_SCHEDULER) && ((previous_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIMEORDER_SCHEDULER)))
+		//do we need to migrate data structure?
+		//first situation: both use hashtable
+		if(current_scheduler->needs_hashtable && previous_scheduler->needs_hashtable)
 		{
-//			reorder_timeline(); 
+			//the only problem here is if we decreased the maximum aggregation
+			//For now we chose to do nothing. If we no longer tolerate aggregations of a certain size, we are not spliting already performed aggregations since this would not benefit us at all. We could rethink that at some point
 		}
-
-
+		//second situation: from hashtable to timeline
+		else if (previous_scheduler->needs_hashtable && (!current_scheduler->needs_hashtable))
+		{
+			print_hashtable();
+			migrate_from_hashtable_to_timeline();
+			print_timeline();
+		}
+		//third situation: from timeline to hashtable
+		else if ((!previous_scheduler->needs_hashtable) && current_scheduler->needs_hashtable)
+		{
+			print_timeline();
+			migrate_from_timeline_to_hashtable();
+			print_hashtable();
+		}	
+		//fourth situation: both algorithms use timeline
+		else
+		{
+			//now it depends on the algorithms. 
+			//if we are changing to NOOP, it does not matter because it does not really use the data structure
+			//if we are changing from or to TIME_WINDOW, we need to reorder the list
+			//if we are changing to the timeorder with aggregation, we need to reorder the list
+			if((current_alg != NOOP_SCHEDULER) && ((previous_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIMEORDER_SCHEDULER)))
+			{
+//				reorder_timeline(); 
+			}
+		}
 	}
 }
 

@@ -221,19 +221,29 @@ void performance_set_new_algorithm(int alg)
 int get_request_timestamp_index(struct request_t *req)
 {
 	int i;
+	int found=0;
 	
-	PRINT_FUNCTION_NAME;
 	i = agios_performance_get_latest_index();
-	while(i != performance_start)
+	if(i == performance_start) //we only have one performance measurement going on (because we ar eusing a static scheduling algorithm, or because we've just started the execution)
+		found=1;
+	else
 	{
-		if(req->dispatch_timestamp > performance_timestamps[i])
-			break;
-		i--;
-		if(i < 0)
-			i = PERFORMANCE_VALUES-1;
+		while(i != performance_start)
+		{
+			if(req->dispatch_timestamp > performance_timestamps[i])
+			{
+				found = 1;
+				break;
+			}
+			i--;
+			if(i < 0)
+				i = PERFORMANCE_VALUES-1;
+		}
 	}
-	PRINT_FUNCTION_EXIT;
-	return i;
+	if(found)
+		return i;
+	else
+		return -1;
 }
 /* 
  * for debug
@@ -298,7 +308,6 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 			break;
 	}
 	list = &hashlist[hash_val];
-	debug("got lock for hashlist[%lu]", hash_val);
 
 	//find the structure for this file 
 	agios_list_for_each_entry(req_file, list, hashlist)
@@ -316,7 +325,6 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 		return 0;
 	}
 	found = 0;
-	debug("got the request_file_t structure");
 
 	//get the relevant list 
 	if(type == RT_WRITE)
@@ -346,17 +354,21 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 		agios_mutex_lock(&performance_mutex);
 		//we need to figure out to each time slice this request belongs
 		index = get_request_timestamp_index(req); //we use the timestamp from when the request was sent for processing, because we want to relate its performance to the scheduling algorithm who choose to process the request
-		performance_time[index] += elapsed_time;
-		performance_size[index] += req->io_data.len;
-
-		if(index == agios_performance_get_latest_index())
+		if(index >= 0) //maybe the request took so long to process we don't even have a record for the scheduling algorithm which issued it
 		{
-			agios_processed_reqnb++; //we only count it as a new processed request if it was issued by the current scheduling algorithm
-			debug("a request issued by the current scheduling algorithm has come back! processed_reqnb is %lu", agios_processed_reqnb);
-		}
+			performance_time[index] += elapsed_time;
+			performance_size[index] += req->io_data.len;
+
+			if(index == agios_performance_get_latest_index())
+			{
+				agios_processed_reqnb++; //we only count it as a new processed request if it was issued by the current scheduling algorithm
+				debug("a request issued by the current scheduling algorithm has come back! processed_reqnb is %lu", agios_processed_reqnb);
+			}
 #ifdef AGIOS_DEBUG
-		print_all_performance_data();
 #endif
+		}
+		else
+			debug("A request came but it's too old now");
 
 		agios_mutex_unlock(&performance_mutex);
 

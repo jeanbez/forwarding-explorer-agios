@@ -50,7 +50,7 @@ void *process_request_thr(void *arg)
 	struct timespec sleep_time_tsp;
 
 	printf("thread created to process request starting ");
-	printf("our request is %d\n", req->reqid);
+	printf("our request is %d from thread %d\n", req->reqid, req->threadid);
 
 	sleep_time_tsp.tv_sec = (unsigned int) sleep_time / 1000000000L;
 	sleep_time_tsp.tv_nsec = (unsigned int) sleep_time % 1000000000L;
@@ -68,6 +68,12 @@ void test_process(void * req_id)
 	struct req_id_t *req = (struct req_id_t *)req_id;
 	int ret;
 
+	if(processing_threads_index >= generated_reqnb)
+	{
+		printf("PANIC! we received more requests than generated\n");
+		agios_exit();
+		exit(0);	
+	}
 	ret = pthread_create(&processing_threads[processing_threads_index], NULL, process_request_thr, req);		
 	processing_threads_index++;
 	if(ret != 0)

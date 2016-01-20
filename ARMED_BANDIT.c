@@ -30,7 +30,8 @@ static int current_sched=0; //current scheduling algorithm in use
 
 //TODO change these values so they are defined in the configuration file instead of constants here
 #define MIN_AB_PROBABILITY 3 //we define a minimum probability to give scheduling algorithms. Without it, we cannot adapt to changes in the workload which could lead to other scheduling algorithm becomes the most adequate. No need to define a maximum probability, since it will be (100 - (useful_sched_nb * MIN_AB_PROBABILITY))
-#define VALIDITY_WINDOW 360000000000L //for how long (nanoseconds) do we consider performance measurements to be still valid (anything older than that will be discarded) 
+//#define VALIDITY_WINDOW 360000000000L //for how long (nanoseconds) do we consider performance measurements to be still valid (anything older than that will be discarded) 
+#define VALIDITY_WINDOW 3600000L //for how long (nanoseconds) do we consider performance measurements to be still valid (anything older than that will be discarded) 
 #define PERFORMANCE_WINDOW 10 //how many performance measurements we keep per scheduling algorithms.
 
 //for debug
@@ -245,7 +246,7 @@ void update_bandwidth(void)
 	recent_measurements = agios_get_performance_bandwidth();
 
 	// update the recent (other than the current) algorithms' performance measurements (this is necessary because some requests issued by an algorithm may arrive after changing algorithms, resulting in new measurements which were not considered on the last algorithm changes)
-	i = performance_start;
+/*	i = performance_start;
 	while(i != agios_performance_get_latest_index())
 	{
 		if(recent_measurements[i] > 0)
@@ -268,7 +269,7 @@ void update_bandwidth(void)
 		i++;
 		if(i == PERFORMANCE_VALUES)
 			i = 0;
-	}
+	}*/
 	// get new measurement for the current scheduling algorithm
 	AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].timestamp = timestamp;
 	AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth = recent_measurements[agios_performance_get_latest_index()];

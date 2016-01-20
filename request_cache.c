@@ -67,18 +67,16 @@ inline void dec_current_reqnb(int hash)
 {
 	pthread_mutex_lock(&current_reqnb_lock);
 	current_reqnb--;
+	hashlist_reqcounter[hash]--;
 	pthread_mutex_unlock(&current_reqnb_lock);
-	if(scheduler_needs_hashtable)
-		hashlist_reqcounter[hash]--;
 }
 /*must hold mutex to the hashtable line*/
 inline void dec_many_current_reqnb(int hash, int value)
 {
 	pthread_mutex_lock(&current_reqnb_lock);
 	current_reqnb-= value;
+	hashlist_reqcounter[hash]-= value;
 	pthread_mutex_unlock(&current_reqnb_lock);
-	if(scheduler_needs_hashtable)
-		hashlist_reqcounter[hash]-= value;
 }
 inline void inc_current_reqfilenb()
 {
@@ -140,6 +138,23 @@ void print_timeline(void)
 /**********************************************************************************************************************/
 /*	FUNCTIONS TO CHANGE THE CURRENT DATA STRUCTURE BETWEEN HASHTABLE AND TIMELINE	*/
 /**********************************************************************************************************************/
+void put_all_requests_in_timeline(struct agios_list_head *related_list, struct request_file_t *req_file, unsigned long hash);
+inline void put_this_request_in_timeline(struct request_t *req, unsigned long hash, struct request_file_t *req_file)
+{
+	//remove from queue
+	agios_list_del(&req->related);
+	if(req->reqnb > 1)
+	{
+		//this is a virtual request, we need to break it into parts
+		put_all_requests_in_timeline(&req->reqs_list, req_file, hash);
+		agios_free(req);
+	}
+	else
+		//put in timeline
+		timeline_add_req(req, hash, req_file);
+	
+
+}
 //take all requests from a list and place them in the timeline
 void put_all_requests_in_timeline(struct agios_list_head *related_list, struct request_file_t *req_file, unsigned long hash)
 {
@@ -148,25 +163,39 @@ void put_all_requests_in_timeline(struct agios_list_head *related_list, struct r
 	agios_list_for_each_entry(req, related_list, related)
 	{
 		if(aux_req)
-		{
-			agios_list_del(&aux_req->related);	
-			timeline_add_req(aux_req, hash, req_file); 
-		}
+			put_this_request_in_timeline(aux_req, hash, req_file);
 		aux_req = req;
 	}
 	if(aux_req)
-	{
-		agios_list_del(&aux_req->related);
-		timeline_add_req(aux_req, hash, req_file);
-	}
+		put_this_request_in_timeline(aux_req, hash, req_file);
 }
-void put_req_in_hashtable(struct request_t *req)
+void put_all_requests_in_hashtable(struct agios_list_head *list);
+inline void put_req_in_hashtable(struct request_t *req)
 {
 	unsigned long hash;
 
 	hash = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES;
 	agios_list_del(&req->related);
-	hashtable_add_req(req, hash, req->globalinfo->req_file);
+	if(req->reqnb > 1)
+	{
+		put_all_requests_in_hashtable(&req->reqs_list);
+		agios_free(req);
+	}
+	else
+		hashtable_add_req(req, hash, req->globalinfo->req_file);
+}
+void put_all_requests_in_hashtable(struct agios_list_head *list)
+{
+	struct request_t *req, *aux_req=NULL;
+
+	agios_list_for_each_entry(req, list, related)
+	{
+		if(aux_req)
+			put_req_in_hashtable(aux_req);	
+		aux_req = req;
+	}
+	if(aux_req)
+		put_req_in_hashtable(aux_req);	
 }
 //gets all requests from hashtable and move them to the timeline. 
 //No need to hold mutexes, but NO OTHER THREAD may be using any of these data structures.
@@ -191,19 +220,7 @@ void migrate_from_hashtable_to_timeline()
 //gets al requests from timeline and move them to the hashtable. Also move all request_file_t structures to the hashtable to we keep statistics. No need to hold mutexes, but NO OTHER THREAD may be using any of these data structures
 void migrate_from_timeline_to_hashtable()
 {
-	struct request_t *req, *aux_req=NULL;
-
-	//move all requests from timeline to hashtable
-	agios_list_for_each_entry(req, &timeline, related)
-	{
-		if(aux_req)
-		{
-			put_req_in_hashtable(aux_req);	
-		}
-		aux_req = req;
-	}
-	if(aux_req)
-		put_req_in_hashtable(aux_req);	
+	put_all_requests_in_hashtable(&timeline);
 }
 
 
@@ -436,6 +453,22 @@ int request_cache_init(void)
 	return ret;
 }
 
+//free the space used by a struct request_t, which describes a request
+//if the request is aggregated (with multiple requests inside), it will recursively free these requests as well
+inline void request_cleanup(struct request_t *aux_req)
+{
+	//remove the request from its queue
+	agios_list_del(&aux_req->related);
+	//see if it is a virtual request 
+	if(aux_req->reqnb > 1)
+	{
+		//free all sub-requests
+		list_of_requests_cleanup(&aux_req->reqs_list);
+	}
+	//free the memory space
+	agios_free(aux_req);
+}
+//free all requests from a queue
 void list_of_requests_cleanup(struct agios_list_head *list)
 {
 	struct request_t *req, *aux_req = NULL;
@@ -445,17 +478,11 @@ void list_of_requests_cleanup(struct agios_list_head *list)
 		agios_list_for_each_entry(req, list, related)
 		{
 			if(aux_req)
-			{
-				agios_list_del(&aux_req->related);
-				agios_free(aux_req);
-			}
+				request_cleanup(aux_req);
 			aux_req = req;
 		}
 		if(aux_req)
-		{
-			agios_list_del(&aux_req->related);
-			agios_free(aux_req);
-		}
+			request_cleanup(aux_req);
 	}
 }
 /*
@@ -489,7 +516,7 @@ struct request_t *start_aggregation(struct request_t *aggregation_head, struct a
 	aggregation_head->agg_head = newreq;
 
 	/*adds the replaced request on the requests list of the aggregation head*/
-	agios_list_add_tail(&aggregation_head->aggregation_element, &newreq->reqs_list);
+	agios_list_add_tail(&aggregation_head->related, &newreq->reqs_list);
 
 	return newreq;
 }
@@ -508,13 +535,13 @@ void include_in_aggregation(struct request_t *req, struct request_t **agg_req)
 	}
 	if(req->io_data.offset <= (*agg_req)->io_data.offset) /*it has to be inserted in the beginning*/	
 	{
-		agios_list_add(&req->aggregation_element, &((*agg_req)->reqs_list));
+		agios_list_add(&req->related, &((*agg_req)->reqs_list));
 		(*agg_req)->io_data.len += (*agg_req)->io_data.offset - req->io_data.offset;
 		(*agg_req)->io_data.offset = req->io_data.offset;
 	}
 	else /*it has to be inserted in the end*/
 	{
-		agios_list_add_tail(&req->aggregation_element, &((*agg_req)->reqs_list));	
+		agios_list_add_tail(&req->related, &((*agg_req)->reqs_list));	
 		(*agg_req)->io_data.len = (*agg_req)->io_data.len + ((req->io_data.offset + req->io_data.len) - ((*agg_req)->io_data.offset + (*agg_req)->io_data.len));
 	}
 	(*agg_req)->reqnb++;
@@ -543,7 +570,7 @@ void join_aggregations(struct request_t **head, struct request_t **tail)
 		aux = (*tail)->reqs_list.next;
 		for(i=0; i<(*tail)->reqnb; i++)
 		{
-			aux_req = agios_list_entry(aux, struct request_t, aggregation_element);
+			aux_req = agios_list_entry(aux, struct request_t, related);
 			aux = aux->next;
 			
 			include_in_aggregation(aux_req, head);

@@ -228,7 +228,7 @@ typedef int64_t user_data_type;
 typedef void * user_data_type;
 #endif
 
-struct request_t { //TODO rethink data types, we probably do not need to have long long long long long long something
+struct request_t { 
 	/*parameters*/
 	char *file_id;  //name of the file
 	unsigned long int jiffies_64; //arrival time 
@@ -261,7 +261,6 @@ struct request_t { //TODO rethink data types, we probably do not need to have lo
 	/*for aggregations*/
 	unsigned int reqnb; //for virtual requests (real requests), it is the number of requests aggregated into this one. For predicted requests, it is used while reading traces to count how many times this request was predicted (and then reset to 1 after finishing reading)
 	struct agios_list_head reqs_list; //list of requests
-	struct agios_list_head aggregation_element; //for being inserted on the list of requests
 	struct request_t *agg_head; //pointer to the virtual request structure (if this one is part of an aggregation)
 
 	/*for predicted requests*/

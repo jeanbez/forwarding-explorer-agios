@@ -377,7 +377,7 @@ unsigned long long int agios_predict_should_we_wait(struct request_t *req)
 		predicted_head = req->mirror->predicted_aggregation_start;
 	else /*it is an aggregated request*/
 	{
-		agios_list_for_each_entry(tmp, &req->reqs_list, aggregation_element) /*go through all subreqs*/
+		agios_list_for_each_entry(tmp, &req->reqs_list, related) /*go through all subreqs*/
 		{
 			if((tmp->mirror) && (tmp->mirror->predicted_aggregation_start) && (tmp->mirror->predicted_aggregation_start != predicted_head)) //we have a predicted aggregation to this request, and it is not the one we've already found 
 			{
