@@ -47,6 +47,11 @@ extern int config_agios_starting_algorithm;
 inline void config_set_starting_algorithm(int value);
 // 4. access times estimation
 extern char *config_agios_access_times_file;
+// 5. ARMED BANDIT
+extern int config_agios_min_ab_probability;
+extern long int config_agios_validity_window;
+extern int config_agios_performance_window;
+
 
 //user info
 extern int config_agios_stripe_size;

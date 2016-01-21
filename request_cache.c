@@ -92,14 +92,6 @@ inline void dec_current_reqfilenb()
 }
 
 
-//TMP TMP TMP
-struct req_id_t
-{
-	int reqid;
-	int threadid;
-};
-
-
 inline void print_request(struct request_t *req)
 {
 	struct request_t *aux_req;
@@ -109,11 +101,11 @@ inline void print_request(struct request_t *req)
 		debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
 		debug("\t\t\t\t\t(virtual request size %d)", req->reqnb);
 		agios_list_for_each_entry(aux_req, &req->reqs_list, related)
-			debug("\t\t\t\t\t(%lu %lu %s - app %d %d)", aux_req->io_data.offset, aux_req->io_data.len, aux_req->file_id, ((struct req_id_t *)aux_req->data)->reqid, ((struct req_id_t *)aux_req->data)->threadid);
+			debug("\t\t\t\t\t(%lu %lu %s)", aux_req->io_data.offset, aux_req->io_data.len, aux_req->file_id);
 				
 	}
 	else
-		debug("\t\t\t%lu %lu (app: %d %d)", req->io_data.offset, req->io_data.len, ((struct req_id_t *)req->data)->reqid, ((struct req_id_t *)req->data)->threadid);
+		debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
 }
 
 inline void print_hashtable_line(int i)
@@ -313,6 +305,7 @@ struct request_t * request_constructor(char *file_id, short int type, unsigned l
 	new->agg_head=NULL;
 	last_timestamp++;
 	new->timestamp = last_timestamp;
+	init_agios_list_head(&new->related);
 
 	new->mirror = NULL ;
 	new->already_waited=0;
@@ -529,13 +522,14 @@ void list_of_requests_cleanup(struct agios_list_head *list)
  */
 void request_cache_cleanup(void)
 {
-	PRINT_FUNCTION_NAME;
+	//TODO we were having serious issues with this portion of code, go through it looking for the errors
+/*	PRINT_FUNCTION_NAME;
 	lock_all_data_structures();
 	print_hashtable();
 	hashtable_cleanup();
 	print_timeline();
 	timeline_cleanup();
-	PRINT_FUNCTION_EXIT;
+	PRINT_FUNCTION_EXIT;*/
 }
 
 //aggregation_head is a normal request which is about to become a virtual request upon aggregation with another contiguous request.
@@ -564,7 +558,6 @@ struct request_t *start_aggregation(struct request_t *aggregation_head, struct a
 void include_in_aggregation(struct request_t *req, struct request_t **agg_req)
 {
 	struct agios_list_head *prev, *next;
-	struct request_t *aux_req, *tmp;
 	
 	PRINT_FUNCTION_NAME;
 	
@@ -597,9 +590,7 @@ void include_in_aggregation(struct request_t *req, struct request_t **agg_req)
 //we have two virtual requests which are going to become one because we've added a new one which fills the gap between them
 void join_aggregations(struct request_t **head, struct request_t **tail)
 {
-	struct agios_list_head *aux;
-	int i;
-	struct request_t *aux_req;
+	struct request_t *req, *aux_req=NULL;
 
 	/*removes the tail from the list*/
 	agios_list_del(&((*tail)->related));
@@ -609,15 +600,21 @@ void join_aggregations(struct request_t **head, struct request_t **tail)
 	else /*it is a virtual request*/
 	{
 		/*transfers all requests from this virtual request to the first one*/
-		aux = (*tail)->reqs_list.next;
-		for(i=0; i<(*tail)->reqnb; i++)
+		agios_list_for_each_entry(req, &(*tail)->reqs_list, related)
 		{
-			aux_req = agios_list_entry(aux, struct request_t, related);
-			aux = aux->next;
-			
+			if(aux_req)
+			{
+				agios_list_del(&aux_req->related);
+				include_in_aggregation(aux_req, head);
+			}
+			aux_req = req;
+		}
+		if(aux_req)
+		{
+			agios_list_del(&aux_req->related);
 			include_in_aggregation(aux_req, head);
-		}	
-		free(tail);	/*we dont need this anymore*/	
+		}
+		agios_free(*tail);	/*we dont need this anymore*/	
 	}
 }
 
@@ -646,7 +643,7 @@ int insert_aggregations(struct request_t *req, struct agios_list_head *insertion
 			if(insertion_place->next != list_head) /*if the request was not to be the last of the queue*/
 			{
 				next_req = agios_list_entry(insertion_place->next, struct request_t, related);
-				if(CHECK_AGGREGATE(req, next_req) && ((next_req->reqnb + prev_req->reqnb) <= current_scheduler->max_aggreg_size)) 
+				if(CHECK_AGGREGATE(prev_req, next_req) && ((next_req->reqnb + prev_req->reqnb) <= current_scheduler->max_aggreg_size)) 
 				{
 					join_aggregations(&prev_req, &next_req);
 				}
@@ -659,10 +656,12 @@ int insert_aggregations(struct request_t *req, struct agios_list_head *insertion
 		if(CHECK_AGGREGATE(req, next_req) && ((next_req->reqnb + req->reqnb) <= current_scheduler->max_aggreg_size)) 
 		{
 			if(req->reqnb > 1)
-				join_aggregations(&req, &next_req);
+				join_aggregations(&req, &next_req); //we could be adding a virtual request (because we are migrating between data structures), and then if we get here we will not add this new request anywhere, we'll actually remove the next one and copy its requests to the new one's list. So we cannot return aggregated = 1, because we still need to add this request
 			else
+			{
 				include_in_aggregation(req, &next_req);
-			aggregated=1;
+				aggregated=1;
+			}
 		}
 	}
 	return aggregated;
@@ -699,7 +698,6 @@ struct request_file_t *find_req_file(struct agios_list_head *hash_list, char *fi
 			insertion_place = &(req_file->hashlist);
 		else
 			insertion_place = hash_list;
-		debug("including a new request_file_t structure for file %s\n", file_id);
 		req_file = request_file_constructor(file_id);
 		if(!req_file)
 		{
@@ -806,7 +804,9 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 		hashtable_unlock(hash);
 	else
 	{
+#ifdef AGIOS_DEBUG
 		print_timeline();
+#endif
 		timeline_unlock();
 	}
 	PRINT_FUNCTION_EXIT;	

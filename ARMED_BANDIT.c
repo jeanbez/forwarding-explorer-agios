@@ -28,12 +28,6 @@ struct scheduler_info_t
 static struct scheduler_info_t *AB_table=NULL; //all the information we have about the scheduling algorithms
 static int current_sched=0; //current scheduling algorithm in use
 
-//TODO change these values so they are defined in the configuration file instead of constants here
-#define MIN_AB_PROBABILITY 3 //we define a minimum probability to give scheduling algorithms. Without it, we cannot adapt to changes in the workload which could lead to other scheduling algorithm becomes the most adequate. No need to define a maximum probability, since it will be (100 - (useful_sched_nb * MIN_AB_PROBABILITY))
-//#define VALIDITY_WINDOW 360000000000L //for how long (nanoseconds) do we consider performance measurements to be still valid (anything older than that will be discarded) 
-#define VALIDITY_WINDOW 3600000L //for how long (nanoseconds) do we consider performance measurements to be still valid (anything older than that will be discarded) 
-#define PERFORMANCE_WINDOW 10 //how many performance measurements we keep per scheduling algorithms.
-
 //for debug
 void print_all_armed_bandit_information()
 {
@@ -49,7 +43,7 @@ void print_all_armed_bandit_information()
 			{
 				debug("\t%lu %.2f", AB_table[i].bandwidth_measurements[j].timestamp, AB_table[i].bandwidth_measurements[j].bandwidth); 
 				j++;
-				if(j == PERFORMANCE_WINDOW)
+				if(j == config_agios_performance_window)
 					j =0;
 			}
 		}
@@ -112,7 +106,7 @@ int ARMED_BANDIT_init(void)
 			useful_sched_nb++;
 		AB_table[i].bandwidth = 0.0;
 		AB_table[i].selection_counter=0;
-		AB_table[i].bandwidth_measurements = (struct performance_info_t *)malloc(sizeof(struct performance_info_t)*PERFORMANCE_WINDOW);
+		AB_table[i].bandwidth_measurements = (struct performance_info_t *)malloc(sizeof(struct performance_info_t)*config_agios_performance_window);
 		AB_table[i].measurements_start = AB_table[i].measurements_end = 0;
 	}
 	debug("Initializing Armed Bandit approach with %d scheduling algorithms, %d of them can be selected", scheduler_nb, useful_sched_nb );
@@ -159,7 +153,7 @@ void recalculate_AB_probabilities(void)
 
 	//make sure this probability is not so large that there is not enough left to give the other algorithms at least MIN_AB_PROBABILITY
 	available_probability = 100 - AB_table[best_bandwidth].probability;
-	i = (useful_sched_nb - 1)*MIN_AB_PROBABILITY;
+	i = (useful_sched_nb - 1)*config_agios_min_ab_probability;
 	if(available_probability < i) 
 	{
 		available_probability = i;
@@ -192,12 +186,12 @@ short int check_validity_window(int sched, unsigned long int now)
 
 	while((AB_table[sched].measurements_start != AB_table[sched].measurements_end) //while we have measurements in the list
 	      &&
-	      ((now - AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp) >= VALIDITY_WINDOW))
+	      ((now - AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp) >= config_agios_validity_window))
 	{
-		debug("we will discard a measurement to schedulre %s with timestamp %lu because now we have a timestamp %lu, and the difference %lu is larger than the validity window %lu", AB_table[sched].sched->name, AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp, now, (now - AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp), VALIDITY_WINDOW);
+		debug("we will discard a measurement to schedulre %s with timestamp %lu because now we have a timestamp %lu, and the difference %lu is larger than the validity window %lu", AB_table[sched].sched->name, AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp, now, (now - AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp), config_agios_validity_window);
 		AB_table[sched].measurements_start++; //discard this measurement, it's too old
 		changed=1;
-		if(AB_table[sched].measurements_start == PERFORMANCE_WINDOW)
+		if(AB_table[sched].measurements_start == config_agios_performance_window)
 			AB_table[sched].measurements_start = 0;
 	}
 	return changed;
@@ -217,7 +211,7 @@ void update_average_bandwidth(int sched)
 		ret += AB_table[sched].bandwidth_measurements[i].bandwidth;
 		counter++; 	
 		i++;
-		if(i == PERFORMANCE_WINDOW)
+		if(i == config_agios_performance_window)
 			i = 0;
 	}
 	if(counter > 0) //we could have an empty performance measurement list
@@ -233,7 +227,8 @@ void update_average_bandwidth(int sched)
 void update_bandwidth(void)
 {
 	double *recent_measurements;
-	int i, j;
+	int i;
+	//int j;
 	struct timespec this_time;
 	unsigned long long timestamp;
 
@@ -275,14 +270,14 @@ void update_bandwidth(void)
 	AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth = recent_measurements[agios_performance_get_latest_index()];
 	debug("most recent performance measurement: %.2f with scheduler %s", AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth, AB_table[current_sched].sched->name);
 	AB_table[current_sched].measurements_end++;
-	if(AB_table[current_sched].measurements_end == PERFORMANCE_WINDOW)
+	if(AB_table[current_sched].measurements_end == config_agios_performance_window)
 	{
 		AB_table[current_sched].measurements_end=0;
 	}
 	if(AB_table[current_sched].measurements_end == AB_table[current_sched].measurements_start)
 	{
 		AB_table[current_sched].measurements_start++;
-		if(AB_table[current_sched].measurements_start == PERFORMANCE_WINDOW)
+		if(AB_table[current_sched].measurements_start == config_agios_performance_window)
 			AB_table[current_sched].measurements_start=0;
 	}
 	check_validity_window(current_sched, timestamp);

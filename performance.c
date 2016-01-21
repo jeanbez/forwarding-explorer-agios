@@ -145,7 +145,6 @@ double agios_get_current_performance_bandwidth(void)
 	PRINT_FUNCTION_NAME;
 
 	agios_mutex_lock(&performance_mutex);
-	debug("going to calculate current bandwidth. start = %d, end = %d", performance_start, performance_end);
 	i = agios_performance_get_latest_index();
 	tmp_time = get_ns2s(performance_time[i]);
 	if(tmp_time > 0)
@@ -153,7 +152,6 @@ double agios_get_current_performance_bandwidth(void)
 	else
 		ret = 0;
 	agios_mutex_unlock(&performance_mutex);	
-	debug("returning performance %.2f", ret);
 	return ret;
 }
 /*
@@ -324,8 +322,10 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 		return 0;
 	}
 	found = 0;
+#ifdef AGIOS_DEBUG
 	debug("Releasing a request from file %s:", req_file->file_id );
 	print_hashtable_line(hash_val);
+#endif
 
 	//get the relevant list 
 	if(type == RT_WRITE)
@@ -368,8 +368,6 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 #ifdef AGIOS_DEBUG
 #endif
 		}
-		else
-			debug("A request came but it's too old now");
 
 		agios_mutex_unlock(&performance_mutex);
 

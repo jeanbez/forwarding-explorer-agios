@@ -104,8 +104,6 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 			return;  
 
 	}
-	debug("got the request_file_t structure for request");
-	print_request(req);
 
 	
 	//the time window scheduling algorithm separates requests into windows
@@ -148,7 +146,6 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 				} 
 			}
 		} 
-		debug("searched for aggregation"); 
 	}
 
 	if(!aggregated)

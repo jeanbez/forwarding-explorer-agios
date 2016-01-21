@@ -163,7 +163,7 @@ struct related_list_t {
 
 	struct timespec last_req_time; //so we can keep statistics on time between requests
 
-	unsigned long int last_received_finaloffset; //so we can keep statistics on offset distance between consecutive requests //TODO do we need to use long long?
+	unsigned long int last_received_finaloffset; //so we can keep statistics on offset distance between consecutive requests 
 
 	//used with dNFSp, do not seem to apply to orangefs
 	long double avg_stripe_difference;  //in ms

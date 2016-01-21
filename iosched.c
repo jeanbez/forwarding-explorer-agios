@@ -295,16 +295,24 @@ void change_selected_alg(int new_alg)
 		//second situation: from hashtable to timeline
 		else if (previous_scheduler->needs_hashtable && (!current_scheduler->needs_hashtable))
 		{
+#ifdef AGIOS_DEBUG
 			print_hashtable();
+#endif
 			migrate_from_hashtable_to_timeline();
+#ifdef AGIOS_DEBUG
 			print_timeline();
+#endif
 		}
 		//third situation: from timeline to hashtable
 		else if ((!previous_scheduler->needs_hashtable) && current_scheduler->needs_hashtable)
 		{
+#ifdef AGIOS_DEBUG
 			print_timeline();
+#endif
 			migrate_from_timeline_to_hashtable();
+#ifdef AGIOS_DEBUG
 			print_hashtable();
+#endif
 		}	
 		//fourth situation: both algorithms use timeline
 		else
