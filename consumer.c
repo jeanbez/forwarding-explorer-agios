@@ -163,12 +163,22 @@ inline void lock_structure_mutex(int hash)
 		timeline_lock();
 }
 
+inline void put_this_request_in_dispatch(struct request_t *req, unsigned long int this_time, struct agios_list_head *dispatch)
+{
+	agios_list_add_tail(&req->related, dispatch);
+	req->dispatch_timestamp = this_time;
+	debug("request - size %lu, offset %lu, file %s - going back to the file system", req->io_data.len, req->io_data.offset, req->file_id);
+	req->globalinfo->current_size -= req->io_data.len; //when we aggregate overlapping requests, we don't adjust the related list current_size, since it is simply the sum of all requests sizes. For this reason, we have to subtract all requests from it individually when processing a virtual request.
+	req->globalinfo->req_file->timeline_reqnb--;
+	
+	
+}
+
 //must hold relevant data structure mutex (it will release and then get it again tough)
 //it will return 1 if some refresh period has expired (it is time to recalculate the alpha factor and redo all predictions, or it is time to change the scheduling algorithm), 0 otherwise
 short int process_requests(struct request_t *head_req, struct client *clnt, int hash)
 {
-	struct request_t *req;
-	struct request_file_t *req_file; 
+	struct request_t *req, *aux_req=NULL;
 	short int update_time=0;	
 	struct timespec now;
 	unsigned long int this_time;
@@ -177,9 +187,10 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 		return 0; /*whaaaat?*/
 
 	PRINT_FUNCTION_NAME;
-	req_file = head_req->globalinfo->req_file;
 	agios_gettime(&now);
 
+	debug("Processing this request:");
+	print_request(head_req);
 
 	if(config_trace_agios)
 		agios_trace_process_requests(head_req);
@@ -193,57 +204,63 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 		void **reqs = (void **)malloc(sizeof(void *)*(head_req->reqnb+1));
 #endif
 		int reqs_index=0;
+		//we give to the user an array with the requests' data (the field used by the user, provided in agios_add_request)
 		agios_list_for_each_entry(req, &head_req->reqs_list, related)
 		{
-			agios_list_add_tail(&req->related, &head_req->globalinfo->dispatch);
-			req->dispatch_timestamp = this_time;
-			debug("request - size %lu, offset %lu, file %s - going back to the file system", req->io_data.len, req->io_data.offset, req->file_id);
-			reqs[reqs_index]=req->data;
-			reqs_index++;
-			req->globalinfo->current_size -= req->io_data.len; //when we aggregate overlapping requests, we don't adjust the related list current_size, since it is simply the sum of all requests sizes. For this reason, we have to subtract all requests from it individually when processing a virtual request.
+			if(aux_req) //we can't just mess with req because the for won't be able to find the next requests after we've modified this one's pointers
+			{
+				put_this_request_in_dispatch(aux_req, this_time, &head_req->globalinfo->dispatch);
+				reqs[reqs_index]=aux_req->data;
+				reqs_index++;
+			}
+			aux_req = req;
 		}
-		//we have to update the counters before releasing the lock to process requests, otherwise the lock may be obtained by another thread to add a new request and end up in weird behaviors.
-		head_req->globalinfo->req_file->timeline_reqnb-=head_req->reqnb;
-		if(req_file->timeline_reqnb == 0)
+		if(aux_req)
+		{
+			put_this_request_in_dispatch(aux_req, this_time, &head_req->globalinfo->dispatch);
+			reqs[reqs_index]=aux_req->data;
+			reqs_index++;
+		}
+		//update requests and files counters
+		if(head_req->globalinfo->req_file->timeline_reqnb == 0)
 			dec_current_reqfilenb();
 		dec_many_current_reqnb(hash, head_req->reqnb);
-//		unlock_structure_mutex(hash); //I believe we no longer need to release this lock since we've removed the waiting by synchronous approach from the user callback function
+		//process
 		clnt->process_requests(reqs, head_req->reqnb);
-//		lock_structure_mutex(hash);
+		//we no longer need this array
 		free(reqs);
 	}
 	else{
 		if(head_req->reqnb == 1)
 		{
-			agios_list_add_tail(&head_req->related, &head_req->globalinfo->dispatch);
-			head_req->dispatch_timestamp = get_timespec2llu(now);
-			debug("request - size %lu, offset %lu, file %s - going back to the file system", head_req->io_data.len, head_req->io_data.offset, head_req->file_id);
-			head_req->globalinfo->current_size -= head_req->io_data.len; 
-			head_req->globalinfo->req_file->timeline_reqnb--;
-			if(req_file->timeline_reqnb == 0)
+			put_this_request_in_dispatch(head_req, get_timespec2llu(now), &head_req->globalinfo->dispatch);
+			if(head_req->globalinfo->req_file->timeline_reqnb == 0)
 				dec_current_reqfilenb();
 			dec_current_reqnb(hash);
-//			unlock_structure_mutex(hash); //holding this lock while waiting for requests processing can cause a deadlock if the user has a mutex to avoid adding and consuming requests at the same time (it will be stuck adding a request while we are stuck waiting for a request to be processed)
 			clnt->process_request(head_req->data);
-//			lock_structure_mutex(hash);
 		}
 		else
 		{
+			//it is a virtual request but the user did not provide a function to process multiple requests at once, so we'll simply give them sequentially 
 			this_time = get_timespec2llu(now);
 			agios_list_for_each_entry(req, &head_req->reqs_list, related)
 			{	
-				agios_list_add_tail(&req->related, &head_req->globalinfo->dispatch);
-				req->dispatch_timestamp = this_time;
-				debug("request (from virtual of %d) - size %lu, offset %lu, file %s - going back to the file system", head_req->reqnb, req->io_data.len, req->io_data.offset, req->file_id);
-				req->globalinfo->current_size -= req->io_data.len; 
-				req->globalinfo->req_file->timeline_reqnb--;
-				if(req_file->timeline_reqnb == 0)
-					dec_current_reqfilenb();
-				dec_current_reqnb(hash);
-//				unlock_structure_mutex(hash); 
-				clnt->process_request(req->data);
-//				lock_structure_mutex(hash); 
+				if(aux_req)
+				{
+					put_this_request_in_dispatch(aux_req, this_time, &head_req->globalinfo->dispatch);
+					clnt->process_request(aux_req->data);
+				}
+				aux_req = req;
 			}
+			if(aux_req)
+			{
+				put_this_request_in_dispatch(aux_req, this_time, &head_req->globalinfo->dispatch);
+				clnt->process_request(aux_req->data);
+			}
+
+			if(head_req->globalinfo->req_file->timeline_reqnb == 0)
+				dec_current_reqfilenb();
+			dec_many_current_reqnb(hash, head_req->reqnb);
 		}
 	}
 

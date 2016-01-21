@@ -91,36 +91,75 @@ inline void dec_current_reqfilenb()
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
 
+
+//TMP TMP TMP
+struct req_id_t
+{
+	int reqid;
+	int threadid;
+};
+
+
+inline void print_request(struct request_t *req)
+{
+	struct request_t *aux_req;
+
+	if(req->reqnb > 1)
+	{
+		debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
+		debug("\t\t\t\t\t(virtual request)");
+		agios_list_for_each_entry(aux_req, &req->reqs_list, related)
+			debug("\t\t\t\t\t(%lu %lu %s - app %d %d)", aux_req->io_data.offset, aux_req->io_data.len, aux_req->file_id, ((struct req_id_t *)aux_req->data)->reqid, ((struct req_id_t *)aux_req->data)->threadid);
+				
+	}
+	else
+		debug("\t\t\t%lu %lu (app: %d %d)", req->io_data.offset, req->io_data.len, ((struct req_id_t *)req->data)->reqid, ((struct req_id_t *)req->data)->threadid);
+}
+
+inline void print_hashtable_line(int i)
+{
+	struct agios_list_head *hash_list;
+	struct request_file_t *req_file;
+	struct request_t *req;
+	
+	hash_list = &hashlist[i];
+	if(!agios_list_empty(hash_list))
+		debug("[%d]", i);
+	agios_list_for_each_entry(req_file, hash_list, hashlist)
+	{	
+		debug("\t%s", req_file->file_id);
+		if(!(agios_list_empty(&req_file->related_reads.list) && agios_list_empty(&req_file->related_reads.dispatch)))
+		{
+			debug("\t\tread");
+			agios_list_for_each_entry(req, &req_file->related_reads.list, related)
+				print_request(req);
+			debug("\t\tdispatch read");
+			agios_list_for_each_entry(req, &req_file->related_reads.dispatch, related)
+				print_request(req);
+		}
+		if(!(agios_list_empty(&req_file->related_writes.list) && agios_list_empty(&req_file->related_writes.dispatch)))
+		{
+			debug("\t\twrite");
+			agios_list_for_each_entry(req, &req_file->related_writes.list, related)
+				print_request(req);
+			debug("\t\tdispatch writes");
+			agios_list_for_each_entry(req, &req_file->related_writes.dispatch, related)
+				print_request(req);
+
+		}
+	}
+
+}
+
 //debug functions, clean after
 void print_hashtable(void)
 {
 	int i;
-	struct agios_list_head *hash_list;
-	struct request_file_t *req_file;
-	struct request_t *req;
 
 	debug("Current hashtable status:");
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //go through the whole hashtable, one position at a time
 	{
-		hash_list = &hashlist[i];
-		if(!agios_list_empty(hash_list))
-			debug("[%d]", i);
-		agios_list_for_each_entry(req_file, hash_list, hashlist)
-		{	
-			debug("\t%s", req_file->file_id);
-			if(!agios_list_empty(&req_file->related_reads.list))
-			{
-				debug("\t\tread");
-				agios_list_for_each_entry(req, &req_file->related_reads.list, related)
-					debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
-			}
-			if(!agios_list_empty(&req_file->related_writes.list))
-			{
-				debug("\t\twrite");
-				agios_list_for_each_entry(req, &req_file->related_writes.list, related)
-					debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
-			}
-		}
+		print_hashtable_line(i);
 	}
 }
 void print_timeline(void)
@@ -759,6 +798,7 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 			consumer_signal_new_reqs(); //if it is time to refresh something (change the scheduling algorithm or recalculate alpha), we wake up the scheduling thread
 	}
 
+	print_hashtable_line(hash);
 	//free the lock
 	if(previous_needs_hashtable)
 		hashtable_unlock(hash);

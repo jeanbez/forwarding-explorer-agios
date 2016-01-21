@@ -325,6 +325,8 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 		return 0;
 	}
 	found = 0;
+	debug("Releasing a request from file %s:", req_file->file_id );
+	print_hashtable_line(hash_val);
 
 	//get the relevant list 
 	if(type == RT_WRITE)

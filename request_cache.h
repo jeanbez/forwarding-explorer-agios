@@ -55,7 +55,9 @@ void migrate_from_timeline_to_hashtable();
 
 /* for debug */
 void print_hashtable(void);
+inline void print_hashtable_line(int i);
 void print_timeline(void);
+inline void print_request(struct request_t *req);
 
 /* init and exit functions*/
 int request_cache_init(void);
