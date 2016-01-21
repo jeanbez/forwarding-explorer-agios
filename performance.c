@@ -224,22 +224,21 @@ int get_request_timestamp_index(struct request_t *req)
 	int found=0;
 	
 	i = agios_performance_get_latest_index();
-	if(i == performance_start) //we only have one performance measurement going on (because we ar eusing a static scheduling algorithm, or because we've just started the execution)
-		found=1;
-	else
+	while(i != performance_start) //go through all performance measurements we're keeping
 	{
-		while(i != performance_start)
+		if(req->dispatch_timestamp > performance_timestamps[i]) //when we found an algorithm timestamp older than this request (it works because we are looking from most recent to least recent)
 		{
-			if(req->dispatch_timestamp > performance_timestamps[i])
-			{
-				found = 1;
-				break;
-			}
-			i--;
-			if(i < 0)
-				i = PERFORMANCE_VALUES-1;
+			found = 1;
+			break;
 		}
+		i--;
+		if(i < 0)
+			i = PERFORMANCE_VALUES-1;
 	}
+	//we did not compare with the oldest measurement
+	if(req->dispatch_timestamp > performance_timestamps[performance_start])
+		found = 1;
+
 	if(found)
 		return i;
 	else

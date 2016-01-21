@@ -107,7 +107,7 @@ inline void print_request(struct request_t *req)
 	if(req->reqnb > 1)
 	{
 		debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
-		debug("\t\t\t\t\t(virtual request)");
+		debug("\t\t\t\t\t(virtual request size %d)", req->reqnb);
 		agios_list_for_each_entry(aux_req, &req->reqs_list, related)
 			debug("\t\t\t\t\t(%lu %lu %s - app %d %d)", aux_req->io_data.offset, aux_req->io_data.len, aux_req->file_id, ((struct req_id_t *)aux_req->data)->reqid, ((struct req_id_t *)aux_req->data)->threadid);
 				
@@ -170,7 +170,7 @@ void print_timeline(void)
 	debug("Requests:");
 	agios_list_for_each_entry(req, &timeline, related)
 	{
-		debug("\t%lu %lu (to file %s)", req->io_data.offset, req->io_data.len, req->file_id);
+		print_request(req);
 	}
 }
 
@@ -182,7 +182,7 @@ inline void put_this_request_in_timeline(struct request_t *req, unsigned long ha
 {
 	//remove from queue
 	agios_list_del(&req->related);
-	if(req->reqnb > 1)
+	if((req->reqnb > 1) && (current_scheduler->max_aggreg_size <= 1))
 	{
 		//this is a virtual request, we need to break it into parts
 		put_all_requests_in_timeline(&req->reqs_list, req_file, hash);
@@ -215,7 +215,7 @@ inline void put_req_in_hashtable(struct request_t *req)
 
 	hash = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES;
 	agios_list_del(&req->related);
-	if(req->reqnb > 1)
+	if((req->reqnb > 1) && (current_scheduler->max_aggreg_size <= 1))
 	{
 		put_all_requests_in_hashtable(&req->reqs_list);
 		agios_free(req);
@@ -564,6 +564,9 @@ struct request_t *start_aggregation(struct request_t *aggregation_head, struct a
 void include_in_aggregation(struct request_t *req, struct request_t **agg_req)
 {
 	struct agios_list_head *prev, *next;
+	struct request_t *aux_req, *tmp;
+	
+	PRINT_FUNCTION_NAME;
 	
 	if((*agg_req)->reqnb == 1) /*this is not a virtual request yet, we have to prepare it*/
 	{
@@ -802,7 +805,10 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 	if(previous_needs_hashtable)
 		hashtable_unlock(hash);
 	else
+	{
+		print_timeline();
 		timeline_unlock();
+	}
 	PRINT_FUNCTION_EXIT;	
 	return 0;		
 }

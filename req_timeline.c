@@ -104,7 +104,9 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 			return;  
 
 	}
-	debug("got the request_file_t structure");
+	debug("got the request_file_t structure for request");
+	print_request(req);
+
 	
 	//the time window scheduling algorithm separates requests into windows
 	if (current_alg == TIME_WINDOW_SCHEDULER) 
@@ -149,26 +151,30 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 		debug("searched for aggregation"); 
 	}
 
-	if((!req_file) || (current_alg == NOOP_SCHEDULER)) 
+	if(!aggregated)
 	{
-		if(!aggregated) //if not aggregated, possibly because this is the simple timeorder algorithm
-			agios_list_add_tail(&req->related, this_timeline); 
-	}
-	else //we are rebuilding this queue from the hashtable, so we need to make sure requests are ordered by time (and we are not using the time window algorithm, otherwise it would have called return already (see above)
-	{
-		insertion_place = this_timeline;
-		if(!agios_list_empty(this_timeline))
+		if((!given_req_file) || (current_alg == NOOP_SCHEDULER))  //if no request_file_t structure was given, this is a regular new request, so we add it to timeline (unless we are using NOOP which does not include requests in timeline)
 		{
-			agios_list_for_each_entry(tmp, this_timeline, related)
+			debug("request is not aggregated, inserting in the timeline");
+			agios_list_add_tail(&req->related, this_timeline); 
+		}
+		else //we are rebuilding this queue from the hashtable, so we need to make sure requests are ordered by time (and we are not using the time window algorithm, otherwise it would have called return already (see above)
+		{
+			debug("request not aggregated and we are reordering the timeline, so looking for its place");
+			insertion_place = this_timeline;
+			if(!agios_list_empty(this_timeline))
 			{
-				if(tmp->timestamp > req->timestamp)
+				agios_list_for_each_entry(tmp, this_timeline, related)
 				{
-					insertion_place = &(tmp->related);
-					break;	
+					if(tmp->timestamp > req->timestamp)
+					{
+						insertion_place = &(tmp->related);
+						break;	
+					}
 				}
 			}
+			agios_list_add(&req->related, insertion_place->prev);
 		}
-		agios_list_add(&req->related, insertion_place->prev);
 	}
 
 }
