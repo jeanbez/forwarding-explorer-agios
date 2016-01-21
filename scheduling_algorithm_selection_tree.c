@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "agios.h"
+#include "agios_request.h"
 #include "scheduling_algorithm_selection_tree.h"
 
 char * scheduling_algorithm_selection_tree (int operation, int fileno, double serra, short int seq, short int size)

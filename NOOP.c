@@ -44,6 +44,7 @@
 #include "iosched.h"
 #include "common_functions.h"
 #include "mylist.h"
+#include "agios_request.h"
 
 //we need to know which was the data structure used by the last scheduling algorithm so we know where to take requests from
 static short int previous_needs_hashtable=0;

@@ -24,6 +24,8 @@
 #ifndef _REQ_TIMELINE_H_
 #define _REQ_TIMELINE_H_
 
+#include "agios_request.h"
+
 /* to access the associated data structures*/
 extern struct agios_list_head timeline;
 struct agios_list_head *timeline_lock(void);

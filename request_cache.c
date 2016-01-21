@@ -25,6 +25,7 @@
 #include "common_functions.h"
 #include "NOOP.h"
 #include "performance.h"
+#include "agios_request.h"
 
 #ifdef AGIOS_KERNEL_MODULE
 /*

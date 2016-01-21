@@ -45,6 +45,8 @@
 #include "common_functions.h"
 #include "estimate_access_times.h"
 #include "iosched.h"
+#include "hash.h"
+#include "agios_request.h"
 
 int SRTF_check_queue(struct related_list_t *related_list, struct related_list_t *predicted_list, unsigned long int *min_size)
 {

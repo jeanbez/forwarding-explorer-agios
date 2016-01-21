@@ -27,6 +27,8 @@
 #ifndef PROC_H
 #define PROC_H
 
+#include "agios_request.h"
+
 void stats_aggregation(struct related_list_t *related);
 void stats_shift_phenomenon(struct related_list_t *related);
 void stats_better_aggregation(struct related_list_t *related);

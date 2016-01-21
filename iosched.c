@@ -50,6 +50,7 @@
 #include "consumer.h"
 #include "agios_config.h"
 #include "req_timeline.h"
+#include "agios_request.h"
 
 #include "TO.h"
 #include "MLF.h"

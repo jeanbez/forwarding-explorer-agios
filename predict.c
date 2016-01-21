@@ -22,6 +22,7 @@
  */
 //TODO Trace format, write, and read functions are *very* unneficient. It would be WAY BETTER to use a different format for traces and read them in larger chunks (like the trace module do for writing them, using a buffer). The prediction thread may sometimes be reading traces during the execution, and this could lead to it harming I/O performance. For now, I *do not* recommend using trace and prediction modules while evaluating AGIOS performance. 
 #include "agios.h"
+#include "agios_request.h"
 #ifndef AGIOS_KERNEL_MODULE 
 
 #include <stdio.h>

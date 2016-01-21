@@ -25,6 +25,8 @@
 #ifndef _REQ_HASHTABLE_H_
 #define _REQ_HASHTABLE_H_
 
+#include "agios_request.h"
+
 /*init and exit functions*/
 int hashtable_init(void);
 void hashtable_cleanup(void);

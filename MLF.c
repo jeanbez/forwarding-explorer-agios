@@ -44,6 +44,8 @@
 #include "req_hashtable.h"
 #include "estimate_access_times.h"
 #include "iosched.h"
+#include "hash.h"
+#include "agios_request.h"
 
 
 static int MLF_current_hash=0; 

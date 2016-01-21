@@ -34,6 +34,7 @@
 #include "performance.h"
 #include "common_functions.h"
 #include "agios_config.h"
+#include "agios_request.h"
 
 unsigned long int agios_processed_reqnb; //processed requests counter. I've decided not to protect it with a mutex although it is used by two threads. The library's user calls the release function, where this variable is modified. The scheduling thread reads it in the process_requests function. Since it is not critical to have the most recent value there, no mutex.
 

@@ -25,6 +25,7 @@
 #ifndef REQUEST_CACHE_H
 #define REQUEST_CACHE_H
 
+#include "mylist.h"
 
 struct request_t;
 struct request_file_t;

@@ -24,7 +24,7 @@ ${OBJS}:
 library_install: library
 	sudo rm -rf /usr/lib/libagios.so.1 /usr/lib/libagios.so
 	sudo cp ./libagios.so.1 /usr/lib
-	sudo cp ./agios.include.h /usr/include/agios.h
+	sudo cp agios.h /usr/include/agios.h
 	sudo chmod 0755 /usr/lib/libagios.so.1
 	sudo ln -s /usr/lib/libagios.so.1 /usr/lib/libagios.so
 	sudo ldconfig

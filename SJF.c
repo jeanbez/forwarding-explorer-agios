@@ -37,6 +37,7 @@
 
 
 #include "agios.h"
+#include "agios_request.h"
 #include "SJF.h"
 #include "request_cache.h"
 #include "consumer.h"
@@ -46,6 +47,7 @@
 #include "estimate_access_times.h"
 #include "iosched.h"
 #include "agios_config.h"
+#include "hash.h"
 
 inline int SJF_check_queue(struct related_list_t *related_list, unsigned long int min_size)
 {

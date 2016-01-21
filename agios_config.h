@@ -23,6 +23,9 @@
 
 #include "iosched.h"
 
+//if not provided a filename, we'll try to read from this one
+#define DEFAULT_CONFIGFILE	"/etc/agios.conf"
+
 inline short int read_configuration_file(char *config_file);
 
 //library options

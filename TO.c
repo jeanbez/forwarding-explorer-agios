@@ -43,6 +43,7 @@
 #include "consumer.h"
 #include "iosched.h"
 #include "common_functions.h"
+#include "agios_request.h"
 
 //simple timeorder: requests are processed in the order they were received (it is the same as the timeorder with aggregation, the only difference between them is in the add_request part
 void timeorder(void *clnt)

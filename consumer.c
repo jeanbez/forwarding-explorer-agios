@@ -37,6 +37,7 @@
 #include "req_timeline.h"
 #include "proc.h"
 #include "performance.h"
+#include "agios_request.h"
 
 #ifndef AGIOS_KERNEL_MODULE
 #include <pthread.h>

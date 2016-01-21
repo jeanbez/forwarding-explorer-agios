@@ -23,6 +23,7 @@
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 #include "agios.h"
+#include "agios_request.h"
 #include "proc.h"
 #include "mylist.h"
 #include "common_functions.h"
@@ -33,6 +34,7 @@
 #include "req_hashtable.h"
 #include "req_timeline.h"
 #include "performance.h"
+#include "hash.h"
 
 #ifdef AGIOS_KERNEL_MODULE
 #include <linux/string.h>

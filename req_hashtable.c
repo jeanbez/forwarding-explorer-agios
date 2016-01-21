@@ -22,6 +22,7 @@
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 #include "agios.h"
+#include "agios_request.h"
 #include "req_hashtable.h"
 #include "common_functions.h"
 #include "hash.h"

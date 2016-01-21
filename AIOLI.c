@@ -44,6 +44,8 @@
 #include "common_functions.h"
 #include "req_hashtable.h"
 #include "estimate_access_times.h"
+#include "hash.h"
+#include "agios_request.h"
 
 
 static unsigned int aioli_quantum; 

@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include "estimate_access_times.h"
 #include "agios.h"
+#include "agios_request.h"
 
 static int intervals=0;
 static unsigned long int **interval_sizes;

@@ -23,6 +23,7 @@
  */
 #include <stdlib.h>
 #include "agios.h"
+#include "agios_request.h"
 #include "req_timeline.h"
 #include "mylist.h"
 #include "common_functions.h"

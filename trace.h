@@ -19,6 +19,7 @@
  */
 #ifndef AGIOS_KERNEL_MODULE 
 #include "agios.h"
+#include "agios_request.h"
 #include "mylist.h"
 
 

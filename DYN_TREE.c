@@ -27,6 +27,7 @@
 #include "iosched.h"
 #include "predict.h"
 #include "common_functions.h"
+#include "agios_request.h"
 
 static int last_selected_algorithm=0;
 

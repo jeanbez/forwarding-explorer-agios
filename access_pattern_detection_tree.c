@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "agios.h"
+#include "agios_request.h"
 #include "access_pattern_detection_tree.h"
 
 //timediff must come im ms

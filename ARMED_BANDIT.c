@@ -2,6 +2,7 @@
 #include "iosched.h"
 #include "common_functions.h"
 #include "performance.h"
+#include "agios_request.h"
 
 static int scheduler_nb=0; //number of possible scheduling algorithms
 static int useful_sched_nb=0; //from the possible scheduling algorithms, how many can be dynamically selected (whe have to exclude the dynamic ones, the ones still being tested, etc)
