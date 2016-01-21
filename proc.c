@@ -71,7 +71,6 @@ static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER;
  ***********************************************************************************************************/
 static int *proc_algs; //the list of the last PROC_ALGS_SIZE selected scheduling algorithms
 static unsigned long int *proc_algs_timestamps; //the timestamps of the last PROC_ALGS_SIZE algorithms selections
-#define PROC_ALGS_SIZE 1000 //how many should we keep (we actually keep PROC_ALGS_SIZE - 1)
 static int proc_algs_start, proc_algs_end=0; //indexes to access the proc_algs list 
 
 inline void proc_set_new_algorithm(int alg)
@@ -82,12 +81,12 @@ inline void proc_set_new_algorithm(int alg)
 	proc_algs[proc_algs_end] = alg;
 	proc_algs_timestamps[proc_algs_end] = get_timespec2llu(now);
 	proc_algs_end++;
-	if(proc_algs_end >= PROC_ALGS_SIZE)
+	if(proc_algs_end >= config_agios_proc_algs)
 		proc_algs_end=0; //circular list
 	if(proc_algs_start == proc_algs_end)
 	{
 		proc_algs_start++; 	//we remove the oldest
-		if(proc_algs_start >= PROC_ALGS_SIZE)
+		if(proc_algs_start >= config_agios_proc_algs)
 			proc_algs_start = 0;
 	}
 }
@@ -386,7 +385,7 @@ void print_selected_algs(void)
 #endif
 			"%lu\t%s\n", proc_algs_timestamps[i], get_algorithm_name_from_index(proc_algs[i]));
 		i++;
-		if(i >= PROC_ALGS_SIZE)
+		if(i >= config_agios_proc_algs)
 			i =0;
 	}
 	print_something("\n");
@@ -644,7 +643,7 @@ void stats_show_ending(void)
 	unsigned long int global_avg_size;
 	double *bandwidth;
 	int i, len;
-	char *band_str = malloc(sizeof(char)*50*PERFORMANCE_VALUES);
+	char *band_str = malloc(sizeof(char)*50*config_agios_performance_values);
 
 	agios_mutex_lock(&global_statistics_mutex);
 
@@ -684,7 +683,7 @@ void stats_show_ending(void)
 		len = strlen(band_str);
 		sprintf(band_str+len, "%.2f\n", bandwidth[i]/1024.0);
 		i++;
-		if(i >= PERFORMANCE_VALUES)
+		if(i >= config_agios_performance_values)
 			i = 0;
 	}
 #ifndef AGIOS_KERNEL_MODULE
@@ -847,8 +846,8 @@ void agios_print_stats_file(char *filename)
 /*register proc entries (useful only to the kernel module implementation) and some other structures*/
 void proc_stats_init(void)
 {
-	proc_algs = agios_alloc(sizeof(int)*(PROC_ALGS_SIZE+1));
-	proc_algs_timestamps = agios_alloc(sizeof(unsigned long int)*(PROC_ALGS_SIZE+1));
+	proc_algs = agios_alloc(sizeof(int)*(config_agios_proc_algs+1));
+	proc_algs_timestamps = agios_alloc(sizeof(unsigned long int)*(config_agios_proc_algs+1));
 	proc_algs_start = proc_algs_end = 0;
 	
 #ifdef AGIOS_KERNEL_MODULE

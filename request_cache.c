@@ -448,6 +448,7 @@ void unlock_all_data_structures()
 /*
  * This function allocates memory and initializes related locks 
  */
+//returns 0 on success
 int request_cache_init(void)
 {
 	int ret=0;

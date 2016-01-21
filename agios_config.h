@@ -51,6 +51,10 @@ extern char *config_agios_access_times_file;
 extern int config_agios_min_ab_probability;
 extern long int config_agios_validity_window;
 extern int config_agios_performance_window;
+// 6. performance module
+extern int config_agios_performance_values;
+// 7. proc module (writing stats file)
+extern int config_agios_proc_algs;
 
 
 //user info

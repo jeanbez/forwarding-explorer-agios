@@ -56,6 +56,8 @@ int config_agios_starting_algorithm = SJF_SCHEDULER;
 int config_agios_min_ab_probability = 3;
 long int config_agios_validity_window = 360000000000L;
 int config_agios_performance_window = 10;
+int config_agios_performance_values = 5;
+int config_agios_proc_algs = 1000;
 
 inline void config_set_starting_algorithm(int value)
 {
@@ -173,6 +175,8 @@ inline short int read_configuration_file(char *config_file)
 	config_lookup_int(&agios_config, "library_options.validity_window", &ret);
 	config_agios_validity_window = ret*1000000L; //convert it to ns
 	config_lookup_int(&agios_config, "library_options.performance_window", &config_agios_performance_window);
+	config_lookup_int(&agios_config, "library_options.performance_values", &config_agios_performance_values);
+	config_lookup_int(&agios_config, "library_options.proc_algs", &config_agios_proc_algs);
 
 	/*2. user info*/
 	config_lookup_int(&agios_config, "user_info.stripe_size", &config_agios_stripe_size);

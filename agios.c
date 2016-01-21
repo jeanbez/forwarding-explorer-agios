@@ -30,6 +30,7 @@
 #include "proc.h"
 #include "agios_config.h"
 #include "estimate_access_times.h"
+#include "performance.h"
 
 #ifdef AGIOS_KERNEL_MODULE
 #include <linux/module.h>
@@ -81,6 +82,7 @@ int __init __agios_init(void)
 
 #endif
 
+//returns 0 on success
 int agios_init(struct client *clnt, char *config_file)
 {
 	int ret;
@@ -105,6 +107,9 @@ int agios_init(struct client *clnt, char *config_file)
 	register_static_io_schedulers();
 
 	if((ret = read_configuration_file(config_file)) != 0)
+		return ret;
+
+	if((ret = agios_performance_init()) != 0)
 		return ret;
 
 	//read the access times file

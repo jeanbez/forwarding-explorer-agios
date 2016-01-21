@@ -33,16 +33,17 @@
 #include "iosched.h"
 #include "performance.h"
 #include "common_functions.h"
+#include "agios_config.h"
 
 unsigned long int agios_processed_reqnb; //processed requests counter. I've decided not to protect it with a mutex although it is used by two threads. The library's user calls the release function, where this variable is modified. The scheduling thread reads it in the process_requests function. Since it is not critical to have the most recent value there, no mutex.
 
 /************************************************************************************************************
  * GLOBAL PERFORMANCE METRICS
  ************************************************************************************************************/
-static unsigned long long int performance_time[PERFORMANCE_VALUES]; 
-static unsigned long long int performance_size[PERFORMANCE_VALUES];
-static unsigned long int performance_timestamps[PERFORMANCE_VALUES];
-int performance_algs[PERFORMANCE_VALUES];
+static unsigned long long int *performance_time; 
+static unsigned long long int *performance_size;
+static unsigned long int *performance_timestamps;
+int *performance_algs;
 int performance_start, performance_end;
 static pthread_mutex_t performance_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -62,7 +63,7 @@ unsigned long long int agios_get_performance_size(void)
 	{
 		ret += performance_size[i];
 		i++;
-		if(i >= PERFORMANCE_VALUES)
+		if(i >= config_agios_performance_values)
 			i=0;
 	}
 	agios_mutex_unlock(&performance_mutex);
@@ -85,7 +86,7 @@ unsigned long long int agios_get_performance_time(void)
 	{
 		ret += performance_time[i];
 		i++;
-		if(i >= PERFORMANCE_VALUES)
+		if(i >= config_agios_performance_values)
 			i=0;
 	}
 	agios_mutex_unlock(&performance_mutex);
@@ -101,13 +102,13 @@ unsigned long long int agios_get_performance_time(void)
  */
 double * agios_get_performance_bandwidth() 
 {
-	double *ret = malloc(sizeof(double)*PERFORMANCE_VALUES);
+	double *ret = malloc(sizeof(double)*config_agios_performance_values);
 	long double tmp_time;
 	int i;
 
 	agios_mutex_lock(&performance_mutex);
 
-	for(i = 0; i< PERFORMANCE_VALUES; i++)
+	for(i = 0; i< config_agios_performance_values; i++)
 	{
 		ret[i] = 0.0;
 		
@@ -129,7 +130,7 @@ inline int agios_performance_get_latest_index()
 	int i;
 	i = performance_end-1;
 	if(i < 0)
-		i = PERFORMANCE_VALUES-1;
+		i = config_agios_performance_values-1;
 	return i;
 }
 /*
@@ -162,7 +163,7 @@ void agios_reset_performance_counters(void)
 {
 	int i;
 	agios_mutex_lock(&performance_mutex);
-	for(i=0; i< PERFORMANCE_VALUES; i++)
+	for(i=0; i< config_agios_performance_values; i++)
 	{
 		performance_time[i] = 0;
 		performance_size[i] = 0;
@@ -171,6 +172,42 @@ void agios_reset_performance_counters(void)
 	}
 	performance_start = performance_end = 0;
 	agios_mutex_unlock(&performance_mutex);
+}
+//returns 0 on success
+int agios_performance_init(void)
+{
+	performance_algs = (int *)malloc(sizeof(int)*config_agios_performance_values);
+	if(!performance_algs)
+	{
+		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
+		return -ENOMEM;
+	}
+	performance_time = (unsigned long long int *)malloc(sizeof(unsigned long long int)*config_agios_performance_values);
+	if(!performance_time)
+	{
+		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
+		agios_free(performance_algs);
+		return -ENOMEM;
+	}
+	performance_size = (unsigned long long int *)malloc(sizeof(unsigned long long int)*config_agios_performance_values);
+	if(!performance_size)
+	{
+		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
+		agios_free(performance_algs);
+		agios_free(performance_time);
+		return -ENOMEM;
+	}
+	performance_timestamps = (unsigned long int *)malloc(sizeof(unsigned long int)*config_agios_performance_values);
+	if(!performance_timestamps)
+	{
+		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
+		agios_free(performance_algs);
+		agios_free(performance_time);
+		agios_free(performance_size);
+		return -ENOMEM;
+	}
+	
+	return 0;
 }
 /*
  * the arrays used to store performance data are circular, with two indexes to represent where the current
@@ -181,12 +218,12 @@ void agios_reset_performance_counters(void)
 void increment_performance_index()
 {
 	performance_end++;
-	if(performance_end >= PERFORMANCE_VALUES)
+	if(performance_end >= config_agios_performance_values);
 		performance_end = 0;
 	if(performance_end == performance_start)
 	{
 		performance_start++;
-		if(performance_start >= PERFORMANCE_VALUES)
+		if(performance_start >= config_agios_performance_values)
 			performance_start = 0;
 	}
 	
@@ -231,7 +268,7 @@ int get_request_timestamp_index(struct request_t *req)
 		}
 		i--;
 		if(i < 0)
-			i = PERFORMANCE_VALUES-1;
+			i = config_agios_performance_values-1;
 	}
 	//we did not compare with the oldest measurement
 	if(req->dispatch_timestamp > performance_timestamps[performance_start])
@@ -259,7 +296,7 @@ void print_all_performance_data()
 		else
 			debug("%s - %llu bytes in %llu ns (timestamp %lu)", get_algorithm_name_from_index(performance_algs[i]), performance_size[i], performance_time[i], performance_timestamps[i]);
 		i++;
-		if(i == PERFORMANCE_VALUES)
+		if(i == config_agios_performance_values)
 			i = 0;
 	}
 }
