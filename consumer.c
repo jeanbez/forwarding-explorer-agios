@@ -189,8 +189,6 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 	PRINT_FUNCTION_NAME;
 	agios_gettime(&now);
 
-	debug("Processing this request:");
-	print_request(head_req);
 
 	if(config_trace_agios)
 		agios_trace_process_requests(head_req);

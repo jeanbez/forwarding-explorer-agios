@@ -32,7 +32,7 @@ void timeline_unlock(void);
 /* to include or remove requests*/
 void timeline_add_req(struct request_t *req, unsigned long hash, struct request_file_t *given_req_file);
 void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct request_file_t *given_req_file, struct agios_list_head *this_timeline);
-struct request_t *timeline_oldest_req(void);
+struct request_t *timeline_oldest_req(unsigned long *hash);
 
 /* timeline management functions*/
 void reorder_timeline();

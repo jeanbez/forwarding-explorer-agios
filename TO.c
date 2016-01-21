@@ -49,16 +49,17 @@ void timeorder(void *clnt)
 {
 	struct request_t *req;	
 	short int update_time = 0;
+	unsigned long hash;
 
 	PRINT_FUNCTION_NAME;
 	
 	while((current_reqnb > 0) && (update_time == 0))
 	{
 		timeline_lock();
-		req = timeline_oldest_req();
+		req = timeline_oldest_req(&hash);
 		if(req)
 		{
-			update_time = process_requests(req, (struct client *)clnt, -1); //we give -1 as the hash so the process_requests function will realize we are taking requests from the timeline, not from the hashtable	
+			update_time = process_requests(req, (struct client *)clnt, hash); //we give -1 as the hash so the process_requests function will realize we are taking requests from the timeline, not from the hashtable	
 			generic_post_process(req);
 		}
 		else

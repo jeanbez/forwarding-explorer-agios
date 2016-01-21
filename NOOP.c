@@ -86,6 +86,7 @@ void NOOP(void *clnt)
 	struct request_t *req;
 	short int update_time=0;
 	short int stop_processing=0;
+	unsigned long hash;
 
 //	PRINT_FUNCTION_NAME;
 	while(!stop_processing) //we give a change to new requests by locking and unlocking to every rquest
@@ -94,9 +95,9 @@ void NOOP(void *clnt)
 		stop_processing = agios_list_empty(list);
 		if(!stop_processing) 
 		{
-			req = timeline_oldest_req();
+			req = timeline_oldest_req(&hash);
 			debug("NOOP is processing leftover requests %s %lu %lu", req->file_id, req->io_data.offset, req->io_data.len);
-			update_time = process_requests(req, clnt, -1);
+			update_time = process_requests(req, clnt, hash);
 			generic_post_process(req);
 			if(update_time)
 			{

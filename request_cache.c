@@ -798,7 +798,6 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 			consumer_signal_new_reqs(); //if it is time to refresh something (change the scheduling algorithm or recalculate alpha), we wake up the scheduling thread
 	}
 
-	print_hashtable_line(hash);
 	//free the lock
 	if(previous_needs_hashtable)
 		hashtable_unlock(hash);

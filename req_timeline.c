@@ -220,7 +220,7 @@ void reorder_timeline()
  * Locking: 
  *	Must have timeline_mutex
  */
-struct request_t *timeline_oldest_req(void)
+struct request_t *timeline_oldest_req(unsigned long *hash)
 {
 	struct request_t *tmp;
 
@@ -232,6 +232,7 @@ struct request_t *timeline_oldest_req(void)
 
 	tmp = agios_list_entry(timeline.next, struct request_t, related);
 	agios_list_del(&tmp->related);
+	*hash = AGIOS_HASH_STR(tmp->file_id) % AGIOS_HASH_ENTRIES;
 
 	return tmp;
 }
