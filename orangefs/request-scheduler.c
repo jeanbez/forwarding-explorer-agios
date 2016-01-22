@@ -105,10 +105,10 @@ struct req_sched_element
     enum PINT_server_req_access_type access_type;
     int mode_change; /* specifies that the element is a mode change */
     enum PVFS_server_mode mode; /* the mode to change to */
-	long long offset;
-	long long real_offset;
-	long len;
-	int type;
+    long long offset;
+    long long real_offset;
+    long len;
+    int type;
 };
 
 

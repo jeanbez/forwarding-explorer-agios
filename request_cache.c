@@ -274,9 +274,9 @@ void request_cache_free(struct request_t *req)
  * to values passed as arguments.
  */
 #ifdef ORANGEFS_AGIOS
-struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, unsigned long int arrival_time, short int state)
+struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, unsigned long int arrival_time, short int state, unsigned int app_id)
 #else
-struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, unsigned long int arrival_time, short int state) 
+struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, unsigned long int arrival_time, short int state, unsigned int app_id) 
 #endif
 
 {
@@ -294,6 +294,7 @@ struct request_t * request_constructor(char *file_id, short int type, unsigned l
 	}
 	strcpy(new->file_id, file_id);
 
+	new->tw_app_id = app_id;
 	new->type = type;
 	new->data = data;
 	new->io_data.offset = offset;
@@ -541,7 +542,7 @@ struct request_t *start_aggregation(struct request_t *aggregation_head, struct a
 	struct request_t *newreq;	
 
 	/*creates a new request to be the aggregation head*/
-	newreq = request_constructor(aggregation_head->file_id, aggregation_head->type, aggregation_head->io_data.offset, aggregation_head->io_data.len, 0, aggregation_head->jiffies_64, RS_HASHTABLE);
+	newreq = request_constructor(aggregation_head->file_id, aggregation_head->type, aggregation_head->io_data.offset, aggregation_head->io_data.len, 0, aggregation_head->jiffies_64, RS_HASHTABLE, aggregation_head->tw_app_id);
 	newreq->sched_factor = aggregation_head->sched_factor;
 	newreq->timestamp = aggregation_head->timestamp;
 
@@ -723,9 +724,9 @@ struct request_file_t *find_req_file(struct agios_list_head *hash_list, char *fi
 }
 
 #ifdef ORANGEFS_AGIOS
-int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, struct client *clnt)
+int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, struct client *clnt, unsigned int app_id)
 #else
-int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, struct client *clnt) //TODO we will need app_id for time_window as well
+int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, struct client *clnt, unsigned int app_id) 
 #endif
 {
 	struct request_t *req;
@@ -737,7 +738,7 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 
 	//build request_t structure and fill it for the new request
 	agios_gettime(&(arrival_time));  	
-	req = request_constructor(file_id, type, offset, len, data, get_timespec2llu(arrival_time), RS_HASHTABLE);
+	req = request_constructor(file_id, type, offset, len, data, get_timespec2llu(arrival_time), RS_HASHTABLE, app_id);
 	
 	if(!req)
 		return -ENOMEM;

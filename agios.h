@@ -86,10 +86,10 @@ void agios_exit(void);
 
 #ifdef ORANGEFS_AGIOS
 int agios_add_request(char *file_id, short int type, unsigned long int offset,
-		       unsigned long int len, int64_t data, struct client *clnt);
+		       unsigned long int len, int64_t data, struct client *clnt, unsigned int app_id);
 #else
 int agios_add_request(char *file_id, short int type, unsigned long int offset,
-		       unsigned long int len, void * data, struct client *clnt);
+		       unsigned long int len, void * data, struct client *clnt, unsigned int app_id);
 #endif
 int agios_release_request(char *file_id, short int type, unsigned long int len, unsigned long int offset);
 

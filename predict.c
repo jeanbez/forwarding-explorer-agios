@@ -182,7 +182,7 @@ int get_current_predicted_reqfilenb()
 /*build a new request structure and initialize some fields*/
 inline struct request_t *predicted_request_constructor(char *file_id, int type, long long offset, long len, unsigned long long int predicted_time)
 {
-	struct request_t *new = request_constructor(file_id, type, offset, len, 0, predicted_time, RS_PREDICTED);
+	struct request_t *new = request_constructor(file_id, type, offset, len, 0, predicted_time, RS_PREDICTED, 0);
 	
 	new->predicted_aggregation_size = 1;
 	new->predicted_aggregation_start = NULL;

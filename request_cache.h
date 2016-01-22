@@ -46,9 +46,9 @@ void lock_all_data_structures();
 void unlock_all_data_structures();
 void request_cache_free(struct request_t *req);
 #ifdef ORANGEFS_AGIOS
-struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, unsigned long int arrival_time, short int state);
+struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, unsigned long int arrival_time, short int state, unsigned int app_id);
 #else
-struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, unsigned long int arrival_time, short int state); 
+struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, unsigned long int arrival_time, short int state, unsigned int app_id); 
 #endif
 struct request_file_t * request_file_constructor(char *file_id);
 void migrate_from_hashtable_to_timeline();
