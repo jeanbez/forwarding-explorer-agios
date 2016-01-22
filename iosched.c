@@ -576,3 +576,14 @@ char * get_algorithm_name_from_index(int index)
 	}
 	return ret;
 }
+void enable_TW(void)
+{
+	struct io_scheduler_instance_t *tw_sched;
+
+	tw_sched = find_io_scheduler(TIME_WINDOW_SCHEDULER);
+	if(!tw_sched)
+	{
+		fprintf(stderr, "PANIC! Could not find TW scheduler structure\n");
+	}
+	tw_sched->can_be_dynamically_selected=1;
+}

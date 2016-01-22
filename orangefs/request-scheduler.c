@@ -795,8 +795,8 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 			last_stripe_size = stripe_size;
 
 		//if this is the first request to this file, update AGIOS' stripe size
-		if(first_req_file)
-			agios_set_stripe_size(file_fn, stripe_size);
+		if(first_file_req)
+			agios_set_stripe_size(agios_fn, stripe_size);
 
 		//get the offset in the local file (offset from the request is about the global view of the file)
 		tmp_element->offset = offset;
@@ -1061,7 +1061,7 @@ int PINT_req_sched_release(
     struct req_sched_element *tmp_element = NULL;
     struct req_sched_list *tmp_list = NULL;
     struct req_sched_element *next_element = NULL;
-    enum PVFS_server_op op;
+    //enum PVFS_server_op op;
 
 //	fprintf(stderr, "PINT_req_sched_release start\n");
 
@@ -1080,7 +1080,7 @@ int PINT_req_sched_release(
 
     /* retrieve the element directly from the id */
     tmp_element = id_gen_fast_lookup(in_completed_id);
-	op = tmp_element->op;
+//	op = tmp_element->op;
 //	fprintf(stderr, "PINT_req_sched_release op = %d, id= %d\n", op, tmp_element->id);
 
 
@@ -1093,7 +1093,7 @@ int PINT_req_sched_release(
 		sprintf(agios_fn, "%llu", llu(tmp_element->handle));
 
 		/*release request*/
-		agios_release_request(agios_fn, tmp_element->type, tmp_element->len);
+		agios_release_request(agios_fn, tmp_element->type, tmp_element->len, tmp_element->real_offset);
 	}
 
     /* remove it from its handle queue */

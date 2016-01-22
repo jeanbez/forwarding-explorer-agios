@@ -177,6 +177,9 @@ inline short int read_configuration_file(char *config_file)
 	config_lookup_int(&agios_config, "library_options.performance_window", &config_agios_performance_window);
 	config_lookup_int(&agios_config, "library_options.performance_values", &config_agios_performance_values);
 	config_lookup_int(&agios_config, "library_options.proc_algs", &config_agios_proc_algs);
+	config_lookup_bool(&agios_config, "library_options.enable_TW", &ret);
+	if(ret)
+		enable_TW();
 
 	/*2. user info*/
 	config_lookup_int(&agios_config, "user_info.stripe_size", &config_agios_stripe_size);
