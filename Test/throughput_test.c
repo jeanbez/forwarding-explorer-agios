@@ -91,6 +91,15 @@ void *test_thr(void *arg)
 	struct timespec timeout;
 	struct req_id_t *req_id;
 	int threadid = (int)pthread_self();
+	int appid = threadid;
+	if (appid < 0)
+		appid = -appid;
+	if(appid >= 32768)
+	{
+		appid = appid % 32768;
+		printf("thread %d has appid %d\n", threadid, appid);
+	}
+		
 
 	printf("Thread %d starting its execution\n", threadid);
 
@@ -106,7 +115,7 @@ void *test_thr(void *arg)
 		req_id->reqid = i;
 		req_id->threadid = threadid;
 		/*generate a request*/
-		agios_add_request(filename, REQ_TYPE, offset, req_size, (void *) req_id, &clnt);
+		agios_add_request(filename, REQ_TYPE, offset, req_size, (void *) req_id, &clnt, threadid);
 		offset += req_size;
 		 
 		/*wait a while before generating the next one*/
