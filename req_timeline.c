@@ -108,7 +108,7 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 
 	
 	//the time window scheduling algorithm separates requests into windows
-	if (current_alg == TIME_WINDOW_SCHEDULER) 
+	if (current_alg == config_tw_size) 
 	{
 		// Calculate the request priority
 		tw_priority = req->jiffies_64 / TIME_WINDOW_SIZE * 32768 + req->tw_app_id; //32768 here is the maximum value app_id can assume  //TODO make sure this is exactly like presented in the paper

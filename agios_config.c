@@ -62,6 +62,7 @@ int config_agios_proc_algs = 1000;
 int config_waiting_time = 900000;
 int config_aioli_quantum = 8192;
 int config_mlf_quantum = 8192;
+int config_tw_size = 1000;
 
 inline void config_set_waiting_time(int value)
 {
@@ -202,6 +203,7 @@ inline short int read_configuration_file(char *config_file)
 	config_lookup_bool(&agios_config, "library_options.enable_TW", &ret);
 	if(ret)
 		enable_TW();
+	config_lookup_int(&agios_config, "library_options.time_window_size", &config_tw_size);
 
 	/*2. user info*/
 	config_lookup_int(&agios_config, "user_info.stripe_size", &config_agios_stripe_size);
