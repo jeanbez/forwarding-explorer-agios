@@ -253,7 +253,6 @@ void timeline_add_req(struct request_t *req)
 			}
 		}  
 	}
-
 	if(!aggregated) //if not aggregated, add it
 		agios_list_add_tail(&req->related, &timeline); //we use the related list structure so we can reuse several (like include_in_aggregation) functions from the hashtable implementation
 
