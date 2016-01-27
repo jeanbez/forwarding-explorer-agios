@@ -46,6 +46,7 @@
 #include "iosched.h"
 #include "hash.h"
 #include "agios_request.h"
+#include "agios_config.h"
 
 
 static int MLF_current_hash=0; 
@@ -90,7 +91,7 @@ struct request_t *applyMLFonlist(struct related_list_t *reqlist)
 		if(!found)
 		{
 			/*see if the request's quantum is large enough to allow its execution*/
-			if((req->sched_factor*MLF_QUANTUM) >= req->io_data.len)
+			if((req->sched_factor*config_mlf_quantum) >= req->io_data.len)
 			{
 				selectedreq = req; 
 				found = 1; /*we select the first possible request because we want to process them by offset order, and the list is ordered by offset. However, we do not stop the for loop here because we still have to increment the sched_factor of all requests (which is equivalent to increase their quanta)*/

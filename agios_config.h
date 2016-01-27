@@ -51,6 +51,7 @@ inline void config_set_starting_algorithm(int value);
 extern int config_waiting_time;
 extern int config_aioli_quantum;
 extern int config_mlf_quantum;
+extern int config_tw_size;
 // 4. access times estimation
 extern char *config_agios_access_times_file;
 // 5. ARMED BANDIT

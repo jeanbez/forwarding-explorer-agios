@@ -31,6 +31,7 @@
 #include "iosched.h"
 #include "req_hashtable.h"
 #include "hash.h"
+#include "agios_config.h"
 
 
 AGIOS_LIST_HEAD(timeline); //a linked list of requests
@@ -111,7 +112,7 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 	if (current_alg == config_tw_size) 
 	{
 		// Calculate the request priority
-		tw_priority = req->jiffies_64 / TIME_WINDOW_SIZE * 32768 + req->tw_app_id; //32768 here is the maximum value app_id can assume  //TODO make sure this is exactly like presented in the paper
+		tw_priority = req->jiffies_64 / config_tw_size * 32768 + req->tw_app_id; //32768 here is the maximum value app_id can assume  //TODO make sure this is exactly like presented in the paper
 
 		// Find the position to insert the request
 		agios_list_for_each_entry(tmp, this_timeline, related)

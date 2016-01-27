@@ -23,11 +23,6 @@
 #ifndef AGIOS_H
 #define AGIOS_H
 
-//scheduling algorithm options 
-#define ANTICIPATORY_VALUE(qt,op) (2*get_access_time(qt,op)) /*the initial quantum given to the requests (usually twice the necessary time to process a request of size MLF_QUANTUM)*/
-#define MAX_AGGREG_SIZE   16
-#define MAX_AGGREG_SIZE_MLF   200
-
 #ifdef AGIOS_KERNEL_MODULE
 #include <linux/completion.h>
 #else
