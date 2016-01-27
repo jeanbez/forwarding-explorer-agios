@@ -23,6 +23,8 @@
 #ifndef _PREDICT_H_
 #define _PREDICT_H_
 
+#include "agios_request.h"
+
 int prediction_module_init(int file_counter);
 void predict_init_wait(void);
 unsigned long long int get_predict_init_time(void);

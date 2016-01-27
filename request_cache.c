@@ -1,25 +1,3 @@
-/* File:	request_cache.c
- * Created: 	2012 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It provides and handles the data structures to store files' and requests' 
- *		information.
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- */
 
 #ifndef AGIOS_KERNEL_MODULE
 #include <pthread.h> 
@@ -40,9 +18,14 @@
 #include "trace.h"
 #include "agios_config.h"
 
-#include "common_functions.h"
+#include "req_hashtable.h"
+#include "req_timeline.h"
+#include "consumer.h"
 
-extern struct consumer_t consumer;
+#include "common_functions.h"
+#include "NOOP.h"
+#include "performance.h"
+#include "agios_request.h"
 
 #ifdef AGIOS_KERNEL_MODULE
 /*
@@ -54,54 +37,17 @@ struct kmem_cache *request_cachep;
 struct kmem_cache *request_file_cachep;
 #endif
 
-/*
- * Time line
- * It contains all requests, the same as hash table but sorted by arrival time.
- */
-static AGIOS_LIST_HEAD(timeline);
-static AGIOS_LIST_HEAD(timeline_files);
-#ifdef AGIOS_KERNEL_MODULE
-static DEFINE_MUTEX(timeline_mutex);
-#else
-static pthread_mutex_t timeline_mutex = PTHREAD_MUTEX_INITIALIZER;
-#endif
+static short int scheduler_needs_hashtable=-1; //local copy of a configuration file parameter. I've had to declare it here because it is used in the counter functions
 
-/*
- * Hash table
- * Beacause we need to quickly find a place to store request for particular
- * file and/or find related requests, we use hash table that uses
- * request_t.file_id as value for hash function.
- */
-static struct agios_list_head *hashlist;
-static int *hashlist_reqcounter = NULL;
-#ifdef AGIOS_KERNEL_MODULE
-static struct mutex *hashlist_locks;
-#else
-static pthread_mutex_t *hashlist_locks;
-#endif
+/**********************************************************************************************************************/
+/*	COUNTERS	*/
+/**********************************************************************************************************************/
+int current_reqnb; //request counter
+int current_reqfilenb; //files being accessed counter
+pthread_mutex_t current_reqnb_lock = PTHREAD_MUTEX_INITIALIZER; //lock to protect these counters
 
-static int current_reqnb;
-static int current_reqfilenb;
-static pthread_mutex_t current_reqnb_lock = PTHREAD_MUTEX_INITIALIZER;
-
-static unsigned long long int last_timestamp=0;
-
-static int max_aggregation_size;
-static short int scheduler_needs_hashtable=1;
-
-inline void set_max_aggregation_size(int value)
-{
-	max_aggregation_size = value;
-}
-inline short int get_needs_hashtable()
-{
-	return scheduler_needs_hashtable;
-}
-
-inline void set_needs_hashtable(short int value)
-{
-	scheduler_needs_hashtable = value;
-}
+//we increase this number at every new request, just so each one of them has an unique identifier
+static unsigned int last_timestamp=0; 
 
 inline int get_current_reqnb()
 {
@@ -111,27 +57,6 @@ inline int get_current_reqnb()
 	pthread_mutex_unlock(&current_reqnb_lock);
 	return ret;
 }
-inline int get_current_reqfilenb()
-{
-	int ret;
-	pthread_mutex_lock(&current_reqnb_lock);
-	ret = current_reqfilenb;
-	pthread_mutex_unlock(&current_reqnb_lock);
-	return ret;
-}
-inline void set_current_reqnb(int value)
-{
-	pthread_mutex_lock(&current_reqnb_lock);
-	current_reqnb = value;
-	pthread_mutex_unlock(&current_reqnb_lock);
-}
-inline void set_current_reqfilenb(int value)
-{
-	pthread_mutex_lock(&current_reqnb_lock);
-	current_reqfilenb = value;
-	pthread_mutex_unlock(&current_reqnb_lock);
-}
-
 inline void inc_current_reqnb()
 {
 	pthread_mutex_lock(&current_reqnb_lock);
@@ -143,20 +68,17 @@ inline void dec_current_reqnb(int hash)
 {
 	pthread_mutex_lock(&current_reqnb_lock);
 	current_reqnb--;
+	hashlist_reqcounter[hash]--;
 	pthread_mutex_unlock(&current_reqnb_lock);
-	if(scheduler_needs_hashtable)
-		hashlist_reqcounter[hash]--;
 }
 /*must hold mutex to the hashtable line*/
 inline void dec_many_current_reqnb(int hash, int value)
 {
 	pthread_mutex_lock(&current_reqnb_lock);
 	current_reqnb-= value;
+	hashlist_reqcounter[hash]-= value;
 	pthread_mutex_unlock(&current_reqnb_lock);
-	if(scheduler_needs_hashtable)
-		hashlist_reqcounter[hash]-=value;
 }
-
 inline void inc_current_reqfilenb()
 {
 	pthread_mutex_lock(&current_reqnb_lock);
@@ -169,156 +91,173 @@ inline void dec_current_reqfilenb()
 	current_reqfilenb--;
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
-/*must hold the hashtable line mutex*/
-inline int get_hashlist_reqcounter(int hash)
+
+
+inline void print_request(struct request_t *req)
 {
-	return hashlist_reqcounter[hash];
-}
+	struct request_t *aux_req;
 
-inline void include_in_aggregation(struct request_t *req, struct request_t **agg_req);
-/*
- * Adds @req to the end of timeline list.
- *
- * Locking: 
- *	Must NOT have timeline_mutex
- */
-void timeline_add_req(struct request_t *req)
-{
-	struct request_file_t *req_file;
-	struct request_t *tmp;
-	int aggregated=0;
-	int tw_priority;
-
-	PRINT_FUNCTION_NAME;
-	VERIFY_REQUEST(req);
-	
-	agios_mutex_lock(&timeline_mutex);
-
-	/*find the file and update its informations if needed*/
-	req_file = find_req_file(&timeline_files, req->file_id, req->state); //its the same function that adds a file to the hashtable. What happens is that a hashtable entry is actually a list of files (ordered by file name), just like timeline_files
-	if(req_file->first_request_time == 0)
-		req_file->first_request_time = req->jiffies_64;
-	if(req->type == RT_READ)
-		req->globalinfo = &req_file->related_reads;
-	else
-		req->globalinfo = &req_file->related_writes;
-	req_file->timeline_reqnb++;
-	
-	/*get timestamp*/
-	if (agios_list_empty(&timeline)) {
-		req->timestamp = 0;
-	} else {
-		req->timestamp = ((struct request_t *)agios_list_entry(timeline.prev,
-							struct request_t,
-							related))->timestamp + 1;
-	}	
-
-	if (get_selected_alg() == TIME_WINDOW_SCHEDULER) 
+	if(req->reqnb > 1)
 	{
-		// Calculate the request priority
-		tw_priority = req->timestamp / TIME_WINDOW_SIZE * 32768 + req->tw_app_id;
-
-		// Find the position to insert the request
-		agios_list_for_each_entry(tmp, &timeline, related)
-		{
-			if (tmp->tw_priority > tw_priority) {
-				agios_list_add(&req->related, &tmp->related);
+		debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
+		debug("\t\t\t\t\t(virtual request size %d)", req->reqnb);
+		agios_list_for_each_entry(aux_req, &req->reqs_list, related)
+			debug("\t\t\t\t\t(%lu %lu %s)", aux_req->io_data.offset, aux_req->io_data.len, aux_req->file_id);
 				
-				return;
-			}
-		}
-
-		// If it was not inserted, insert the request in the proper position
-		agios_list_add_tail(&req->related, &timeline);
-
-		return;
-	} 
-
-	/*try to aggregate it*/
-	if(get_selected_alg() != SIMPLE_TIMEORDER_SCHEDULER && get_selected_alg() != TIME_WINDOW_SCHEDULER)
-	{	
-		agios_list_for_each_entry(tmp, &timeline, related)
-		{
-			if(tmp->globalinfo == req->globalinfo) //same type and to the same file
-			{
-				if(tmp->reqnb < max_aggregation_size) 
-				{
-					if(CHECK_AGGREGATE(req,tmp) || CHECK_AGGREGATE(tmp, req)) //contiguous
-					{
-						include_in_aggregation(req, &tmp);
-						aggregated=1;
-						break;	
-					}
-				} 
-			}
-		}  
 	}
-	if(!aggregated) //if not aggregated, add it
-		agios_list_add_tail(&req->related, &timeline); //we use the related list structure so we can reuse several (like include_in_aggregation) functions from the hashtable implementation
-
+	else
+		debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
 }
 
-/*
- * Returns the oldest request and REMOVES it from timeline list.
- *
- * Returns:
- *	oldest request or NULL
- *
- * Locking: 
- *	Must have timeline_mutex
- */
-struct request_t *timeline_oldest_req(void)
+inline void print_hashtable_line(int i)
 {
-	struct request_t *tmp;
-
-	//PRINT_FUNCTION_NAME;
+	struct agios_list_head *hash_list;
+	struct request_file_t *req_file;
+	struct request_t *req;
 	
-	if (agios_list_empty(&timeline)) {
-		return 0;
+	hash_list = &hashlist[i];
+	if(!agios_list_empty(hash_list))
+		debug("[%d]", i);
+	agios_list_for_each_entry(req_file, hash_list, hashlist)
+	{	
+		debug("\t%s", req_file->file_id);
+		if(!(agios_list_empty(&req_file->related_reads.list) && agios_list_empty(&req_file->related_reads.dispatch)))
+		{
+			debug("\t\tread");
+			agios_list_for_each_entry(req, &req_file->related_reads.list, related)
+				print_request(req);
+			debug("\t\tdispatch read");
+			agios_list_for_each_entry(req, &req_file->related_reads.dispatch, related)
+				print_request(req);
+		}
+		if(!(agios_list_empty(&req_file->related_writes.list) && agios_list_empty(&req_file->related_writes.dispatch)))
+		{
+			debug("\t\twrite");
+			agios_list_for_each_entry(req, &req_file->related_writes.list, related)
+				print_request(req);
+			debug("\t\tdispatch writes");
+			agios_list_for_each_entry(req, &req_file->related_writes.dispatch, related)
+				print_request(req);
+
+		}
 	}
 
-	tmp = agios_list_entry(timeline.next, struct request_t, related);
-	agios_list_del(&tmp->related);
-	tmp->globalinfo->req_file->timeline_reqnb--;
+}
 
-	return tmp;
+//debug functions, clean after
+void print_hashtable(void)
+{
+	int i;
+
+	debug("Current hashtable status:");
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //go through the whole hashtable, one position at a time
+	{
+		print_hashtable_line(i);
+	}
+}
+void print_timeline(void)
+{
+	struct request_t *req;
+
+	debug("Current timeline status:");
+	debug("Requests:");
+	agios_list_for_each_entry(req, &timeline, related)
+	{
+		print_request(req);
+	}
+}
+
+/**********************************************************************************************************************/
+/*	FUNCTIONS TO CHANGE THE CURRENT DATA STRUCTURE BETWEEN HASHTABLE AND TIMELINE	*/
+/**********************************************************************************************************************/
+void put_all_requests_in_timeline(struct agios_list_head *related_list, struct request_file_t *req_file, unsigned long hash);
+inline void put_this_request_in_timeline(struct request_t *req, unsigned long hash, struct request_file_t *req_file)
+{
+	//remove from queue
+	agios_list_del(&req->related);
+	if((req->reqnb > 1) && (current_scheduler->max_aggreg_size <= 1))
+	{
+		//this is a virtual request, we need to break it into parts
+		put_all_requests_in_timeline(&req->reqs_list, req_file, hash);
+		agios_free(req);
+	}
+	else
+		//put in timeline
+		timeline_add_req(req, hash, req_file);
+	
+
+}
+//take all requests from a list and place them in the timeline
+void put_all_requests_in_timeline(struct agios_list_head *related_list, struct request_file_t *req_file, unsigned long hash)
+{
+	struct request_t *req, *aux_req=NULL;
+	
+	agios_list_for_each_entry(req, related_list, related)
+	{
+		if(aux_req)
+			put_this_request_in_timeline(aux_req, hash, req_file);
+		aux_req = req;
+	}
+	if(aux_req)
+		put_this_request_in_timeline(aux_req, hash, req_file);
+}
+void put_all_requests_in_hashtable(struct agios_list_head *list);
+inline void put_req_in_hashtable(struct request_t *req)
+{
+	unsigned long hash;
+
+	hash = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES;
+	agios_list_del(&req->related);
+	if((req->reqnb > 1) && (current_scheduler->max_aggreg_size <= 1))
+	{
+		put_all_requests_in_hashtable(&req->reqs_list);
+		agios_free(req);
+	}
+	else
+		hashtable_add_req(req, hash, req->globalinfo->req_file);
+}
+void put_all_requests_in_hashtable(struct agios_list_head *list)
+{
+	struct request_t *req, *aux_req=NULL;
+
+	agios_list_for_each_entry(req, list, related)
+	{
+		if(aux_req)
+			put_req_in_hashtable(aux_req);	
+		aux_req = req;
+	}
+	if(aux_req)
+		put_req_in_hashtable(aux_req);	
+}
+//gets all requests from hashtable and move them to the timeline. 
+//No need to hold mutexes, but NO OTHER THREAD may be using any of these data structures.
+void migrate_from_hashtable_to_timeline()
+{	
+	int i;
+	struct agios_list_head *hash_list;
+	struct request_file_t *req_file;
+
+	//we will mess with the data structures and don't even use locks, since here we are certain no one else is messing with them
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //go through the whole hashtable, one position at a time
+	{
+		hash_list = &hashlist[i];
+		agios_list_for_each_entry(req_file, hash_list, hashlist)
+		{	
+			//get all requests from it and put them in the timeline
+			put_all_requests_in_timeline(&req_file->related_writes.list, req_file, i);
+			put_all_requests_in_timeline(&req_file->related_reads.list, req_file, i);
+		}
+	}
+}
+//gets al requests from timeline and move them to the hashtable. Also move all request_file_t structures to the hashtable to we keep statistics. No need to hold mutexes, but NO OTHER THREAD may be using any of these data structures
+void migrate_from_timeline_to_hashtable()
+{
+	put_all_requests_in_hashtable(&timeline);
 }
 
 
 /*
- * Function locks timeline.
- * Used by I/O scheduler before iterating the list.
- *
- * Locking:
- *	Must NOT be holding timeline_mutex.
- *	Must call timeline_unlock later.
- */ 
-inline struct agios_list_head *timeline_lock(void)
-{
-	agios_mutex_lock(&timeline_mutex);
-	return &timeline;
-}
-
-/*
- * Function unlocks timeline.
- * Used by I/O scheduler after iterating through the list.
- *
- * Locking:
- *	Must be holding timeline_mutex.
- */ 
-inline void timeline_unlock(void)
-{
-	agios_mutex_unlock(&timeline_mutex);
-}
-
-//must have timeline_mutex
-inline struct agios_list_head *get_timeline_files(void)
-{
-	return &timeline_files;
-}
-
-/*
- * Frees @req by returning it to slab cache.
+ * Frees @req
  */
 void request_cache_free(struct request_t *req)
 {
@@ -335,9 +274,9 @@ void request_cache_free(struct request_t *req)
  * to values passed as arguments.
  */
 #ifdef ORANGEFS_AGIOS
-struct request_t * request_constructor(char *file_id, int type, long long offset, long len, int64_t data, unsigned long long int arrival_time, int state)
+struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, unsigned long int arrival_time, short int state, unsigned int app_id)
 #else
-struct request_t * request_constructor(char *file_id, int type, long long offset, long len, int data, unsigned long long int arrival_time, int state) 
+struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, unsigned long int arrival_time, short int state, unsigned int app_id) 
 #endif
 
 {
@@ -355,6 +294,7 @@ struct request_t * request_constructor(char *file_id, int type, long long offset
 	}
 	strcpy(new->file_id, file_id);
 
+	new->tw_app_id = app_id;
 	new->type = type;
 	new->data = data;
 	new->io_data.offset = offset;
@@ -365,6 +305,9 @@ struct request_t * request_constructor(char *file_id, int type, long long offset
 	new->reqnb = 1;
 	init_agios_list_head(&new->reqs_list);
 	new->agg_head=NULL;
+	last_timestamp++;
+	new->timestamp = last_timestamp;
+	init_agios_list_head(&new->related);
 
 	new->mirror = NULL ;
 	new->already_waited=0;
@@ -376,37 +319,63 @@ struct request_t * request_constructor(char *file_id, int type, long long offset
 	return new;
 }
 
+//to each file, we will have related_list structures for read and write queues (and sometimes for predicted queues as well)
+//even when requests are kept in timeline (not in these queues), we still have the structures to keep track of statistics
+void request_file_init_related_statistics(struct related_list_statistics_t *stats)
+{
+	stats->processedreq_nb=0;
+	stats->receivedreq_nb=0;
+
+	stats->processed_req_size=0;
+	stats->processed_req_time=0;
+
+	stats->total_req_size = 0;
+	stats->min_req_size = ~0;
+	stats->max_req_size=0;
+
+	stats->max_request_time = 0;
+	stats->total_request_time = 0;
+	stats->min_request_time = ~0;
+
+	stats->avg_distance = -1;
+	stats->avg_distance_count = 1;
+
+	stats->aggs_no = 0;
+	stats->sum_of_agg_reqs = 0;
+}
+//this function initializes a related_list structure
 void request_file_init_related_list(struct related_list_t *related_list, struct request_file_t *req_file)
 {
 	init_agios_list_head(&related_list->list);
+	init_agios_list_head(&related_list->dispatch);
+	related_list->req_file = req_file;
 
 	related_list->laststartoff = 0;
 	related_list->lastfinaloff = 0;
-	related_list->used_quantum_rate=100;
 	related_list->predictedoff = 0;
-	related_list->lastaggregation = 0;
-	related_list->proceedreq_nb = 0;
+
 	related_list->nextquantum = 0;
+
 	related_list->current_size = 0;
-	related_list->req_file = req_file;
-	related_list->avg_distance = -1;
-	related_list->avg_distance_count = 1;
-	related_list->avg_stripe_difference=-1;
+
+	related_list->lastaggregation = 0;
+	related_list->best_agg = 0;
+
+	related_list->last_received_finaloffset = 0;
+
+#ifndef ORANGEFS_AGIOS
+	related_list->avg_stripe_difference= -1;
+#endif
+
 	related_list->spatiality = -1;
 	related_list->app_request_size = -1;
 
-	related_list->stats.aggs_no = 0;
-	related_list->stats.sum_of_agg_reqs = 0;
-	related_list->stats.biggest = 0;
-	related_list->stats.shift_phenomena = 0;
-	related_list->stats.better_aggregation = 0;
-	related_list->stats.predicted_better_aggregation = 0;
-	related_list->stats.total_req_size = 0;
-	related_list->stats.min_req_size = ~0;
-	related_list->stats.max_req_size = 0;
-	related_list->stats.max_request_time = 0;
-	related_list->stats.total_request_time = 0;
-	related_list->stats.min_request_time = ~0;
+	related_list->shift_phenomena = 0;
+	related_list->better_aggregation = 0;
+	related_list->predicted_better_aggregation = 0;
+
+	request_file_init_related_statistics(&related_list->stats_file);
+	request_file_init_related_statistics(&related_list->stats_window);
 }
 /*
  * Function sets fields of struct request_file_t @req_file to default values.
@@ -422,6 +391,8 @@ static void request_file_init(struct request_file_t *req_file, char *file_id)
 	req_file->wrote_simplified_trace=0;
 	req_file->timeline_reqnb=0;
 
+	req_file->stripe_size = config_agios_stripe_size;
+
 	request_file_init_related_list(&req_file->related_reads, req_file);
 	request_file_init_related_list(&req_file->related_writes, req_file);
 	request_file_init_related_list(&req_file->predicted_reads, req_file);
@@ -429,7 +400,7 @@ static void request_file_init(struct request_file_t *req_file, char *file_id)
 }
 
 /*
- * Function allocates new struct request_file_t from slab cache
+ * Function allocates new struct request_file_t 
  * and initializes it's fields to default values.
  *
  * Arguments:
@@ -451,17 +422,43 @@ struct request_file_t * request_file_constructor(char *file_id)
 }
 
 /*
- * This function allocates memory and initializes related locks 
+ * locks (and unlocks) all data structures used for requests and files
+ * It is not supposed to be used for normal library functions. 
+ * We only use them at initialization, to guarantee the user won't try
+ * to add new requests while we did not decide on the scheduling algorithm
+ * yet. Moreover, we use these functions while migrating between scheduling 
+ * algorithms
  */
-int request_cache_init(void)
+void lock_all_data_structures()
 {
+	PRINT_FUNCTION_NAME;
 	int i;
 
-	reset_reqstats();
+	timeline_lock();
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
+		hashtable_lock(i);
+	PRINT_FUNCTION_EXIT;
+}
+void unlock_all_data_structures()
+{
+	int i;
+	for(i=0; i<AGIOS_HASH_ENTRIES; i++)
+		hashtable_unlock(i);
+	timeline_unlock();
+}
 
-	/*at this point we dont know if we will be using timeline or hashtable or both, so we will have to allocate both of them*/
-	init_agios_list_head(&timeline);
-	init_agios_list_head(&timeline_files);
+/*
+ * This function allocates memory and initializes related locks 
+ */
+//returns 0 on success
+int request_cache_init(void)
+{
+	int ret=0;
+
+	reset_global_reqstats(); //put all statistics to zero
+	agios_reset_performance_counters();
+
+	timeline_init(); //initializes the timeline
 
 #ifdef AGIOS_KERNEL_MODULE
 	/*allocates slab caches of the most used types (request_t and request_file_t)
@@ -477,60 +474,75 @@ int request_cache_init(void)
 		return -ENOMEM;
 	}
 #endif
+	ret = hashtable_init(); //initializes the hashtable
 
-	hashlist = (struct agios_list_head *) agios_alloc(sizeof(struct agios_list_head) * AGIOS_HASH_ENTRIES);
-	if(!hashlist)
+	//put request and file counters to 0
+	if(ret == 0)
 	{
-		agios_print("AGIOS: cannot allocate memory for req cache\n");
-		return -ENOMEM;
+		current_reqnb = 0;
+		current_reqfilenb=0;
 	}
 
-	hashlist_locks = agios_alloc(SIZE_OF_AGIOS_MUTEX_T*(AGIOS_HASH_ENTRIES+1));
-	if(!hashlist_locks)
-	{
-		agios_print("AGIOS: cannot allocate memory for req locks\n");
-		agios_free(hashlist);
-		return -ENOMEM;
-	}
+	lock_all_data_structures();
 
-	hashlist_reqcounter = agios_alloc(sizeof(int)*(AGIOS_HASH_ENTRIES+1));
-	if(!hashlist_reqcounter)
-	{
-		agios_print("AGIOS: cannot allocate memory for req counters\n");
-		agios_free(hashlist);
-		agios_free(hashlist_locks);
-		return -ENOMEM;
-	}
-
-	
-	for (i = 0; i < AGIOS_HASH_ENTRIES; i++) {
-		init_agios_list_head(&hashlist[i]);
-		agios_mutex_init(&(hashlist_locks[i]));
-		hashlist_reqcounter[i]=0;
-	}
-
-	set_current_reqnb(0);
-	set_current_reqfilenb(0);
-	
-	return 0;
+	return ret;
 }
 
+//free the space used by a struct request_t, which describes a request
+//if the request is aggregated (with multiple requests inside), it will recursively free these requests as well
+inline void request_cleanup(struct request_t *aux_req)
+{
+	//remove the request from its queue
+	agios_list_del(&aux_req->related);
+	//see if it is a virtual request 
+	if(aux_req->reqnb > 1)
+	{
+		//free all sub-requests
+		list_of_requests_cleanup(&aux_req->reqs_list);
+	}
+	//free the memory space
+	agios_free(aux_req);
+}
+//free all requests from a queue
+void list_of_requests_cleanup(struct agios_list_head *list)
+{
+	struct request_t *req, *aux_req = NULL;
+
+	if(!agios_list_empty(list))
+	{
+		agios_list_for_each_entry(req, list, related)
+		{
+			if(aux_req)
+				request_cleanup(aux_req);
+			aux_req = req;
+		}
+		if(aux_req)
+			request_cleanup(aux_req);
+	}
+}
 /*
  * Function destroys all SLAB caches previously created by request_cache_init().
  */
 void request_cache_cleanup(void)
 {
-	agios_free(hashlist);
-	agios_free(hashlist_locks);
-	agios_free(hashlist_reqcounter);
+	//TODO we were having serious issues with this portion of code, go through it looking for the errors
+/*	PRINT_FUNCTION_NAME;
+	lock_all_data_structures();
+	print_hashtable();
+	hashtable_cleanup();
+	print_timeline();
+	timeline_cleanup();
+	PRINT_FUNCTION_EXIT;*/
 }
 
-inline struct request_t *start_aggregation(struct request_t *aggregation_head, struct agios_list_head *prev, struct agios_list_head *next)
+//aggregation_head is a normal request which is about to become a virtual request upon aggregation with another contiguous request.
+//for that, we need to create a new request_t structure to keep the virtual request, add it to the hashtable in place of aggregation_head, and include aggregation_head in its internal list
+struct request_t *start_aggregation(struct request_t *aggregation_head, struct agios_list_head *prev, struct agios_list_head *next)
 {
 	struct request_t *newreq;	
 
 	/*creates a new request to be the aggregation head*/
-	newreq = request_constructor(aggregation_head->file_id, aggregation_head->type, aggregation_head->io_data.offset, aggregation_head->io_data.len, 0, aggregation_head->jiffies_64, RS_HASHTABLE);
+	newreq = request_constructor(aggregation_head->file_id, aggregation_head->type, aggregation_head->io_data.offset, aggregation_head->io_data.len, 0, aggregation_head->jiffies_64, RS_HASHTABLE, aggregation_head->tw_app_id);
 	newreq->sched_factor = aggregation_head->sched_factor;
 	newreq->timestamp = aggregation_head->timestamp;
 
@@ -540,15 +552,17 @@ inline struct request_t *start_aggregation(struct request_t *aggregation_head, s
 	aggregation_head->agg_head = newreq;
 
 	/*adds the replaced request on the requests list of the aggregation head*/
-	agios_list_add_tail(&aggregation_head->aggregation_element, &newreq->reqs_list);
+	agios_list_add_tail(&aggregation_head->related, &newreq->reqs_list);
 
 	return newreq;
 }
 
 /*includes req in the aggregation agg_req */
-inline void include_in_aggregation(struct request_t *req, struct request_t **agg_req)
+void include_in_aggregation(struct request_t *req, struct request_t **agg_req)
 {
 	struct agios_list_head *prev, *next;
+	
+	PRINT_FUNCTION_NAME;
 	
 	if((*agg_req)->reqnb == 1) /*this is not a virtual request yet, we have to prepare it*/
 	{
@@ -559,13 +573,13 @@ inline void include_in_aggregation(struct request_t *req, struct request_t **agg
 	}
 	if(req->io_data.offset <= (*agg_req)->io_data.offset) /*it has to be inserted in the beginning*/	
 	{
-		agios_list_add(&req->aggregation_element, &((*agg_req)->reqs_list));
+		agios_list_add(&req->related, &((*agg_req)->reqs_list));
 		(*agg_req)->io_data.len += (*agg_req)->io_data.offset - req->io_data.offset;
 		(*agg_req)->io_data.offset = req->io_data.offset;
 	}
 	else /*it has to be inserted in the end*/
 	{
-		agios_list_add_tail(&req->aggregation_element, &((*agg_req)->reqs_list));	
+		agios_list_add_tail(&req->related, &((*agg_req)->reqs_list));	
 		(*agg_req)->io_data.len = (*agg_req)->io_data.len + ((req->io_data.offset + req->io_data.len) - ((*agg_req)->io_data.offset + (*agg_req)->io_data.len));
 	}
 	(*agg_req)->reqnb++;
@@ -576,35 +590,39 @@ inline void include_in_aggregation(struct request_t *req, struct request_t **agg
 	(*agg_req)->sched_factor += req->sched_factor;
 	req->agg_head = (*agg_req);
 }
-
-inline void join_aggregations(struct request_t *head, struct request_t *tail)
+//we have two virtual requests which are going to become one because we've added a new one which fills the gap between them
+void join_aggregations(struct request_t **head, struct request_t **tail)
 {
-	struct agios_list_head *aux;
-	int i;
-	struct request_t *aux_req;
+	struct request_t *req, *aux_req=NULL;
 
 	/*removes the tail from the list*/
-	agios_list_del(&tail->related);
+	agios_list_del(&((*tail)->related));
 
-	if(tail->reqnb == 1) /*it is not a virtual request*/
-		include_in_aggregation(tail, &head);
+	if((*tail)->reqnb == 1) /*it is not a virtual request*/
+		include_in_aggregation(*tail, head);
 	else /*it is a virtual request*/
 	{
 		/*transfers all requests from this virtual request to the first one*/
-		aux = tail->reqs_list.next;
-		for(i=0; i<tail->reqnb; i++)
+		agios_list_for_each_entry(req, &(*tail)->reqs_list, related)
 		{
-			aux_req = agios_list_entry(aux, struct request_t, aggregation_element);
-			aux = aux->next;
-			
-			include_in_aggregation(aux_req, &head);
-		}	
-		free(tail);	/*we dont need this anymore*/	
+			if(aux_req)
+			{
+				agios_list_del(&aux_req->related);
+				include_in_aggregation(aux_req, head);
+			}
+			aux_req = req;
+		}
+		if(aux_req)
+		{
+			agios_list_del(&aux_req->related);
+			include_in_aggregation(aux_req, head);
+		}
+		agios_free(*tail);	/*we dont need this anymore*/	
 	}
 }
 
 /*upon the insertion of a new request, checks if it is possible to include it into an existing virtual request (if yes, perform the aggregations already)*/
-inline int insert_aggregations(struct request_t *req, struct agios_list_head *insertion_place, struct agios_list_head *list_head)
+int insert_aggregations(struct request_t *req, struct agios_list_head *insertion_place, struct agios_list_head *list_head)
 {
 	struct request_t *prev_req, *next_req;
 	int aggregated = 0;
@@ -616,18 +634,21 @@ inline int insert_aggregations(struct request_t *req, struct agios_list_head *in
 	if(insertion_place != list_head)
 	{
 		prev_req = agios_list_entry(insertion_place, struct request_t, related);
-		if(CHECK_AGGREGATE(prev_req, req) && (prev_req->reqnb < max_aggregation_size)) //TODO  also check if it is worth it considering the required times? does it make sense, since requests are already here anyway, and that's why we have max_aggregation_size anyway...
+		if(CHECK_AGGREGATE(prev_req, req) && ((prev_req->reqnb + req->reqnb) <= current_scheduler->max_aggreg_size)) //TODO  also check if it is worth it considering the required times? does it make sense, since requests are already here anyway, and that's why we have max_aggregation_size anyway...
 		{
-			include_in_aggregation(req,&prev_req);
+			if(req->reqnb > 1)
+				join_aggregations(&prev_req, &req);
+			else
+				include_in_aggregation(req,&prev_req);
 			insertion_place = &(prev_req->related);
 			aggregated=1;
 			/*maybe this request is also contiguous to the next one, so we will join everything*/
 			if(insertion_place->next != list_head) /*if the request was not to be the last of the queue*/
 			{
 				next_req = agios_list_entry(insertion_place->next, struct request_t, related);
-				if(CHECK_AGGREGATE(req, next_req) && (next_req->reqnb + prev_req->reqnb <= max_aggregation_size)) 
+				if(CHECK_AGGREGATE(prev_req, next_req) && ((next_req->reqnb + prev_req->reqnb) <= current_scheduler->max_aggreg_size)) 
 				{
-					join_aggregations(prev_req, next_req);
+					join_aggregations(&prev_req, &next_req);
 				}
 			}
 		}
@@ -635,19 +656,25 @@ inline int insert_aggregations(struct request_t *req, struct agios_list_head *in
 	if((!aggregated) && (insertion_place->next != list_head)) /*if we could not aggregated with the previous one, or there is no previous one, and this request is not to be the last of the queue, lets try with the next one*/
 	{
 		next_req = agios_list_entry(insertion_place->next, struct request_t, related);
-		if(CHECK_AGGREGATE(req, next_req) && (next_req->reqnb < max_aggregation_size)) 
+		if(CHECK_AGGREGATE(req, next_req) && ((next_req->reqnb + req->reqnb) <= current_scheduler->max_aggreg_size)) 
 		{
-			include_in_aggregation(req, &next_req);
-			aggregated=1;
+			if(req->reqnb > 1)
+				join_aggregations(&req, &next_req); //we could be adding a virtual request (because we are migrating between data structures), and then if we get here we will not add this new request anywhere, we'll actually remove the next one and copy its requests to the new one's list. So we cannot return aggregated = 1, because we still need to add this request
+			else
+			{
+				include_in_aggregation(req, &next_req);
+				aggregated=1;
+			}
 		}
 	}
 	return aggregated;
 }
 
-/* searchs the hash_list (hashtable entry, MUST HOLD LOCK, for the file which req is trying to access and returns
- * a pointer to the struct request_file_t of this file. If there is no entry to this file, create one
+/* goes through a list of request_file_t structures searching for the given file_id. 
+ * if such structure does not exist in the list, creates a new one and includes it.
+ * must hold relevant lock (timeline or hashtable entry).
  */
-inline struct request_file_t *find_req_file(struct agios_list_head *hash_list, char *file_id, int state)
+struct request_file_t *find_req_file(struct agios_list_head *hash_list, char *file_id, int state)
 {
 	struct request_file_t *req_file;
 	int found_reqfile=0;
@@ -674,7 +701,6 @@ inline struct request_file_t *find_req_file(struct agios_list_head *hash_list, c
 			insertion_place = &(req_file->hashlist);
 		else
 			insertion_place = hash_list;
-		debug("including a new request_file_t structure for file %s\n", file_id);
 		req_file = request_file_constructor(file_id);
 		if(!req_file)
 		{
@@ -690,251 +716,124 @@ inline struct request_file_t *find_req_file(struct agios_list_head *hash_list, c
 		inc_current_predicted_reqfilenb();
 	else if(state == RS_HASHTABLE) //real request
 	{
-		if((scheduler_needs_hashtable) && (agios_list_empty(&req_file->related_reads.list)) && (agios_list_empty(&req_file->related_writes.list))) //request is being included in the hashtable on req_file->related_reads or req_file->related_writes
-			inc_current_reqfilenb();
-		else if ((!scheduler_needs_hashtable) && (req_file->timeline_reqnb  == 0)) //request is being included in the timeline, req_file->timeline_reqnb keeps track of how many requests are for this file
+		if(req_file->timeline_reqnb == 0)
 			inc_current_reqfilenb();
 	}
 
 	return req_file;
 }
-/*
- * This is internal function which adds @req to hash table and places it
- * according to @hash_val.
- *
- * Locking:
- * 	Must be holding hashlist_locks[hash_val]
- */
-static void __hashtable_add_req(struct request_t *req, unsigned long hash_val)
-{
-	struct agios_list_head *hash_list = &hashlist[hash_val];
-	struct request_file_t *req_file;
-	struct request_t *tmp;
-	struct agios_list_head *insertion_place;
-
-
-#ifdef AGIOS_DEBUG
-	if(req->state == RS_HASHTABLE)
-		debug("adding request [%d] to file %s, offset %lld, size %lld", req->data, req->file_id, req->io_data.offset, req->io_data.len);
-#endif
-
-	/*finds the file to add to*/
-	req_file = find_req_file(hash_list, req->file_id, req->state);
-	
-	/*if it is the first request to this file (first actual request, anyway, it could have predicted requests only), we have to store the arrival time*/
-	if(req->state != RS_PREDICTED)
-	{
-		/*see if this is the first request to the file*/
-		if(req_file->first_request_time == 0)
-			req_file->first_request_time = req->jiffies_64;
-	}
-
-	/*
-	 * Now we have request_file_t structure describing our file,
-	 * so add @req to one of it's lists.
-	 */
-
-	/* Choose appropriate list. */
-	if(req->state == RS_HASHTABLE)
-	{
-		if (req->type == RT_READ) {
-			hash_list = &req_file->related_reads.list;
-			req->globalinfo = &req_file->related_reads;
-		} else {
-			hash_list = &req_file->related_writes.list;
-			req->globalinfo = &req_file->related_writes;
-		}
-	}
-	else
-	{
-		if(req->type == RT_READ) {
-			hash_list = &req_file->predicted_reads.list;
-			req->globalinfo = &req_file->predicted_reads;
-		} else {
-			hash_list = &req_file->predicted_writes.list;
-			req->globalinfo = &req_file->predicted_writes;
-		}
-	}
-	req->globalinfo->current_size += req->io_data.len;
-
-	/* Search for proper position for @req (the list is sorted). */
-	insertion_place = hash_list;
-	if (!agios_list_empty(hash_list)) {
-		agios_list_for_each_entry(tmp, hash_list, related) {
-			if ((tmp->io_data.offset > req->io_data.offset) ||
-			    ((tmp->io_data.offset == req->io_data.offset) &&
-			    (tmp->io_data.len > req->io_data.len))) {
-				insertion_place = &(tmp->related);
-				break;
-			}
-		}
-	}
-	
-	/* Add @req to the list in sorted order. */
-	if(req->state == RS_HASHTABLE)
-	{
-		if(!insert_aggregations(req, insertion_place->prev, hash_list))
-			agios_list_add(&req->related, insertion_place->prev);
-		else
-			debug("included in an already existing virtual request");
-			
-	}
-	else
-		agios_list_add(&req->related, insertion_place->prev); //predicted requests are not really aggregated into virtual requests
-		
-	if((config_get_trace_predict()) && (req->state == RS_PREDICTED))
-		agios_trace_predict_addreq(req);
-
-}
-
-/*
- * Function adds @req to hash table.
- *
- * Arguments:
- *	@req	- request to be added.
- *	@clnt	- structure describing calling client.
- *
- * Locking:
- *	Must NOT hold hastlist_locks[hash_val]
- */
-unsigned long hashtable_add_req(struct request_t *req)
-{
-	unsigned long hash_val;
-
-	VERIFY_REQUEST(req);
-	
-	hash_val = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES;	
-
-	agios_mutex_lock(&hashlist_locks[hash_val]);
-
-	__hashtable_add_req(req, hash_val);
-
-	return hash_val;
-}
-
-/* Internal function (but called by I/O scheduler)
- * that removes @req from hash table.
- *
- * Locking:
- *	Must be holding hashlist_locks[hash_val]
- */
-inline void __hashtable_del_req(struct request_t *req)
-{
-	agios_list_del(&req->related);
-}
-
-/*
- * Function removes @req from hash table.
- *
- * Locking:
- *	Must NOT be holding hashlist_locks[hash_val]
- */ 
-void hashtable_del_req(struct request_t *req)
-{
-	unsigned long hash_val = AGIOS_HASH_FN(req->file_id) % AGIOS_HASH_ENTRIES;
-
-	VERIFY_REQUEST(req);
-
-	agios_mutex_lock(&hashlist_locks[hash_val]);
-	
-	__hashtable_del_req(req);
-
-	agios_mutex_unlock(&hashlist_locks[hash_val]);
-}
-
-/*
- * Function locks hash table slot (collision list) identified by @index.
- * Used by I/O scheduler before iterating through collision list.
- *
- * Locking:
- *	Must NOT be holding hashlist_locks[hash_val]
- *	Must call hashtable_unlock(@index) later.
- */ 
-struct agios_list_head *hashtable_lock(int index)
-{
-	agios_mutex_lock(&hashlist_locks[index]);
-	return &hashlist[index];
-}
-struct agios_list_head *hashtable_trylock(int index)
-{
-	if(pthread_mutex_trylock(&hashlist_locks[index]) == 0)
-		return &hashlist[index];
-	else
-		return NULL;
-}
-/*must hold the lock*/
-struct agios_list_head *get_hashlist(int index)
-{
-	return &hashlist[index];	
-}
-
-/*
- * Function unlocks hash table slot (collision list) identified by @index.
- * Used by I/O scheduler after iterating through collision list.
- *
- * Locking:
- *	Must be holding hashlist_locks[hash_val]
- */ 
-void hashtable_unlock(int index)
-{
-	agios_mutex_unlock(&hashlist_locks[index]);
-}
 
 #ifdef ORANGEFS_AGIOS
-int agios_add_request(char *file_id, int type, long long offset, long len, int64_t data, struct client *clnt)
+int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, struct client *clnt, unsigned int app_id)
 #else
-int agios_add_request(char *file_id, int type, long long offset, long len, int data, struct client *clnt) //, int app_id
+int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, struct client *clnt, unsigned int app_id) 
 #endif
 {
 	struct request_t *req;
 	struct timespec arrival_time;
 	unsigned long hash;
+	short int previous_needs_hashtable; 
 	
 	PRINT_FUNCTION_NAME;
 
+	//build request_t structure and fill it for the new request
 	agios_gettime(&(arrival_time));  	
-
-	req = request_constructor(file_id, type, offset, len, data, get_timespec2llu(arrival_time), RS_HASHTABLE);
-	if (req) {
-		if(scheduler_needs_hashtable)
+	req = request_constructor(file_id, type, offset, len, data, get_timespec2llu(arrival_time), RS_HASHTABLE, app_id);
+	
+	if(!req)
+		return -ENOMEM;
+	
+	//first acquire lock	
+	hash = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES; 
+	while(1)
+	{
+		previous_needs_hashtable = current_scheduler->needs_hashtable;
+		if(previous_needs_hashtable)
+			hashtable_lock(hash);
+		else
+			timeline_lock();
+		if(previous_needs_hashtable != current_scheduler->needs_hashtable) //acquiring the lock means a memory wall, so we are sure to get the latest version of current_scheduler
 		{
-			hash = hashtable_add_req(req);
-			hashlist_reqcounter[hash]++; //had to remove it from inside __hashtable_add_req because that function is also used for prediction requests. we do not want to count them as requests for the scheduling algorithms
-			last_timestamp++;
-			req->timestamp = last_timestamp;
-			if(config_get_predict_request_aggregation())
-				prediction_newreq(req);
+			//the other thread has migrated scheduling algorithms (and data structure) while we were waiting for the lock (so the lock is no longer the adequate one)
+			if(previous_needs_hashtable)
+				hashtable_unlock(hash);
+			else
+				timeline_unlock();
 		}
 		else
-			timeline_add_req(req);
+			break;	
+	}
 
-		proc_stats_newreq(req);  //update statistics
-		if(config_get_trace())
-			agios_trace_add_request(req);  //trace this request arrival
-		inc_current_reqnb(); //increase the number of current requests on the scheduler
-		/* Signalize to the consumer thread that new request was added. */
-#ifdef AGIOS_KERNEL_MODULE
-		complete(&consumer.request_added);
-#else
-		agios_mutex_lock(&consumer.request_added_mutex);
-		agios_cond_signal(&consumer.request_added_cond);
-		agios_mutex_unlock(&consumer.request_added_mutex);
+	//add request to the right data structure
+	if(current_scheduler->needs_hashtable)
+		hashtable_add_req(req,hash,NULL);
+	else
+		timeline_add_req(req, hash, NULL);
+
+	//if(config_predict_agios_request_aggregation)
+	//	prediction_newreq(req);
+//TODO predict
+
+
+	hashlist_reqcounter[hash]++; 
+	req->globalinfo->current_size += req->io_data.len;
+	req->globalinfo->req_file->timeline_reqnb++;
+
+	proc_stats_newreq(req);  //update statistics
+	if(config_trace_agios)
+		agios_trace_add_request(req);  //trace this request arrival
+	inc_current_reqnb(); //increase the number of current requests on the scheduler
+
+	/* Signalize to the consumer thread that new request was added. */
+	if(current_alg != NOOP_SCHEDULER)
+		consumer_signal_new_reqs();
+
+	debug("current status: there are %d requests in the scheduler to %d files",current_reqnb, current_reqfilenb);
+
+	//if we are running the NOOP scheduler, we just process it already
+	if(current_alg == NOOP_SCHEDULER)
+	{
+		short int update_time;
+
+		debug("NOOP is directly processing this request");
+		update_time = process_requests(req, clnt, hash);
+		generic_post_process(req);
+		if(update_time)
+			consumer_signal_new_reqs(); //if it is time to refresh something (change the scheduling algorithm or recalculate alpha), we wake up the scheduling thread
+	}
+
+	//free the lock
+	if(previous_needs_hashtable)
+		hashtable_unlock(hash);
+	else
+	{
+#ifdef AGIOS_DEBUG
+		print_timeline();
 #endif
-
-		if(scheduler_needs_hashtable)
-			debug("current status. hashtable[%d] has %d requests, there are %d requests in the scheduler to %d files.", hash, hashlist_reqcounter[hash], get_current_reqnb(), get_current_reqfilenb());
-		if(scheduler_needs_hashtable)
-			agios_mutex_unlock(&hashlist_locks[hash]);
-		else
-			agios_mutex_unlock(&timeline_mutex);	
-
-		return 0;		
-	}		
-	return -ENOMEM;
+		timeline_unlock();
+	}
+	PRINT_FUNCTION_EXIT;	
+	return 0;		
 }
 
-int hashtable_get_size(void)
+//when agios is used to schedule requests to a parallel file system server, the stripe size is relevant to some calculations (specially for algorithm selection). A default value is provided through the configuration file, but many file systems (like PVFS) allow for each file to have different configurations. In this situation, the user could call this function to update a specific file's stripe size
+int agios_set_stripe_size(char *file_id, unsigned int stripe_size)
 {
-	return AGIOS_HASH_ENTRIES;
-}
+	struct request_file_t *req_file;
+	unsigned long hash_val;
+	struct agios_list_head *list;
 
+	//find the structure for this file (and acquire lock)
+	if(scheduler_needs_hashtable)
+	{
+		hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;	
+		list = hashtable_lock(hash_val);
+	}
+	else
+	{
+		list = timeline_lock();
+	}
+	req_file = find_req_file(list, file_id, RS_HASHTABLE);
+	req_file->stripe_size = stripe_size;
+	return 1;
+}

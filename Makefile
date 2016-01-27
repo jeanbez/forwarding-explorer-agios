@@ -1,9 +1,9 @@
 #ccflags-y += -DAGIOS_DEBUG=1
 #ccflags-y += -DAGIOS_KERNEL_MODULE=1
-ccflags-y += -DORANGEFS_AGIOS=1
+ccflags-y += -DORANGEFS_AGIOS=0
 
-FILES=mylist.c hash.c proc.c request_cache.c consumer.c iosched.c agios.c predict.c trace.c estimate_access_times.c common_functions.c agios_config.c access_pattern_detection_tree.c scheduling_algorithm_selection_tree.c
-OBJS=mylist.o hash.o proc.o request_cache.o consumer.o iosched.o agios.o predict.o trace.o estimate_access_times.o common_functions.o agios_config.o access_pattern_detection_tree.o scheduling_algorithm_selection_tree.o /usr/local/lib/libconfig.so
+FILES=mylist.c hash.c proc.c request_cache.c consumer.c iosched.c agios.c predict.c trace.c estimate_access_times.c common_functions.c agios_config.c access_pattern_detection_tree.c scheduling_algorithm_selection_tree.c TO.c AIOLI.c MLF.c SJF.c SRTF.c NOOP.c TW.c req_hashtable.c req_timeline.c DYN_TREE.c ARMED_BANDIT.c performance.c
+OBJS=mylist.o hash.o proc.o request_cache.o consumer.o iosched.o agios.o predict.o trace.o estimate_access_times.o common_functions.o agios_config.o access_pattern_detection_tree.o scheduling_algorithm_selection_tree.o TO.o AIOLI.o MLF.o SJF.o SRTF.o NOOP.o TW.o req_hashtable.o req_timeline.o DYN_TREE.o ARMED_BANDIT.o performance.o /usr/local/lib/libconfig.so
 obj-m += agiosmodule.o
 agiosmodule-objs := ${OBJS}
 
@@ -24,7 +24,7 @@ ${OBJS}:
 library_install: library
 	sudo rm -rf /usr/lib/libagios.so.1 /usr/lib/libagios.so
 	sudo cp ./libagios.so.1 /usr/lib
-	sudo cp ./agios.include.h /usr/include/agios.h
+	sudo cp agios.h /usr/include/agios.h
 	sudo chmod 0755 /usr/lib/libagios.so.1
 	sudo ln -s /usr/lib/libagios.so.1 /usr/lib/libagios.so
 	sudo ldconfig

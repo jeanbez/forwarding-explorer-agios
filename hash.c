@@ -20,8 +20,9 @@
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-#include "agios.h"
+#include "agios_request.h"
 #include "hash.h"
+#include "agios.h"
 
 #ifndef AGIOS_KERNEL_MODULE
 #include <string.h>

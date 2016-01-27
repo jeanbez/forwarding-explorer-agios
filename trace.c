@@ -3,6 +3,8 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
+ * Collaborators:
+ *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
@@ -38,13 +40,10 @@ static struct timespec agios_trace_t0; //time measured at initialization (all tr
 
 //a buffer avoids generating many I/O operations to the trace file, which is stored in the local file system. This would affect the scheduler's results, since these operations are not schedule with the user's ones.
 static char *agios_tracefile_buffer=NULL;
-static int agios_tracefile_buffer_size=0; //occupancy of the buffer. Used to control when to flush it.
+static unsigned long int agios_tracefile_buffer_size=0; //occupancy of the buffer. Used to control when to flush it.
 static char *aux_buf = NULL; //this smaller buffer is used by the functions to write a line at a time to the main buffer. We keep it global to avoid having to allocate it multiple times (it is allocated during initialization)
 static int aux_buf_size = 300*sizeof(char); //hard coded
 
-/*configuration options. Obtained at initialization for performance reasons*/
-static short int agios_config_trace_full=0;
-static long int agios_config_max_trace_buffer_size = 1*1024*1024;
 
 //must have trace lock
 void agios_tracefile_flush_buffer()
@@ -62,7 +61,7 @@ void agios_tracefile_flush_buffer()
 void agios_trace_write_to_buffer()
 {
 	int size = strlen(aux_buf);
-	if((agios_tracefile_buffer_size + size) >= agios_config_max_trace_buffer_size)
+	if((agios_tracefile_buffer_size + size) >= config_agios_max_trace_buffer_size)
 	{
 		agios_tracefile_flush_buffer();
 	}
@@ -71,28 +70,28 @@ void agios_trace_write_to_buffer()
 	aux_buf[0]='\0';
 }
 //a shift phenomenon was detected and the scheduler decided to wait for a file (for aIOLi and MLF only)
-void agios_trace_shift(unsigned long long int wait_time, char *file)
+void agios_trace_shift(unsigned int wait_time, char *file)
 {
-	if(!agios_config_trace_full)
+	if(!config_trace_agios_full)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
 
-	snprintf(aux_buf, aux_buf_size, "[SHIFT PHENOMENON]\t%llu\t%s\t%llu\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
+	snprintf(aux_buf, aux_buf_size, "[SHIFT PHENOMENON]\t%lu\t%s\t%u\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
 	agios_trace_write_to_buffer();
 	
 	agios_mutex_unlock(&agios_trace_mutex);
 
 }
 //schedulerr is going to wait for a file
-void agios_trace_wait(unsigned long long int wait_time, char *file)
+void agios_trace_wait(unsigned int wait_time, char *file)
 {
-	if(!agios_config_trace_full)
+	if(!config_trace_agios_full)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
 	
-	snprintf(aux_buf, aux_buf_size, "[AGIOS WAIT]\t%llu\t%s\t%llu\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
+	snprintf(aux_buf, aux_buf_size, "[AGIOS WAIT]\t%lu\t%s\t%u\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
 	agios_trace_write_to_buffer();
 
 	agios_mutex_unlock(&agios_trace_mutex);
@@ -100,7 +99,7 @@ void agios_trace_wait(unsigned long long int wait_time, char *file)
 //it was detected that a better aggregation to a file was already performed, so the scheduler decided to wait 
 void agios_trace_better(char *file)
 {
-	if(!agios_config_trace_full)
+	if(!config_trace_agios_full)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -111,14 +110,14 @@ void agios_trace_better(char *file)
 	agios_mutex_unlock(&agios_trace_mutex);
 }
 //a better aggregation was predicted, so the scheduler decided to wait
-void agios_trace_predicted_better_aggregation(unsigned long long int wait_time, char *file)
+void agios_trace_predicted_better_aggregation(unsigned int wait_time, char *file)
 {
-	if(!agios_config_trace_full)
+	if(!config_trace_agios_full)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
 	
-	snprintf(aux_buf, aux_buf_size, "[PREDICTED BETTER AGGREGATION]\t%llu\t%s\t%llu\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
+	snprintf(aux_buf, aux_buf_size, "[PREDICTED BETTER AGGREGATION]\t%lu\t%s\t%u\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
 	agios_trace_write_to_buffer();
 
 	agios_mutex_unlock(&agios_trace_mutex);
@@ -128,24 +127,24 @@ void agios_trace_print_request(struct request_t *req)
 {
 	int index = strlen(aux_buf);
 	if(req->type == RT_READ)
-		snprintf(aux_buf+index, aux_buf_size - index, "%s\tR\t%lld\t%ld\n", req->file_id, req->io_data.offset, req->io_data.len);
+		snprintf(aux_buf+index, aux_buf_size - index, "%s\tR\t%lu\t%lu\n", req->file_id, req->io_data.offset, req->io_data.len);
 	else
-		snprintf(aux_buf+index, aux_buf_size - index, "%s\tW\t%lld\t%ld\n", req->file_id, req->io_data.offset, req->io_data.len);	
+		snprintf(aux_buf+index, aux_buf_size - index, "%s\tW\t%lu\t%lu\n", req->file_id, req->io_data.offset, req->io_data.len);	
 }
 //must have trace lock
 void agios_trace_print_predicted_request(struct request_t *req)
 {
 	int size = strlen(aux_buf);
 	if(req->type == RT_READ)
-		snprintf(aux_buf+size, aux_buf_size - size, "%s\tR\t%lld\t%ld\t%llu\n", req->file_id, req->io_data.offset, req->io_data.len, req->jiffies_64);
+		snprintf(aux_buf+size, aux_buf_size - size, "%s\tR\t%lu\t%lu\t%lu\n", req->file_id, req->io_data.offset, req->io_data.len, req->jiffies_64);
 	else
-		snprintf(aux_buf+size, aux_buf_size - size, "%s\tW\t%lld\t%ld\t%llu\n", req->file_id, req->io_data.offset, req->io_data.len, req->jiffies_64);
+		snprintf(aux_buf+size, aux_buf_size - size, "%s\tW\t%lu\t%lu\t%lu\n", req->file_id, req->io_data.offset, req->io_data.len, req->jiffies_64);
 }
 //a new request arrived to the scheduler
 void agios_trace_add_request(struct request_t *req)
 {
 	agios_mutex_lock(&agios_trace_mutex);
-	snprintf(aux_buf, aux_buf_size, "%llu\t", (req->jiffies_64 - get_timespec2llu(agios_trace_t0)));
+	snprintf(aux_buf, aux_buf_size, "%lu\t", (req->jiffies_64 - get_timespec2llu(agios_trace_t0)));
 	agios_trace_print_request(req);
 	agios_trace_write_to_buffer();
 	
@@ -155,7 +154,7 @@ void agios_trace_add_request(struct request_t *req)
 //a predicted request was added to the queues
 void agios_trace_predict_addreq(struct request_t *req)
 {
-	if(!config_get_trace_predict())
+	if(!config_trace_agios_predict)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
@@ -172,12 +171,12 @@ void agios_trace_process_requests(struct request_t *head_req)
 	struct request_t *req;
 	int size;
 
-	if(!agios_config_trace_full)
+	if(!config_trace_agios_full)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
 
-	snprintf(aux_buf, aux_buf_size, "[VIRTUAL REQUEST PROCESSED]\t%llu\t%s\n",get_nanoelapsed(agios_trace_t0) , head_req->file_id);
+	snprintf(aux_buf, aux_buf_size, "[VIRTUAL REQUEST PROCESSED]\t%lu\t%s\n",get_nanoelapsed(agios_trace_t0) , head_req->file_id);
 	agios_trace_write_to_buffer();
 	if(head_req->reqnb == 1)
 	{
@@ -185,7 +184,7 @@ void agios_trace_process_requests(struct request_t *head_req)
 	}
 	else
 	{
-		agios_list_for_each_entry(req, &head_req->reqs_list, aggregation_element)
+		agios_list_for_each_entry(req, &head_req->reqs_list, related)
 		{
 			agios_trace_print_request(req);
 			agios_trace_write_to_buffer();
@@ -236,12 +235,12 @@ void agios_trace_print_predicted_aggregations(struct request_file_t *req_file)
 {
 	int size;
 
-	if(!config_get_trace_predict())
+	if(!config_trace_agios_predict)
 		return;
 
 	agios_mutex_lock(&agios_trace_mutex);
 
-	snprintf(aux_buf, aux_buf_size, "[PREDICTED AGGREGATIONS]\t%s\t%llu\n", req_file->file_id, get_nanoelapsed(agios_trace_t0) );
+	snprintf(aux_buf, aux_buf_size, "[PREDICTED AGGREGATIONS]\t%s\t%lu\n", req_file->file_id, get_nanoelapsed(agios_trace_t0) );
 
 	trace_print_predicted_aggregations_onlist(&req_file->predicted_reads);
 	trace_print_predicted_aggregations_onlist(&req_file->predicted_writes);
@@ -273,14 +272,14 @@ int agios_trace_init()
 				fclose(agios_tracefile_fd);
 
 			agios_trace_counter++;
-			sprintf(filename, "%s.%d.%s", config_get_trace_file_name(1), agios_trace_counter, config_get_trace_file_name(2));	
+			sprintf(filename, "%s.%d.%s", config_trace_agios_file_prefix, agios_trace_counter, config_trace_agios_file_sufix);	
 			agios_tracefile_fd = fopen(filename, "r");
 		} while(agios_tracefile_fd);
 	}
 	else
 	{
 		agios_trace_counter++;
-		sprintf(filename, "%s.%d.%s", config_get_trace_file_name(1), agios_trace_counter, config_get_trace_file_name(2));
+		sprintf(filename, "%s.%d.%s", config_trace_agios_file_prefix, agios_trace_counter, config_trace_agios_file_sufix);
 	}
 		
 	/*create and open the new trace file*/
@@ -293,15 +292,12 @@ int agios_trace_init()
 			agios_tracefile_buffer_size=0; //we already have a buffer, just have to reset it
 		else
 		{
-			agios_tracefile_buffer = (char *)malloc(agios_config_max_trace_buffer_size); 
+			agios_tracefile_buffer = (char *)malloc(config_agios_max_trace_buffer_size); 
 		}
 		ret =  agios_trace_counter;
 	}
 	else
 		ret =  -1;
-
-	agios_config_max_trace_buffer_size = config_get_max_trace_buffer_size();
-	agios_config_trace_full = config_get_trace_full(); //TODO if we were to change the configuration options during execution, we would need to update this. It is like this for performance reasons
 
 	if(!aux_buf)
 	{

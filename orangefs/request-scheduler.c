@@ -61,13 +61,6 @@ static struct client agios_clnt;
 
 static int agios_is_it_a_server=1;
 
-static short int agios_can_continue=0;
-static pthread_mutex_t request_processed_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t request_processed_cond = PTHREAD_COND_INITIALIZER;
-
-static int requests_sent_to_agios=0;
-static int requests_received_from_agios=0;
-
 #endif
 
 /** request states */
@@ -109,9 +102,10 @@ struct req_sched_element
     enum PINT_server_req_access_type access_type;
     int mode_change; /* specifies that the element is a mode change */
     enum PVFS_server_mode mode; /* the mode to change to */
-	long long offset;
-	long long real_offset;
-	long len;
+    long long offset;
+    long long real_offset;
+    long len;
+    int type;
 };
 
 
@@ -159,7 +153,6 @@ void ready_queue_include_request(struct qlist_head *ready_link)
 	pthread_mutex_lock(&ready_queue_mutex);
 	qlist_add_tail(ready_link, &ready_queue);	
 	ready_queue_len++;
-//	fprintf(stderr, " agora temos %d reqs na ready_queue\n", ready_queue_len);
 	pthread_mutex_unlock(&ready_queue_mutex);
 }
 void ready_queue_remove_request(struct qlist_head *ready_link)
@@ -167,7 +160,6 @@ void ready_queue_remove_request(struct qlist_head *ready_link)
 	pthread_mutex_lock(&ready_queue_mutex);
 	qlist_del(ready_link);
 	ready_queue_len--;
-//	fprintf(stderr, " agora nos temos %d reqs na ready_queue\n", ready_queue_len);
 	pthread_mutex_unlock(&ready_queue_mutex);
 }
 short int is_ready_queue_empty(void)
@@ -189,7 +181,6 @@ struct req_sched_element *ready_queue_remove_next(void)
 		tmp_element = qlist_entry((ready_queue.next), struct req_sched_element, ready_link);
 		qlist_del(&(tmp_element->ready_link));
 		ready_queue_len--;
-	//	fprintf(stderr, " agora nos temos %d reqs na ready_queue\n", ready_queue_len);
 	}
 	pthread_mutex_unlock(&ready_queue_mutex);
 
@@ -205,7 +196,6 @@ void PINT_req_sched_agios_process(int64_t req_id)
 	struct req_sched_element *element;
 
 	requests_received_from_agios++;
-//	fprintf(stderr, "PINT_req_sched_agios_process - request no %d to come back from AGIOS\n", requests_received_from_agios);
 
  	element = id_gen_fast_lookup(req_id); 
 
@@ -213,24 +203,11 @@ void PINT_req_sched_agios_process(int64_t req_id)
 	{
 		assert(element->state == REQ_QUEUED);
 		element->state = REQ_READY_TO_SCHEDULE;
-	//	fprintf(stderr, "ORANGEFS - requisicao offset %lld (real %lld) tamanho %ld passando pra READY", element->offset, element->real_offset, element->len);
 		ready_queue_include_request(&(element->ready_link));
-
-		//if required, wait until it was processed
-		if(agios_clnt.sync)
-		{
-			//fprintf(stderr, "will wait for sync\n");
-			pthread_mutex_lock(&request_processed_mutex);
-			while(!agios_can_continue)
-				pthread_cond_wait(&request_processed_cond, &request_processed_mutex);
-			agios_can_continue = 0;
-			pthread_mutex_unlock(&request_processed_mutex);
-		}
 	}	
 	else
 	{
-	//	fprintf(stderr, "ORANGEFS PANIC! Could not find request that came back from AGIOS!\n");
-		exit(-1);
+		fprintf(stderr, "ORANGEFS PANIC! Could not find request that came back from AGIOS!\n");
 	}
 }
 void PINT_req_sched_agios_process_multiple(int64_t *reqs, int reqnb)
@@ -253,18 +230,7 @@ void PINT_req_sched_agios_process_multiple(int64_t *reqs, int reqnb)
 		else
 		{
 			fprintf(stderr, "ORANGEFS PANIC! Could not find request that came back from AGIOS!\n");
-			exit(-1);
 		}
-	}
-	//if required, wait until it was processed
-	if(agios_clnt.sync)
-	{
-		//fprintf(stderr, "will wait for sync\n");
-		pthread_mutex_lock(&request_processed_mutex);
-		while(!agios_can_continue)
-			pthread_cond_wait(&request_processed_cond, &request_processed_mutex);
-		agios_can_continue = 0;
-		pthread_mutex_unlock(&request_processed_mutex);
 	}
 }
 #endif
@@ -522,6 +488,9 @@ int PINT_req_sched_post(enum PVFS_server_op op,
     struct req_sched_element *last_element;
     struct qlist_head *iterator;
     int tmp_flag;
+#ifdef ORANGEFS_AGIOS
+	short int first_file_req=0;
+#endif
 
 	/*test_out = fopen(TEST_REQATTS_FILENAME, "a");
 	if(test_out)
@@ -616,6 +585,9 @@ int PINT_req_sched_post(enum PVFS_server_op op,
     }
     else
     {
+#ifdef ORANGEFS_AGIOS
+	first_file_req=1;
+#endif
 	/* no queue yet for this handle */
 	/* create one and add it in */
 	tmp_list = (struct req_sched_list *)malloc(
@@ -776,8 +748,8 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 		PVFS_offset offset;
 		PVFS_size size, aux_size, stripe_size=-1;
 		uint32_t server_nb, this_server, aux_server;
-		int type;
 		char agios_fn[25];
+		uint32_t app_id;
 	
 		/*get filename*/	
 		sprintf(agios_fn, "%llu", llu(handle));
@@ -788,6 +760,7 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 			offset = ((PINT_server_op *) s_op)->req->u.io.file_req_offset ;
 			size = ((PINT_server_op *) s_op)->req->u.io.aggregate_size;
 			server_nb = ((PINT_server_op *) s_op)->req->u.io.server_ct;
+			app_id = ((PINT_server_op *) s_op)->req->u.io.app_id;
 			this_server= ((PINT_server_op *) s_op)->req->u.io.server_nr;
 			if(((PINT_server_op *) s_op)->req->u.io.io_dist)
 			{
@@ -800,6 +773,7 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 			offset = ((PINT_server_op *) s_op)->req->u.small_io.file_req_offset;
 			size = ((PINT_server_op *) s_op)->req->u.small_io.aggregate_size;
 			server_nb = ((PINT_server_op *) s_op)->req->u.small_io.server_ct;
+			app_id = ((PINT_server_op *) s_op)->req->u.small_io.app_id;
 			this_server = ((PINT_server_op *) s_op)->req->u.small_io.server_nr;
 			if(((PINT_server_op *) s_op)->req->u.small_io.dist)
                         {
@@ -812,6 +786,10 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 			stripe_size = last_stripe_size;
 		else
 			last_stripe_size = stripe_size;
+
+		//if this is the first request to this file, update AGIOS' stripe size
+		if(first_file_req)
+			agios_set_stripe_size(agios_fn, stripe_size);
 
 		//get the offset in the local file (offset from the request is about the global view of the file)
 		tmp_element->offset = offset;
@@ -849,14 +827,12 @@ int PINT_req_sched_post(enum PVFS_server_op op,
 
 		/*get operation type*/
 		if(((PINT_server_op *) s_op)->req->u.io.io_type == PVFS_IO_READ)
-			type = RT_READ;
+			tmp_element->type = RT_READ;
 		else
-			type = RT_WRITE;
+			tmp_element->type = RT_WRITE;
 
 		/*give the request to agios*/
-		requests_sent_to_agios+=1;
-//		fprintf(stderr, "this is the request no %d to go to AGIOS\n", requests_sent_to_agios);
-		agios_add_request(agios_fn, type, tmp_element->real_offset, tmp_element->len, tmp_element->id, &agios_clnt);
+		agios_add_request(agios_fn, tmp_element->type, tmp_element->real_offset, tmp_element->len, tmp_element->id, &agios_clnt, app_id);
 
 	}
 #endif
@@ -1076,7 +1052,6 @@ int PINT_req_sched_release(
     struct req_sched_element *tmp_element = NULL;
     struct req_sched_list *tmp_list = NULL;
     struct req_sched_element *next_element = NULL;
-    enum PVFS_server_op op;
 
 //	fprintf(stderr, "PINT_req_sched_release start\n");
 
@@ -1095,22 +1070,18 @@ int PINT_req_sched_release(
 
     /* retrieve the element directly from the id */
     tmp_element = id_gen_fast_lookup(in_completed_id);
-	op = tmp_element->op;
-//	fprintf(stderr, "PINT_req_sched_release op = %d, id= %d\n", op, tmp_element->id);
 
 
-	/*release AGIOS to schedule more*/
+	/*notify AGIOS about request processing so it can keep performance measurements (and manage the synchronous approach)*/
 	if((agios_is_it_a_server) && ((tmp_element->op == PVFS_SERV_IO) || (tmp_element->op == PVFS_SERV_SMALL_IO)))
 	{
-		if(agios_clnt.sync)
-		{
-//			fprintf(stderr, "PINT_req_sched_release signaling AGIOS\n");
-			pthread_mutex_lock(&request_processed_mutex);
-			agios_can_continue=1;
-			pthread_cond_signal(&request_processed_cond);
-			pthread_mutex_unlock(&request_processed_mutex);
-//			fprintf(stderr, "PINT_req_sched_release signaled AGIOS\n");
-		}
+		char agios_fn[25];
+	
+		/*get filename*/	
+		sprintf(agios_fn, "%llu", llu(tmp_element->handle));
+
+		/*release request*/
+		agios_release_request(agios_fn, tmp_element->type, tmp_element->len, tmp_element->real_offset);
 	}
 
     /* remove it from its handle queue */
@@ -1446,7 +1417,6 @@ int PINT_req_sched_testworld(
     struct timeval tv;
 
     *inout_count_p = 0;
-//	fprintf(stderr, "ORANGEFS PINT_req_sched_testworld start");
 //	if(is_ready_queue_empty())
 //		fprintf(stderr, "ready_queue is empty\n");
 //	else
@@ -1490,11 +1460,9 @@ int PINT_req_sched_testworld(
 
     while ((!is_ready_queue_empty()) && (*inout_count_p < incount))
     {
-//	fprintf(stderr, "ORANGEFS PINT_req_sched_testworld scheduling a request...");
 	tmp_element = ready_queue_remove_next();
 	if(!tmp_element)
 		continue;
-//	fprintf(stderr, "...op = %d, id = %d\n", tmp_element->op, tmp_element->id);
 	out_id_array[*inout_count_p] = tmp_element->id;
 	if (returned_user_ptr_array)
 	{

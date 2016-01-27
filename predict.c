@@ -20,7 +20,9 @@
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
+//TODO Trace format, write, and read functions are *very* unneficient. It would be WAY BETTER to use a different format for traces and read them in larger chunks (like the trace module do for writing them, using a buffer). The prediction thread may sometimes be reading traces during the execution, and this could lead to it harming I/O performance. For now, I *do not* recommend using trace and prediction modules while evaluating AGIOS performance. 
 #include "agios.h"
+#include "agios_request.h"
 #ifndef AGIOS_KERNEL_MODULE 
 
 #include <stdio.h>
@@ -40,6 +42,7 @@
 #include "access_pattern_detection_tree.h"
 #include "scheduling_algorithm_selection_tree.h"
 #include "agios_config.h"
+#include "req_hashtable.h"
 
 static int prediction_thr_stop = 0; /*for being notified about finishing the scheduler's execution*/
 static pthread_mutex_t prediction_thr_stop_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -179,7 +182,7 @@ int get_current_predicted_reqfilenb()
 /*build a new request structure and initialize some fields*/
 inline struct request_t *predicted_request_constructor(char *file_id, int type, long long offset, long len, unsigned long long int predicted_time)
 {
-	struct request_t *new = request_constructor(file_id, type, offset, len, 0, predicted_time, RS_PREDICTED);
+	struct request_t *new = request_constructor(file_id, type, offset, len, 0, predicted_time, RS_PREDICTED, 0);
 	
 	new->predicted_aggregation_size = 1;
 	new->predicted_aggregation_start = NULL;
@@ -191,9 +194,9 @@ inline struct request_t *predicted_request_constructor(char *file_id, int type, 
  *this is used to deciding if predictions are for the same request*/
 inline int request_time_is_close_enough(unsigned long long int time1, unsigned long long int time2)
 {
-	if(time1 >= (time2 - (time2 * config_get_prediction_time_error())/100))
+	if(time1 >= (time2 - (time2 * config_predict_agios_time_error)/100))
 	{
-		if(time1 <= (time2 + (time2 * config_get_prediction_time_error())/100))
+		if(time1 <= (time2 + (time2 * config_predict_agios_time_error)/100))
 			return 1;
 		else
 			return 0;
@@ -205,11 +208,6 @@ inline int request_time_is_close_enough(unsigned long long int time1, unsigned l
 //TODO should we have a mutex for predict_timeline?
 void predict_timeline_add_req(struct request_t *req) 
 {
-	if (agios_list_empty(&predict_timeline))
-		req->timestamp = 0;
-	else 
-		req->timestamp = ((struct request_t *)agios_list_entry(predict_timeline.prev, struct request_t, timeline))->timestamp + 1;
-
 	agios_list_add_tail(&req->timeline, &predict_timeline);
 }
 /*searches for the already existing predicted request inside a related list. MUST hold hashtable lock*/
@@ -323,7 +321,8 @@ int add_prediction(char *file_id, int type, long long offset, long len, unsigned
 
 	if(req)
 	{
-		hash = hashtable_add_req(req);
+		hashtable_lock(hash);
+		hashtable_add_req(req, hash, NULL);
 		proc_stats_newreq(req);  //update statistics
 		update_average_distance(req->globalinfo, offset, len);
 		hashtable_unlock(hash);
@@ -345,7 +344,7 @@ void prediction_newreq(struct request_t *req)
 	struct agios_list_head *predicted_list;
 
 #ifdef AGIOS_DEBUG
-	agios_print("looking for the request %s %d %lld %ld...", req->file_id, req->type, req->io_data.offset, req->io_data.len);
+	agios_print("looking for the request %s %d %lu %lu...", req->file_id, req->type, req->io_data.offset, req->io_data.len);
 #endif
 
 	if(req->type == RT_READ)
@@ -379,7 +378,7 @@ unsigned long long int agios_predict_should_we_wait(struct request_t *req)
 		predicted_head = req->mirror->predicted_aggregation_start;
 	else /*it is an aggregated request*/
 	{
-		agios_list_for_each_entry(tmp, &req->reqs_list, aggregation_element) /*go through all subreqs*/
+		agios_list_for_each_entry(tmp, &req->reqs_list, related) /*go through all subreqs*/
 		{
 			if((tmp->mirror) && (tmp->mirror->predicted_aggregation_start) && (tmp->mirror->predicted_aggregation_start != predicted_head)) //we have a predicted aggregation to this request, and it is not the one we've already found 
 			{
@@ -439,14 +438,14 @@ void update_average_distance(struct related_list_t *related_list, long long offs
 	
 	if(related_list->lastfinaloff > 0)
 	{
-		if(related_list->avg_distance == -1)
-			related_list->avg_distance = 0;
+		if(related_list->stats_file.avg_distance == -1)
+			related_list->stats_file.avg_distance = 0;
 		this_distance = offset - related_list->lastfinaloff;
 		if(this_distance < 0)
 			this_distance *= -1;
 		this_distance = this_distance/len;
-		related_list->avg_distance += this_distance;
-		related_list->avg_distance_count++;
+		related_list->stats_file.avg_distance += this_distance;
+		related_list->stats_file.avg_distance_count++;
 	}
 	related_list->lastfinaloff = offset+len;
 }
@@ -598,7 +597,7 @@ void predict_aggregations_onlist(struct related_list_t *predicted_l, short int c
 					/*aggregate them!*/
 					req->predicted_aggregation_size++;
 					req_next->predicted_aggregation_start = req;
-					req->globalinfo->stats.aggs_no++;
+					req->globalinfo->stats_file.aggs_no++;
 					if(req_next->jiffies_64 < req->first_agg_time)
 						req->first_agg_time = req_next->jiffies_64;
 					if(req_next->jiffies_64 > req->last_agg_time)
@@ -609,9 +608,9 @@ void predict_aggregations_onlist(struct related_list_t *predicted_l, short int c
 			
 				req_l_next = req_l_next->next;
 			} 
-			req->globalinfo->stats.sum_of_agg_reqs+= req->predicted_aggregation_size;
-			if(req->predicted_aggregation_size > req->globalinfo->stats.biggest)
-				req->globalinfo->stats.biggest = req->predicted_aggregation_size;
+			req->globalinfo->stats_file.sum_of_agg_reqs+= req->predicted_aggregation_size;
+			if(req->predicted_aggregation_size > req->globalinfo->best_agg)
+				req->globalinfo->best_agg = req->predicted_aggregation_size;
 
 		}
 		req_l = req_l->next;
@@ -625,7 +624,7 @@ void predict_aggregations(short int cleanup)
 	struct agios_list_head *hash_list;
 	struct request_file_t *req_file;
 	
-	for(i=0; i< hashtable_get_size(); i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
 
@@ -644,7 +643,7 @@ void predict_aggregations(short int cleanup)
 					/*the predicted writes list*/
 					predict_aggregations_onlist(&req_file->predicted_writes, cleanup);
 				}
-				if((config_get_trace_predict()) && (!(agios_list_empty(&(req_file->predicted_writes.list)) && agios_list_empty(&(req_file->predicted_reads.list)))))
+				if((config_trace_agios_predict) && (!(agios_list_empty(&(req_file->predicted_writes.list)) && agios_list_empty(&(req_file->predicted_reads.list)))))
 					agios_trace_print_predicted_aggregations(req_file);
 			}
 		}
@@ -658,6 +657,7 @@ void predict_aggregations(short int cleanup)
  *Between the requests from this stripe, we calculate the difference between the maximum and the minimum arrival times. 
  *Then we take the average between all stripes' differences
  */
+//TODO it probably does not make sense for orangefs
 void calculate_average_stripe_access_time_difference(struct related_list_t *related_list) 
 {
 	unsigned long long int arrival_times_differences_sum, max_arrival_time, min_arrival_time;
@@ -674,10 +674,10 @@ void calculate_average_stripe_access_time_difference(struct related_list_t *rela
 		stripes_count=0;
 		agios_list_for_each_entry(req, &related_list->list, related)
 		{
-			if((req->io_data.offset / config_get_stripesize()) != current_stripe)
+			if((req->io_data.offset / config_agios_stripe_size) != current_stripe)
 			{
 				//since requests are ordered by offset, we know we already went through all requests from the current stripe
-				current_stripe = (req->io_data.offset / config_get_stripesize());
+				current_stripe = (req->io_data.offset / config_agios_stripe_size);
 				if(current_count > 1)
 				{
 					arrival_times_differences_sum = max_arrival_time - min_arrival_time; //get the difference from the last stripe if we had at least two requests in it
@@ -751,7 +751,7 @@ void update_traced_access_pattern()
 	
 	PRINT_FUNCTION_NAME;
 	
-	for(i=0; i< hashtable_get_size(); i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
 
@@ -760,42 +760,44 @@ void update_traced_access_pattern()
 			/*go through all the files of this hash value*/
 			agios_list_for_each_entry(req_file, hash_list, hashlist)
 			{
-				if((!agios_list_empty(&req_file->predicted_reads.list)) || (req_file->predicted_reads.avg_distance > -1))
+				if((!agios_list_empty(&req_file->predicted_reads.list)) || (req_file->predicted_reads.stats_file.avg_distance > -1))
 				{
-					if(req_file->predicted_reads.avg_distance_count > 1)
+					//average distance between consecutive requests (we keep summing the difference while adding the requests, so we just have to take the average 
+					if(req_file->predicted_reads.stats_file.avg_distance_count > 1)
 					{
-						req_file->predicted_reads.avg_distance= ((long double) req_file->predicted_reads.avg_distance)/req_file->predicted_reads.avg_distance_count;
-						req_file->predicted_reads.avg_distance_count=1;
+						req_file->predicted_reads.stats_file.avg_distance= ((long double) req_file->predicted_reads.stats_file.avg_distance)/req_file->predicted_reads.stats_file.avg_distance_count;
+						req_file->predicted_reads.stats_file.avg_distance_count=1;
 					}
 
+					//average stripe arrival time difference
 					calculate_average_stripe_access_time_difference(&req_file->predicted_reads);
 
-					if((req_file->predicted_reads.avg_stripe_difference >= 0) && (req_file->predicted_reads.avg_distance >= 0))
+					if((req_file->predicted_reads.avg_stripe_difference >= 0) && (req_file->predicted_reads.stats_file.avg_distance >= 0))
 					{
 						reads_count++;
-						read_server_reqsize += req_file->predicted_reads.stats.total_req_size / req_file->predicted_reads.proceedreq_nb;
+						read_server_reqsize += req_file->predicted_reads.stats_file.total_req_size / req_file->predicted_reads.stats_file.processedreq_nb;
 
-						access_pattern_detection_tree(RT_READ, req_file->predicted_reads.avg_distance, req_file->predicted_reads.avg_stripe_difference, &req_file->predicted_reads.spatiality, &req_file->predicted_reads.app_request_size);
+						access_pattern_detection_tree(RT_READ, req_file->predicted_reads.stats_file.avg_distance, req_file->predicted_reads.avg_stripe_difference, &req_file->predicted_reads.spatiality, &req_file->predicted_reads.app_request_size);
 						read_spatiality_count[req_file->predicted_reads.spatiality]++;
 						read_reqsize_count[req_file->predicted_reads.app_request_size]++;
 					}
 				}
-				if((!agios_list_empty(&req_file->predicted_writes.list)) || (req_file->predicted_writes.avg_distance > -1))
+				if((!agios_list_empty(&req_file->predicted_writes.list)) || (req_file->predicted_writes.stats_file.avg_distance > -1))
 				{
-					if(req_file->predicted_writes.avg_distance_count > 1)
+					if(req_file->predicted_writes.stats_file.avg_distance_count > 1)
 					{
-						req_file->predicted_writes.avg_distance= req_file->predicted_writes.avg_distance/req_file->predicted_writes.avg_distance_count;
-						req_file->predicted_writes.avg_distance_count=1;
+						req_file->predicted_writes.stats_file.avg_distance= req_file->predicted_writes.stats_file.avg_distance/req_file->predicted_writes.stats_file.avg_distance_count;
+						req_file->predicted_writes.stats_file.avg_distance_count=1;
 					}
 
 					calculate_average_stripe_access_time_difference(&req_file->predicted_writes);	
 			
-					if((req_file->predicted_writes.avg_stripe_difference >= 0) && (req_file->predicted_writes.avg_distance >= 0))
+					if((req_file->predicted_writes.avg_stripe_difference >= 0) && (req_file->predicted_writes.stats_file.avg_distance >= 0))
 					{
 						writes_count++;
-						write_server_reqsize += req_file->predicted_writes.stats.total_req_size / req_file->predicted_writes.proceedreq_nb;
+						write_server_reqsize += req_file->predicted_writes.stats_file.total_req_size / req_file->predicted_writes.stats_file.processedreq_nb;
 
-						access_pattern_detection_tree(RT_WRITE, req_file->predicted_writes.avg_distance, req_file->predicted_writes.avg_stripe_difference, &req_file->predicted_writes.spatiality, &req_file->predicted_writes.app_request_size);
+						access_pattern_detection_tree(RT_WRITE, req_file->predicted_writes.stats_file.avg_distance, req_file->predicted_writes.avg_stripe_difference, &req_file->predicted_writes.spatiality, &req_file->predicted_writes.app_request_size);
 						write_spatiality_count[req_file->predicted_writes.spatiality]++;
 						write_reqsize_count[req_file->predicted_writes.app_request_size]++;
 					}
@@ -838,7 +840,7 @@ void update_requests_arrival_times()
 	
 	PRINT_FUNCTION_NAME;
 	
-	for(i=0; i< hashtable_get_size(); i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
 
@@ -878,9 +880,9 @@ void update_requests_arrival_times()
 				
 
 }
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//FUNCTIONS RELATED TO READING TRACE FILES
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+/************************************************************************************************************
+ * TRACE FILES
+ ************************************************************************************************************/
 void reset_files_first_arrival_time()
 {
 	int i;
@@ -889,7 +891,7 @@ void reset_files_first_arrival_time()
 	
 	PRINT_FUNCTION_NAME;
 	
-	for(i=0; i< hashtable_get_size(); i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
 
@@ -928,7 +930,7 @@ void read_predictions_from_traces(int last, int files_nb)
 
 	for(i=last+1; i<= files_nb; i++)
 	{
-		snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_get_trace_file_name(1), i, config_get_trace_file_name(2));
+		snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_trace_agios_file_prefix, i, config_trace_agios_file_sufix);
 
 		input_file = fopen(filename, "r");
 
@@ -946,7 +948,7 @@ void read_predictions_from_traces(int last, int files_nb)
 			add_prediction(filename, type, offset, len, timestamp);
 		}
 		if(ret > 0)
-			agios_print("Error while reading the trace file %s.%d.%s. Stopping for this file.\n", config_get_trace_file_name(1), i, config_get_trace_file_name(2));
+			agios_print("Error while reading the trace file %s.%d.%s. Stopping for this file.\n", config_trace_agios_file_prefix, i, config_trace_agios_file_sufix);
 	
 		/*we have to reset the first arrival times for the files because the next trace can have accesses to the same file, and it would be harder to identify duplicate predictions*/
 		reset_files_first_arrival_time();
@@ -965,7 +967,7 @@ int how_many_tracefiles_there_are(int start)
 	int ret=start+1;
 
 	do{
-		snprintf(filename, 300*sizeof(char),  "%s.%d.%s", config_get_trace_file_name(1), ret, config_get_trace_file_name(2));
+		snprintf(filename, 300*sizeof(char),  "%s.%d.%s", config_trace_agios_file_prefix, ret, config_trace_agios_file_sufix);
 		input_file = fopen(filename, "r");
 		if(input_file)
 		{
@@ -981,6 +983,11 @@ int how_many_tracefiles_there_are(int start)
 
 	return ret-1;
 }
+/************************************************************************************************************
+ * SIMPLIFIED TRACE FILES
+ * instead of tracing requests, these files only give some metrics previously measured for files 
+ * (they are substantially faster than normal traces, very useful to repeat tests)
+ ************************************************************************************************************/
 //return the number of files for which we obtained information from simplified traces
 int read_predictions_from_simple_traces(void)
 {
@@ -995,11 +1002,11 @@ int read_predictions_from_simple_traces(void)
 	
 
 	PRINT_FUNCTION_NAME;
-	if((config_get_simple_trace_file_prefix() == NULL) || (config_get_trace_file_name(2) == NULL))
+	if((config_simple_trace_agios_file_prefix == NULL) || (config_trace_agios_file_sufix == NULL))
 		return 0;
 	do{
 		simple_tracefile_counter++;
-		snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_get_simple_trace_file_prefix(), simple_tracefile_counter, config_get_trace_file_name(2));
+		snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_simple_trace_agios_file_prefix, simple_tracefile_counter, config_trace_agios_file_sufix);
 		input_file = fopen(filename, "r");
 		if(input_file)
 		{
@@ -1017,7 +1024,7 @@ int read_predictions_from_simple_traces(void)
 			hash_list = hashtable_lock(hash_val);
 			req_file = find_req_file(hash_list, file_id, RS_NONE);
 
-			ret = fscanf(input_file, "%Le\t%Le\t%lld\nWRITE\t%Le\t%Le\t%lld\n", &req_file->predicted_reads.avg_distance, &req_file->predicted_reads.avg_stripe_difference, &req_file->predicted_reads.stats.total_req_size, &req_file->predicted_writes.avg_distance, &req_file->predicted_writes.avg_stripe_difference, &req_file->predicted_writes.stats.total_req_size);
+			ret = fscanf(input_file, "%Le\t%Le\t%llu\nWRITE\t%Le\t%Le\t%llu\n", &req_file->predicted_reads.stats_file.avg_distance, &req_file->predicted_reads.avg_stripe_difference, &req_file->predicted_reads.stats_file.total_req_size, &req_file->predicted_writes.stats_file.avg_distance, &req_file->predicted_writes.avg_stripe_difference, &req_file->predicted_writes.stats_file.total_req_size);
 			if(ret != 6)
 			{
 				agios_print("could not read from simplified trace file %s\n", filename);
@@ -1025,9 +1032,9 @@ int read_predictions_from_simple_traces(void)
 				hashtable_unlock(hash_val);
 				continue;
 			}
-			debug("READ\t%Le\t%Le\t%lld\tWRITE\t%Le\t%Le\t%lld\n", req_file->predicted_reads.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats.total_req_size, req_file->predicted_writes.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats.total_req_size);
+			debug("READ\t%Le\t%Le\t%llu\tWRITE\t%Le\t%Le\t%llu\n", req_file->predicted_reads.stats_file.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats_file.total_req_size, req_file->predicted_writes.stats_file.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats_file.total_req_size);
 			req_file->wrote_simplified_trace=1; //so we won't write it to another file
-			req_file->predicted_reads.proceedreq_nb = req_file->predicted_writes.proceedreq_nb = 1;
+			req_file->predicted_reads.stats_file.processedreq_nb = req_file->predicted_writes.stats_file.processedreq_nb = 1;
 			count++;
 
 			hashtable_unlock(hash_val);
@@ -1049,7 +1056,7 @@ void write_simplified_trace_files(void)
 	FILE *output_file=NULL;
 	char filename[300];
 
-	for(i=0; i< hashtable_get_size(); i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
 
@@ -1062,7 +1069,7 @@ void write_simplified_trace_files(void)
 				{
 					if((!agios_list_empty(&(req_file->predicted_reads.list))) || (!agios_list_empty(&(req_file->predicted_writes.list)))) //if we have any predicted requests. we are not generating simplified trace files from information we got from simplified trace files...
 					{
-						snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_get_simple_trace_file_prefix(), simple_tracefile_counter, config_get_trace_file_name(2));
+						snprintf(filename, 300*sizeof(char), "%s.%d.%s", config_simple_trace_agios_file_prefix, simple_tracefile_counter, config_trace_agios_file_sufix);
 						output_file = fopen(filename, "w");
 						if(!output_file)
 						{
@@ -1076,11 +1083,11 @@ void write_simplified_trace_files(void)
 						if(agios_list_empty(&(req_file->predicted_reads.list)))
 							fprintf(output_file, "READ\t-1\t-1\t0\n");
 						else
-							fprintf(output_file, "READ\t%Le\t%Le\t%lld\n", req_file->predicted_reads.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats.total_req_size / req_file->predicted_reads.proceedreq_nb);
+							fprintf(output_file, "READ\t%Le\t%Le\t%llu\n", req_file->predicted_reads.stats_file.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats_file.total_req_size / req_file->predicted_reads.stats_file.processedreq_nb);
 						if(agios_list_empty(&(req_file->predicted_writes.list)))
 							fprintf(output_file, "WRITE\t-1\t-1\t0\n");
 						else
-							fprintf(output_file, "WRITE\t%Le\t%Le\t%lld\n", req_file->predicted_writes.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats.total_req_size / req_file->predicted_writes.proceedreq_nb);
+							fprintf(output_file, "WRITE\t%Le\t%Le\t%llu\n", req_file->predicted_writes.stats_file.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats_file.total_req_size / req_file->predicted_writes.stats_file.processedreq_nb);
 						fclose(output_file);
 					}
 				}
@@ -1091,9 +1098,9 @@ void write_simplified_trace_files(void)
 	}
 }
 
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//PREDICTION THREAD'S MAIN FUNCTIONS
-//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+/************************************************************************************************************
+ * PREDICTION THREAD
+ ************************************************************************************************************/
 void *prediction_thr(void *arg)
 {
 	int new_tracefile_counter;
@@ -1110,17 +1117,17 @@ void *prediction_thr(void *arg)
 
 	init_agios_list_head(&predict_timeline); //we used to have both a timeline and a hashtable for the schedulers, but it led to race conditions, since you could have the lock to a line of the hashtable and with it change the timeline, where there are requests from other lines. I'm still not 100% positive it will not be a problem for the prediction module... it's probably ok, because we'll never erase predictions (unlike requests which are processed and then go away)
 
-	if((tracefile_counter > 0) && (config_get_predict_read_traces()))
+	if((tracefile_counter > 0) && (config_predict_agios_read_traces))
 	{
 		read_predictions_from_traces(0,tracefile_counter);
 		read_predictions_from_simple_traces();
 		update_traced_access_pattern();
-		if(config_get_predict_request_aggregation())
+		if(config_predict_agios_request_aggregation)
 		{
 			calculate_prediction_alpha(0, 0, 1); /*necessary to the prediction of aggregations*/
 			predict_aggregations(0);  /*go through all the predictions to evaluate possible aggregations*/
 		}
-		if(config_get_write_simplified_traces())
+		if(config_agios_write_simplified_traces)
 			write_simplified_trace_files();
 	}
 	else
@@ -1150,19 +1157,19 @@ void *prediction_thr(void *arg)
 				new_tracefile_counter = how_many_tracefiles_there_are(tracefile_counter);
 				new_tracefile_counter--; //we take one out, because it's the one the Trace Module is using right now.
 				
-				if(config_get_predict_read_traces())
+				if(config_predict_agios_read_traces)
 				{
 					read_predictions_from_traces(tracefile_counter, new_tracefile_counter);
 					update_traced_access_pattern();
-					if(config_get_write_simplified_traces())
+					if(config_agios_write_simplified_traces)
 						write_simplified_trace_files();
 				}
 				tracefile_counter = new_tracefile_counter;
 			}
-			if(config_get_predict_request_aggregation())
+			if(config_predict_agios_request_aggregation)
 			{
 				/*re-calculate alpha and re-do all agregations predictions*/
-				calculate_prediction_alpha(get_time_spent_waiting(), get_waiting_time_overlapped(), 0);
+				calculate_prediction_alpha(time_spent_waiting, waiting_time_overlapped, 0);
 				predict_aggregations(1);
 			}
 			pthread_mutex_unlock(&prediction_thr_refresh_mutex);
