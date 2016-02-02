@@ -130,10 +130,6 @@ int agios_thread_should_stop(void)
  ***********************************************************************************************************/
 static struct io_scheduler_instance_t *dynamic_scheduler=NULL;
 static struct timespec last_algorithm_update; //the time at the last time we've selected an algorithm
-struct io_scheduler_instance_t *consumer_get_current_scheduler(void)
-{
-	return current_scheduler;
-}
 
 /***********************************************************************************************************
  * REFRESH OF PREDICTION MODULE'S ALPHA FACTOR 	   *
@@ -148,7 +144,7 @@ struct io_scheduler_instance_t *consumer_get_current_scheduler(void)
 //if hash= -1, we are using the timeline (a simple list with only one mutex)
 inline void unlock_structure_mutex(int hash)
 {
-	if(hash >= 0) 
+	if(current_scheduler->needs_hashtable)
 		hashtable_unlock(hash);
 	else
 		timeline_unlock();
@@ -158,7 +154,7 @@ inline void unlock_structure_mutex(int hash)
 //if hash= -1, we are using the timeline (a simple list with only one mutex)
 inline void lock_structure_mutex(int hash)
 {
-	if(hash >= 0) 
+	if(current_scheduler->needs_hashtable)
 		hashtable_lock(hash);
 	else
 		timeline_lock();

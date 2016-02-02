@@ -195,8 +195,6 @@ void PINT_req_sched_agios_process(int64_t req_id)
 {
 	struct req_sched_element *element;
 
-	requests_received_from_agios++;
-
  	element = id_gen_fast_lookup(req_id); 
 
 	if(element)
@@ -215,7 +213,6 @@ void PINT_req_sched_agios_process_multiple(int64_t *reqs, int reqnb)
 	struct req_sched_element *element;
 	int i;
 
-	requests_received_from_agios+=reqnb;
 
 	for(i=0; i< reqnb; i++)
 	{
@@ -1417,10 +1414,6 @@ int PINT_req_sched_testworld(
     struct timeval tv;
 
     *inout_count_p = 0;
-//	if(is_ready_queue_empty())
-//		fprintf(stderr, "ready_queue is empty\n");
-//	else
-//		fprintf(stderr, "ready_queue is NOT empty\n");
 
     /* do timers first, if we have them */
     if(!qlist_empty(&timer_queue))

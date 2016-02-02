@@ -441,10 +441,13 @@ void lock_all_data_structures()
 }
 void unlock_all_data_structures()
 {
+	PRINT_FUNCTION_NAME;
+
 	int i;
 	for(i=0; i<AGIOS_HASH_ENTRIES; i++)
 		hashtable_unlock(i);
 	timeline_unlock();
+	PRINT_FUNCTION_EXIT;
 }
 
 /*
@@ -807,9 +810,6 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 		hashtable_unlock(hash);
 	else
 	{
-#ifdef AGIOS_DEBUG
-		print_timeline();
-#endif
 		timeline_unlock();
 	}
 	PRINT_FUNCTION_EXIT;	
@@ -820,20 +820,18 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 int agios_set_stripe_size(char *file_id, unsigned int stripe_size)
 {
 	struct request_file_t *req_file;
-	unsigned long hash_val;
-	struct agios_list_head *list;
+	unsigned long hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;
 
 	//find the structure for this file (and acquire lock)
-	if(scheduler_needs_hashtable)
-	{
-		hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;	
-		list = hashtable_lock(hash_val);
-	}
+	if(current_scheduler->needs_hashtable)
+		hashtable_lock(hash_val);
 	else
-	{
-		list = timeline_lock();
-	}
-	req_file = find_req_file(list, file_id, RS_HASHTABLE);
+		timeline_lock();
+	req_file = find_req_file(&hashlist[hash_val], file_id, RS_HASHTABLE);
 	req_file->stripe_size = stripe_size;
+	if(current_scheduler->needs_hashtable)
+		hashtable_unlock(hash_val);
+	else
+		timeline_unlock();
 	return 1;
 }
