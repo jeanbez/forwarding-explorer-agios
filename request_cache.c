@@ -37,8 +37,6 @@ struct kmem_cache *request_cachep;
 struct kmem_cache *request_file_cachep;
 #endif
 
-static short int scheduler_needs_hashtable=-1; //local copy of a configuration file parameter. I've had to declare it here because it is used in the counter functions
-
 /**********************************************************************************************************************/
 /*	COUNTERS	*/
 /**********************************************************************************************************************/
