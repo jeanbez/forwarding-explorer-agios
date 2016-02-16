@@ -78,6 +78,7 @@ int agios_release_request(char *file_id, short int type, unsigned long int len, 
 
 int agios_set_stripe_size(char *file_id, unsigned int stripe_size);
 
+int agios_cancel_request(char *file_id, short int type, unsigned long int len, unsigned long int offset);
 
 void agios_print_stats_file(char *filename);
 void agios_reset_stats(void);
