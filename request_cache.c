@@ -819,14 +819,30 @@ int agios_set_stripe_size(char *file_id, unsigned int stripe_size)
 {
 	struct request_file_t *req_file;
 	unsigned long hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;
+	short int previous_needs_hashtable;
 
 	//find the structure for this file (and acquire lock)
-	if(current_scheduler->needs_hashtable)
-		hashtable_lock(hash_val);
-	else
-		timeline_lock();
+	while(1)
+	{
+		previous_needs_hashtable = current_scheduler->needs_hashtable;
+		if(previous_needs_hashtable)
+			hashtable_lock(hash_val);
+		else
+			timeline_lock();
+		if(previous_needs_hashtable != current_scheduler->needs_hashtable)
+		{
+			if(previous_needs_hashtable)
+				hashtable_unlock(hash_val);
+			else
+				timeline_unlock();
+		}
+		else
+			break;
+	}
+
 	req_file = find_req_file(&hashlist[hash_val], file_id, RS_HASHTABLE);
 	req_file->stripe_size = stripe_size;
+
 	if(current_scheduler->needs_hashtable)
 		hashtable_unlock(hash_val);
 	else
