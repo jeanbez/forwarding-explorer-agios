@@ -35,8 +35,6 @@ void consumer_init(struct client *clnt_value, int task_value);
 int consumer_get_task(void);
 #endif
 
-struct io_scheduler_instance_t *consumer_get_current_scheduler(void);
-
 void consumer_signal_new_reqs(void);
 
 void stop_the_agios_thread(void);

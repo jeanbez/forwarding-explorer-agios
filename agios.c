@@ -31,6 +31,7 @@
 #include "agios_config.h"
 #include "estimate_access_times.h"
 #include "performance.h"
+#include "iosched.h"
 
 #ifdef AGIOS_KERNEL_MODULE
 #include <linux/module.h>
@@ -163,7 +164,6 @@ void __exit __agios_exit(void)
 #endif
 void agios_exit(void)
 {
-	struct io_scheduler_instance_t *current_sched;
 	PRINT_FUNCTION_NAME;
 
 #ifdef AGIOS_KERNEL_MODULE
@@ -189,9 +189,8 @@ void agios_exit(void)
 #else
 		pthread_join(agios_pthread, NULL);
 #endif
-		current_sched = consumer_get_current_scheduler();
-		if(current_sched->exit)
-			current_sched->exit();
+		if(current_scheduler->exit)
+			current_scheduler->exit();
 	}
 
 	request_cache_cleanup();
