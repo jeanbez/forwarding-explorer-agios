@@ -30,6 +30,10 @@
 #include <stdint.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * Request type.
  */
@@ -85,5 +89,8 @@ void agios_reset_stats(void);
 
 void agios_wait_predict_init(void);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif // #ifndef AGIOS_H
