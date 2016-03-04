@@ -248,6 +248,16 @@ void AIOLI(void *clnt)
 				update_time = process_requests(req, (struct client *)clnt, selected_hash);
 				/*cleanup step*/
 				waiting_algorithms_postprocess(req);
+
+				/*we need to wait until the rquest was processed before moving on*/
+				if(!update_time) //unless we are changing algorithms
+				{
+					//we need to release the hashtable/timeline mutes while waiting because otherwise other thread will not be able to acquire it in the release_request function and signal us
+					hashtable_unlock(selected_hash);
+					iosched_wait_synchronous();
+					hashtable_lock(selected_hash);
+				}
+
 				
 				/*lets see if we expired the quantum*/	
 				remaining = aioli_quantum - get_nanoelapsed(aioli_start);

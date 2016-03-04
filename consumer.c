@@ -271,15 +271,6 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 
 	debug("current status. hashtable[%d] has %d requests, there are %d requests in the scheduler to %d files.", hash, hashlist_reqcounter[hash], current_reqnb, current_reqfilenb); //attention: it could be outdated info since we are not using the lock
 
-	//if the current scheduling algorithm follows the synchronous approach, we need to wait until the request was processed
-	if((current_scheduler->sync) && (!update_time))
-	{
-		//we need to release the hashtable/timeline mutex while waiting because otherwise other thread will not be able to acquire it in the release_request function and signal us
-		unlock_structure_mutex(hash); 
-		iosched_wait_synchronous();
-		lock_structure_mutex(hash);	
-	}	
-
 	PRINT_FUNCTION_EXIT;
 	return update_time;
 }
