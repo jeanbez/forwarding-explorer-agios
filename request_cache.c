@@ -843,7 +843,7 @@ int agios_set_stripe_size(char *file_id, unsigned int stripe_size)
 	req_file = find_req_file(&hashlist[hash_val], file_id, RS_HASHTABLE);
 	req_file->stripe_size = stripe_size;
 
-	if(current_scheduler->needs_hashtable)
+	if(previous_needs_hashtable)
 		hashtable_unlock(hash_val);
 	else
 		timeline_unlock();
