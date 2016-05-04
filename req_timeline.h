@@ -28,6 +28,8 @@
 
 /* to access the associated data structures*/
 extern struct agios_list_head timeline;
+extern struct agios_list_head *app_timeline;
+extern int app_timeline_size;
 struct agios_list_head *timeline_lock(void);
 void timeline_unlock(void);
 

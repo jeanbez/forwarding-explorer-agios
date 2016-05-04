@@ -61,7 +61,7 @@ void print_timeline(void);
 inline void print_request(struct request_t *req);
 
 /* init and exit functions*/
-int request_cache_init(void);
+int request_cache_init(int max_app_id);
 void request_cache_cleanup(void);
 void list_of_requests_cleanup(struct agios_list_head *list);
 

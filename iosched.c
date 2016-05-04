@@ -61,6 +61,7 @@
 #include "NOOP.h"
 #include "DYN_TREE.h"
 #include "ARMED_BANDIT.h"
+#include "EXCLUSIVE_TW.h"
 
 
 /**********************************************************************************************************************/
@@ -527,6 +528,19 @@ void register_static_io_schedulers(void)
 			.is_dynamic = 1,
 			.name = "ARMED_BANDIT",
 			.index = 9,
+		},
+		{
+			.init = &EXCLUSIVE_TW_init,
+			.exit = &EXCLUSIVE_TW_exit,
+			.schedule = &EXCLUSIVE_TW,
+			.select_algorithm = NULL,
+			.max_aggreg_size = 1,
+			.sync = 0, 
+			.needs_hashtable = 0, 
+			.can_be_dynamically_selected = 0, //The functions that implement the migration between different scheduling algorithms were not adapted for this algorithm, so it should never be used with a dynamic algorithm until we fix that.  
+			.is_dynamic = 0,
+			.name = "EXCLUSIVE_TIME_WINDOW",
+			.index = 10,
 		}
 	};
 	int i = 0;

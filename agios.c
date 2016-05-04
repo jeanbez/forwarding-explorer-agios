@@ -84,7 +84,7 @@ int __init __agios_init(void)
 #endif
 
 //returns 0 on success
-int agios_init(struct client *clnt, char *config_file)
+int agios_init(struct client *clnt, char *config_file, int max_app_id)
 {
 	int ret;
 	int file_counter=0;
@@ -117,7 +117,7 @@ int agios_init(struct client *clnt, char *config_file)
 	read_access_times_functions(config_agios_access_times_file);
 
 	/*init the memory structures*/
-	if ((ret = request_cache_init()))
+	if ((ret = request_cache_init(max_app_id)))
 	{
 		return ret;
 	}

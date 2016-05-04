@@ -42,6 +42,7 @@
 #define NOOP_SCHEDULER 7
 #define DYN_TREE_SCHEDULER 8
 #define ARMED_BANDIT_SCHEDULER 9
+#define EXCLUSIVE_TIME_WINDOW 10
 
 struct request_t;
 struct request_file_t;
@@ -79,7 +80,7 @@ struct io_scheduler_instance_t {
 	int max_aggreg_size; //maximum number of requests to be aggregated at once
 	short int can_be_dynamically_selected; //some algorithms need special conditions (like available trace files or application ids) or are still experimental, so we may not want them to be selected by the dynamic selectors
 	short int is_dynamic;
-	char name[20];
+	char name[22];
 	int index;
 
 };

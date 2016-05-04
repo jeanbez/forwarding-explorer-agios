@@ -52,6 +52,7 @@ extern int config_waiting_time;
 extern int config_aioli_quantum;
 extern int config_mlf_quantum;
 extern unsigned long int config_tw_size;
+extern unsigned long int config_exclusive_tw_window_duration;
 // 4. access times estimation
 extern char *config_agios_access_times_file;
 // 5. ARMED BANDIT

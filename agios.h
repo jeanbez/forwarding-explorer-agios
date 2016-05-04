@@ -67,7 +67,7 @@ struct client {
 int __init __agios_init(void);
 void __exit __agios_exit(void);
 #endif
-int agios_init(struct client *clnt, char *config_file);
+int agios_init(struct client *clnt, char *config_file, int max_app_id); //max_app_id is only relevant for exclusive time window scheduler, otherwise you MUST provide 0. Also we will assume app_id will always be something between 0 and max_app_id. 
 void agios_exit(void);
 
 

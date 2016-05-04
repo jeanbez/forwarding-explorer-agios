@@ -115,7 +115,7 @@ void *test_thr(void *arg)
 		req_id->reqid = i;
 		req_id->threadid = threadid;
 		/*generate a request*/
-		agios_add_request(filename, REQ_TYPE, offset, req_size, (void *) req_id, &clnt, threadid);
+		agios_add_request(filename, REQ_TYPE, offset, req_size, (void *) req_id, &clnt, threadid%4);
 		offset += req_size;
 		 
 		/*wait a while before generating the next one*/
@@ -152,7 +152,7 @@ int main (int argc, char **argv)
 	/*start AGIOS*/
 	clnt.process_requests = NULL;
 	clnt.process_request = test_process;
-	if(agios_init(&clnt, "/tmp/agios.conf") != 0)
+	if(agios_init(&clnt, "/tmp/agios.conf", 3) != 0)
 	{
 		printf("PANIC! Could not initialize AGIOS!\n");
 		exit(1);

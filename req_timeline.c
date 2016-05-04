@@ -35,6 +35,8 @@
 
 
 AGIOS_LIST_HEAD(timeline); //a linked list of requests
+struct agios_list_head *app_timeline;
+int app_timeline_size=0;
 //a lock to access all timeline structures
 #ifdef AGIOS_KERNEL_MODULE
 static DEFINE_MUTEX(timeline_mutex);
@@ -91,7 +93,7 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 		PRINT_FUNCTION_NAME;
 		VERIFY_REQUEST(req);
 
-		debug("adding request %lu %lu to file %s", req->io_data.offset, req->io_data.len, req->file_id);	
+		debug("adding request %lu %lu to file %s, app_id %u", req->io_data.offset, req->io_data.len, req->file_id, req->tw_app_id);	
 
 		/*find the file and update its informations if needed*/
 		req_file = find_req_file(&hashlist[hash_val], req->file_id, req->state); //we store file information in the hashtable 
@@ -129,6 +131,11 @@ void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct re
 
 		return;
 	} 
+	if(current_alg == EXCLUSIVE_TIME_WINDOW)
+	{
+		agios_list_add_tail(&req->related, &(app_timeline[req->tw_app_id]));
+		return;
+	}
 
 	//the TO-agg scheduling algorithm searches the queue for contiguous requests. If it finds any, then aggregate them.	
 	if((current_alg == TIMEORDER_SCHEDULER) && (current_scheduler->max_aggreg_size > 1))
@@ -243,9 +250,25 @@ struct request_t *timeline_oldest_req(unsigned long *hash)
 }
 
 //initializes data structures
-inline void timeline_init()
+//max_app_id is only relevant for EXCLUSIVE_TIME_WINDOW. Pass 0 otherwise to prevent unnecessary memory allocation
+inline void timeline_init(int max_app_id)
 {
+	int i;
 	init_agios_list_head(&timeline);
+	if(max_app_id > 0)
+	{
+		app_timeline = (struct agios_list_head *) malloc(sizeof(struct agios_list_head)*(max_app_id+1));
+		app_timeline_size = max_app_id+1;
+		if(!app_timeline)
+		{
+			fprintf(stderr, "no memory to allocate the app timeline for exclusive time window\n");
+			return; //what to do?
+		}
+		for(i=0; i< app_timeline_size; i++)
+		{
+			init_agios_list_head(&(app_timeline[i]));
+		}
+	}
 }
 inline void timeline_cleanup()
 {

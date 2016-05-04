@@ -452,14 +452,14 @@ void unlock_all_data_structures()
  * This function allocates memory and initializes related locks 
  */
 //returns 0 on success
-int request_cache_init(void)
+int request_cache_init(int max_app_id)
 {
 	int ret=0;
 
 	reset_global_reqstats(); //put all statistics to zero
 	agios_reset_performance_counters();
 
-	timeline_init(); //initializes the timeline
+	timeline_init(max_app_id); //initializes the timeline
 
 #ifdef AGIOS_KERNEL_MODULE
 	/*allocates slab caches of the most used types (request_t and request_file_t)
