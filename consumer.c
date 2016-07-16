@@ -38,6 +38,7 @@
 #include "proc.h"
 #include "performance.h"
 #include "agios_request.h"
+#include "ARMED_BANDIT.h"
 
 #ifndef AGIOS_KERNEL_MODULE
 #include <pthread.h>
@@ -292,6 +293,7 @@ void check_update_time()
 		reset_stats_window(); //reset all stats so they will not affect the next selection
 		unlock_all_data_structures();
 		agios_gettime(&last_algorithm_update); 
+		write_migration_end(get_timespec2llu(last_algorithm_update));	
 		debug("We've changed the scheduling algorithm to %s", current_scheduler->name);
 
 	}

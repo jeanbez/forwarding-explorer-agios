@@ -26,4 +26,5 @@
 int ARMED_BANDIT_init(void);
 int ARMED_BANDIT_select_next_algorithm(void);
 void ARMED_BANDIT_exit(void);
+void write_migration_end(unsigned long long int timestamp);
 #endif

@@ -10,6 +10,7 @@ static int benchmarked_scheds=0; //how many of the possible scheduling algorithm
 static int best_bandwidth=-1; //we keep an updated best scheduling algorithm (according to bandwidth) so we don't have to go through all of them when recalculating probabilities
 static int sum_of_all_probabilities=100; //we keep this value so we don't have to recalculate it every time we need it. It may not be 100 because we use integers (for instance, if we start with 6 scheduling algorithms, each one of them will receive probability 100/6 = 16, which sums up to 96)
 static long double sum_of_bandwidth=0; //we keep an update sum of all algorithms' bandwidth so we don't have to recalculate it every time we need it. 
+static FILE *ab_trace = NULL;
 
 struct performance_info_t
 {
@@ -76,6 +77,31 @@ int randomly_pick_algorithm()
 	}
 	return i;
 }
+void print_ab_trace_probs()
+{
+	int i, j;
+	for(i=0; i < scheduler_nb; i++) 
+	{
+		if(AB_table[i].sched->can_be_dynamically_selected == 1)
+		{
+			fprintf(ab_trace, "Scheduler %s\tprob %d/%d\tselected %d times\tavg band %.2f\tMeasurements: ", AB_table[i].sched->name, AB_table[i].probability, sum_of_all_probabilities, AB_table[i].selection_counter, AB_table[i].bandwidth);
+
+			j = AB_table[i].measurements_start;
+			while(j != AB_table[i].measurements_end)
+			{
+				fprintf(ab_trace, "\t%lu %.2f", AB_table[i].bandwidth_measurements[j].timestamp, AB_table[i].bandwidth_measurements[j].bandwidth); 
+				j++;
+				if(j == config_agios_performance_window)
+					j =0;
+			}
+			fprintf(ab_trace, "\n");
+
+		}
+	}
+	fprintf(ab_trace, "Selected scheduler %s\n---------------------------------------------------------------------------------------------\n", AB_table[current_sched].sched->name);
+	fflush(ab_trace);
+
+}
 //this function is called during initialization. It initializes data structures used by this algorithm. 
 //the first scheduling algorithm is not randomly picked, but defined in AGIOS' configuration file (unless this definition makes no sense)
 //returns 1 on success
@@ -89,6 +115,14 @@ int ARMED_BANDIT_init(void)
 	//initialize the pseudo-random number generator
 	agios_gettime(&start_time);
 	srand(get_timespec2llu(start_time));
+
+	//open ab trace file
+	ab_trace = fopen("/tmp/agios_ab_trace.txt", "w");
+	if(!ab_trace)
+	{
+		agios_print("PANIC! Could not open trace file for AB!");
+		return -1;
+	}
 
 	//find out how many scheduling algorithms do we have
 	scheduler_nb = get_io_schedulers_size();
@@ -138,6 +172,9 @@ int ARMED_BANDIT_init(void)
 			return 0;
 	}
 	AB_table[current_sched].selection_counter++;
+
+	fprintf(ab_trace, "Starting Armed Bandit at timestamp %llu\n", get_timespec2llu(start_time));
+	print_ab_trace_probs();
 
 	return 1;
 }
@@ -225,7 +262,7 @@ void update_average_bandwidth(int sched)
 
 //update the observed bandwidth for a scheduling algorithm after using it for a period of time
 //we keep a best bandwidth cache (best bandwidth gives the index of the scheduling algorithm for which we have observed the highest bandwidth) to make it easier to recalculate the probabilities
-void update_bandwidth(void)
+unsigned long long int update_bandwidth(void)
 {
 	double *recent_measurements;
 	int i;
@@ -312,19 +349,21 @@ void update_bandwidth(void)
 			sum_of_bandwidth += AB_table[i].bandwidth;
 		}
 	}
+	return timestamp;
 }
 
 //this function is called periodically to select a new scheduling algorithm
 int ARMED_BANDIT_select_next_algorithm(void)
 {
 	int next_alg=-1;
+	unsigned long long timestamp;
 
 	PRINT_FUNCTION_NAME;
 
 	print_all_armed_bandit_information();
 
 	//update bandwidth observed for the most recently selected scheduling algorithms
-	update_bandwidth();
+	timestamp = update_bandwidth();
 
 	print_all_armed_bandit_information();
 
@@ -360,13 +399,22 @@ int ARMED_BANDIT_select_next_algorithm(void)
 	{
 		current_sched = next_alg;
 		AB_table[current_sched].selection_counter++;	
+		fprintf(ab_trace, "Armed Bandit at timestamp %llu\n", timestamp);
+		print_ab_trace_probs();
 	}
 
 	return next_alg;
+}
+void write_migration_end(unsigned long long int timestamp)
+{
+	fprintf(ab_trace, "Finished migrating data structures at %llu\n-----------------------------------------------------\n", timestamp);
+	fflush(ab_trace);
 }
 //cleanup function
 void ARMED_BANDIT_exit(void)
 {
 	if(AB_table)
 		free(AB_table);
+	if(ab_trace)
+		fclose(ab_trace);
 }
