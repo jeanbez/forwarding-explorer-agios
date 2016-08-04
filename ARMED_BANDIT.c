@@ -29,6 +29,7 @@ struct scheduler_info_t
 };
 static struct scheduler_info_t *AB_table=NULL; //all the information we have about the scheduling algorithms
 static int current_sched=0; //current scheduling algorithm in use
+static short int first_performance_measurement;
 
 //for debug
 void print_all_armed_bandit_information()
@@ -112,6 +113,8 @@ int ARMED_BANDIT_init(void)
 
 	PRINT_FUNCTION_NAME;
 
+	first_performance_measurement=1; //we'll need to discard the first measurement because it is not stable yet
+
 	//initialize the pseudo-random number generator
 	agios_gettime(&start_time);
 	srand(get_timespec2llu(start_time));
@@ -171,7 +174,7 @@ int ARMED_BANDIT_init(void)
 		else
 			return 0;
 	}
-	AB_table[current_sched].selection_counter++;
+//	AB_table[current_sched].selection_counter++;  (because we'll skip the first window)
 
 	fprintf(ab_trace, "Starting Armed Bandit at timestamp %llu\n", get_timespec2llu(start_time));
 	print_ab_trace_probs();
@@ -182,36 +185,57 @@ int ARMED_BANDIT_init(void)
 //since we have performance measurements to all scheduling algorithms, we are able to use these values to give more probability to algorithms which result in better performance
 void recalculate_AB_probabilities(void)
 {
-	int i;
+	int i, best_i, best_perf;
 	int available_probability;
+	int *calculated_algs;
+	int calculated_counter;
 
 	PRINT_FUNCTION_NAME;
-	//adjust the best one's probability proportionally to its bandwidth
-	AB_table[best_bandwidth].probability = (AB_table[best_bandwidth].bandwidth*100) / sum_of_bandwidth; //there is no way sum_of_bandwidth is zero because it is updated right before this call
 
-	//make sure this probability is not so large that there is not enough left to give the other algorithms at least MIN_AB_PROBABILITY
-	available_probability = 100 - AB_table[best_bandwidth].probability;
-	i = (useful_sched_nb - 1)*config_agios_min_ab_probability;
-	if(available_probability < i) 
+	//we'll use an array to keep track of the algorithms to which we already recalculated the probability
+	calculated_algs = malloc(sizeof(int)*scheduler_nb);
+	//if(!calculated_algs)
+		//TODO error
+	for(i=0; i< scheduler_nb; i++)
+		calculated_algs[i]=0;
+
+	//we'll go through the algorithms in order of performance (best to worst)
+	available_probability = 100;
+	sum_of_all_probabilities = 0;
+	calculated_counter=0;
+	while(calculated_counter < useful_sched_nb)
 	{
-		available_probability = i;
-		AB_table[best_bandwidth].probability = 100 - i;
-	}
-	
-	//adjust all other algorithms' probabilities uniformly
-	if(useful_sched_nb > 1)
-	{
-		debug("bandwidth for scheduler %s changed to %.2f, changing probability to %d. Other algorithms will receive probability %d\n", AB_table[best_bandwidth].sched->name, AB_table[best_bandwidth].bandwidth, AB_table[best_bandwidth].probability, available_probability / (useful_sched_nb - 1));
-		available_probability = available_probability / (useful_sched_nb - 1);
-		for(i=0; i< scheduler_nb; i++)
+		//get the best performance (among the ones not yet recalculated)
+		if(calculated_counter == 0)
+			i = best_bandwidth;
+		else
 		{
-			if(AB_table[i].sched->can_be_dynamically_selected == 1)
+			best_perf = 0;
+			best_i = 0;
+			for(i=0; i < scheduler_nb; i++)
 			{
-				if(i != best_bandwidth)
-					AB_table[i].probability = available_probability;
+				if((AB_table[i].sched->can_be_dynamically_selected == 1) && (calculated_algs[i] == 0) && (best_perf <= AB_table[i].bandwidth))
+				{
+					best_perf = AB_table[i].bandwidth;
+					best_i = i;
+				}
 			}
+			i = best_i;
 		}
-		sum_of_all_probabilities = AB_table[best_bandwidth].probability + available_probability*(useful_sched_nb - 1); //we divide available_probability by useful_sched_nb - 1 and them multiply again because we are using integers, so this may not sum up to 100.
+		//give this algorithm a probability which is proportional to its bandwidth
+		AB_table[i].probability = (AB_table[i].bandwidth*100)/sum_of_bandwidth;
+		//give it a bonus according to its position in the ranking
+		AB_table[i].probability += (useful_sched_nb - calculated_counter - 1)*3; //3? With 5 algorithms the best will receive +12%, the second +9%, +6%, +3%, and +0%.
+		//it cannot be so large that others algorithms won't have the minimum probability (or lower than the minimum)
+		if(AB_table[i].probability < config_agios_min_ab_probability)
+			AB_table[i].probability = config_agios_min_ab_probability;
+		if((available_probability - AB_table[i].probability) < ((useful_sched_nb - calculated_counter - 1)*config_agios_min_ab_probability))
+			AB_table[i].probability = available_probability - ((useful_sched_nb - calculated_counter - 1)*config_agios_min_ab_probability);
+		//update things
+		available_probability -= AB_table[i].probability;
+		sum_of_all_probabilities += AB_table[i].probability;
+		calculated_algs[i] = 1;
+		calculated_counter++;
 	}
 }
 
@@ -277,6 +301,12 @@ unsigned long long int update_bandwidth(void)
 
 	// get all recent measurements from the performance model 
 	recent_measurements = agios_get_performance_bandwidth();
+
+	if(first_performance_measurement == 1) //we won't use the first performance measurement
+	{
+		agios_reset_performance_counters(); //we discard the first measurement
+		return timestamp;
+	}
 
 	// update the recent (other than the current) algorithms' performance measurements (this is necessary because some requests issued by an algorithm may arrive after changing algorithms, resulting in new measurements which were not considered on the last algorithm changes)
 /*	i = performance_start;
@@ -371,7 +401,10 @@ int ARMED_BANDIT_select_next_algorithm(void)
 	//if we haven't tested all algorithms yet, just select one not yet selected
 	if(benchmarked_scheds < (useful_sched_nb - 1))
 	{
-		benchmarked_scheds++;
+		if(first_performance_measurement == 1)
+			first_performance_measurement= 0;
+		else
+			benchmarked_scheds++;
 		//randomly take one of the useful schedulers (without considering their probabilities for now)
 		next_alg = rand() % scheduler_nb;
 		while( !((AB_table[next_alg].sched->can_be_dynamically_selected == 1) && (AB_table[next_alg].selection_counter == 0))) 
