@@ -194,6 +194,7 @@ void agios_exit(void)
 	}
 
 	request_cache_cleanup();
+	stop_the_pattern_tracker_thread();
 	if(config_trace_agios)
 		agios_trace_close();
 	proc_stats_exit();

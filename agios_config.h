@@ -63,7 +63,8 @@ extern int config_agios_performance_window;
 extern int config_agios_performance_values;
 // 7. proc module (writing stats file)
 extern int config_agios_proc_algs;
-
+// 8. DTW
+extern unsigned long int config_pattern_duration;
 
 //user info
 extern int config_agios_stripe_size;
