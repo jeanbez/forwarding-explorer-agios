@@ -62,6 +62,7 @@
 #include "DYN_TREE.h"
 #include "ARMED_BANDIT.h"
 #include "EXCLUSIVE_TW.h"
+#include "PATTERN_MATCHING.h"
 
 
 /**********************************************************************************************************************/
@@ -541,6 +542,19 @@ void register_static_io_schedulers(void)
 			.is_dynamic = 0,
 			.name = "EXCLUSIVE_TIME_WINDOW",
 			.index = 10,
+		},
+		{
+			.init = &PATTERN_MATCHING_init,
+			.exit = &PATTERN_MATCHING_exit,
+			.schedule = NULL,
+			.select_algorithm = &PATTERN_MATCHING_select_next_algorithm,
+			.max_aggreg_size = 1,
+			.sync = 0,
+			.needs_hashtable = 0,
+			.can_be_dynamically_selected = 0,
+			.is_dynamic = 1,
+			.name = "PATTERN_MATCHING",
+			.index = 11,
 		}
 	};
 	int i = 0;

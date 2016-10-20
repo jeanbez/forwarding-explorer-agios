@@ -43,6 +43,7 @@
 #define DYN_TREE_SCHEDULER 8
 #define ARMED_BANDIT_SCHEDULER 9
 #define EXCLUSIVE_TIME_WINDOW 10
+#define PATTERN_MATCHING_SCHEDULER 11
 
 struct request_t;
 struct request_file_t;
