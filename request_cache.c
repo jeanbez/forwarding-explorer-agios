@@ -742,7 +742,7 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 
 	//build request_t structure and fill it for the new request
 	agios_gettime(&(arrival_time));  
-	timestamp = 	get_timespec2llu(arrival_time);
+	timestamp = get_timespec2llu(arrival_time);
 	add_request_to_pattern(timestamp, offset, len);
 	req = request_constructor(file_id, type, offset, len, data, timestamp, RS_HASHTABLE, app_id);
 	

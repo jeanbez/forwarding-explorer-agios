@@ -1,19 +1,13 @@
 #include "agios.h"
 #include "agios_request.h"
 #include "common_functions.h"
+#include "mylist.h"
+#include "pattern_tracker.h"
 
 //to access the tracked_pattern list
 pthread_mutex_t pattern_tracker_lock = PTHREAD_MUTEX_INITIALIZER;
 
 //current access pattern
-struct pattern_tracker_req_info_t
-{
-	unsigned long int timestamp;
-	unsigned long int offset;
-	unsigned long int len;
-	//TODO see with Ramon what we need to track	
-	struct agios_list_head list;
-}
 int pattern_tracker_reqnb = 0;
 AGIOS_LIST_HEAD(tracked_pattern);
 
