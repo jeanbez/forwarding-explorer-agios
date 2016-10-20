@@ -65,8 +65,6 @@ int config_mlf_quantum = 8192;
 unsigned long int config_tw_size = 1000000000L;
 unsigned long int config_exclusive_tw_window_duration=250000000L; //250ms
 
-unsigned long int config_pattern_duration = 2000000000L;
-
 inline void config_set_waiting_time(int value)
 {
 	config_waiting_time = value;
@@ -210,9 +208,6 @@ inline short int read_configuration_file(char *config_file)
 	config_tw_size = ret*1000000L; //convert to ns
 	config_lookup_int(&agios_config, "library_options.exclusive_tw_window_duration", &ret);
 	config_exclusive_tw_window_duration = ret*1000L; //convert us to ns
-
-	config_lookup_int(&agios_config, "library_options.pattern_duration", &ret);
-	config_pattern_duration = ret * 1000000L; // from ms to ns
 
 	/*2. user info*/
 	config_lookup_int(&agios_config, "user_info.stripe_size", &config_agios_stripe_size);
