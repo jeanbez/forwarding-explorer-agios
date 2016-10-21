@@ -29,7 +29,11 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	//1 TODO we get something from the pattern tracker module, the representation of the pattern
 	//1.1 TODO if the pattern has zero requests, do we just stop? (maybe need to update the previous probabilities first) Maybe we should have a representation for the empty pattern (it could bring some relevant information)?
 	//2 TODO we look for this pattern in the all_observed_patterns list, put the match in seen_pattern
-	//TODO TODO
+	//2.1 TODO we get a performance measurement and save it for the current scheduling algorithm in seen_pattern
+	//3 TODO we look for the seen_pattern in the next patterns from previous_pattern so we can update its counters and probability
+	//4 TODO based on the probability chain, we predict the next pattern
+	//5 TODO based on the next pattern we're predicting, we choose the next scheduling algorithm
+	//6 TODO if we can't make predictions, we'll use the Armed Bandit
 	
 }
 void PATTERN_MATCHING_exit(void)
