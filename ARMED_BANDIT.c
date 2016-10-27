@@ -20,6 +20,7 @@ static short int first_performance_measurement;
 inline void ARMED_BANDIT_set_current_sched(int new_sched)
 {
 	current_sched = new_sched;
+	AB_table[current_sched].selection_counter++;
 }
 
 //for debug
@@ -233,6 +234,7 @@ void recalculate_AB_probabilities(void)
 		calculated_algs[i] = 1;
 		calculated_counter++;
 	}
+	free(calculated_algs);
 }
 
 //update the observed bandwidth for a scheduling algorithm after using it for a period of time
@@ -303,10 +305,7 @@ int ARMED_BANDIT_aux_select_next_algorithm(unsigned long int timestamp)
 	//if we haven't tested all algorithms yet, just select one not yet selected
 	if(benchmarked_scheds < (useful_sched_nb - 1))
 	{
-		if(first_performance_measurement == 1)
-			first_performance_measurement= 0;
-		else
-			benchmarked_scheds++;
+		benchmarked_scheds++;
 		//randomly take one of the useful schedulers (without considering their probabilities for now)
 		next_alg = rand() % scheduler_nb;
 		while( !((AB_table[next_alg].sched->can_be_dynamically_selected == 1) && (AB_table[next_alg].selection_counter == 0))) 
@@ -359,7 +358,7 @@ int ARMED_BANDIT_select_next_algorithm(void)
 		timestamp = get_timespec2llu(this_time);
 		agios_reset_performance_counters(); //we discard the first measurement
 		benchmarked_scheds--;
-		return timestamp;
+		first_performance_measurement=0;	
 	}
 	else
 		timestamp = ARMED_BANDIT_update_bandwidth(agios_get_performance_bandwidth(), 1);

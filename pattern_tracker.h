@@ -24,7 +24,8 @@ struct access_pattern_t {
 	unsigned int filenb; //how many different files were accessed during this pattern
 	
 	//request list
-	struct agios_list_head requests;
+	struct agios_list_head requests; //while tracking we use the linked list, because it is easier(and we don't know how many requests we'll receive
+	struct pattern_tracker_req_info_t *time_series; //after tracking, we translate it to arrays because it will make DTW easier.
 };
 	
 #define MAXIMUM_FILE_NUMBER 10000 //TODO these numbers were completely arbitrary, make better predictions

@@ -44,7 +44,8 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 		ARMED_BANDIT_update_bandwidth(recent_measurements,0);
 	else
 	{
-		agios_reset_performance_counters(); //we really discard that first measurement	
+		agios_reset_performance_counters(); //we really discard that first measurement		     
+		first_performance_measurement=0;	
 	}
 
 

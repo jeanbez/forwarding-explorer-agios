@@ -76,13 +76,50 @@ inline void add_request_to_pattern(unsigned long int timestamp, unsigned long in
 	}
 }
 
+//modify the current_pattern structure so the linked list of requests we were keeping while execution becomes an array
+inline void translate_list_to_time_series()
+{
+	struct pattern_tracker_req_info_t *tmp, *aux=NULL;
+	int i=0;
+
+	current_pattern->time_series = malloc(sizeof(struct pattern_tracker_req_info_t)*(current_pattern->reqnb+1));
+	//if(!current_pattern->time_series)
+		//TODO error
+	
+	agios_list_for_each_entry(tmp, &current_pattern->requests, list)
+	{
+		if(aux)
+		{
+			agios_list_del(&aux->list);
+			free(aux);
+		}
+		current_pattern->time_series[i].timestamp = tmp->timestamp;
+		current_pattern->time_series[i].offset = tmp->offset;
+		i++;
+		aux = tmp;
+	}
+	if(aux)
+	{
+		agios_list_del(&aux->list);
+		free(aux);
+	}
+}
+
 //returns the current pattern and resets it so we will start to track the next pattern
 struct access_pattern_t *get_pattern()
 {
-	struct access_pattern_t *ret = current_pattern;
+	struct access_pattern_t *ret;
+	
+	agios_mutex_lock(&pattern_tracker_lock);
+	
+	translate_list_to_time_series();
+	ret = current_pattern;
 	reset_current_pattern(0);
+	
+	agios_mutex_unlock(&pattern_tracker_lock);
 	return ret;
 }
+
 
 inline void reset_current_pattern(short int first_execution)
 {
