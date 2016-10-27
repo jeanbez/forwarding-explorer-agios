@@ -27,4 +27,7 @@ int ARMED_BANDIT_init(void);
 int ARMED_BANDIT_select_next_algorithm(void);
 void ARMED_BANDIT_exit(void);
 void write_migration_end(unsigned long long int timestamp);
+int ARMED_BANDIT_aux_init(void);
+inline void ARMED_BANDIT_set_current_sched(int new_sched);
+unsigned long long int ARMED_BANDIT_update_bandwidth(double *recent_measurements, short int cleanup);
 #endif

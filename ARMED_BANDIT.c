@@ -12,24 +12,15 @@ static int sum_of_all_probabilities=100; //we keep this value so we don't have t
 static long double sum_of_bandwidth=0; //we keep an update sum of all algorithms' bandwidth so we don't have to recalculate it every time we need it. 
 static FILE *ab_trace = NULL;
 
-struct performance_info_t
-{
-	unsigned long int timestamp; //the moment this performance information was obtained
-	double bandwidth; 
-};
-struct scheduler_info_t
-{
-	struct io_scheduler_instance_t *sched;
-	struct performance_info_t *bandwidth_measurements;
-	int measurements_start;
-	int measurements_end;
-	double bandwidth;
-	int selection_counter;
-	int probability;
-};
 static struct scheduler_info_t *AB_table=NULL; //all the information we have about the scheduling algorithms
 static int current_sched=0; //current scheduling algorithm in use
 static short int first_performance_measurement;
+
+//This function is called by the PATTERN_MATCHING algorithm because usually the ARMED_BANDIT one keeps its current scheduler updated. However, ARMED_BANDIT is not making the decisions about the current_scheduler if the PATTERN_MATCHING is running, but it needs to know which one is the current one so it will keep update performance measurements.
+inline void ARMED_BANDIT_set_current_sched(int new_sched)
+{
+	current_sched = new_sched;
+}
 
 //for debug
 void print_all_armed_bandit_information()
@@ -59,7 +50,7 @@ void print_all_armed_bandit_information()
 int randomly_pick_algorithm()
 {
 	int aggregated_prob=0;
-	int i=scheduler_nb;
+	int i;
 
 	//randomly pick a number between 0 and 99 (or less, depending on the sum of all probabilities)
 	int result = rand() % sum_of_all_probabilities;
@@ -78,6 +69,7 @@ int randomly_pick_algorithm()
 	}
 	return i;
 }
+//for debug, print information to a trace file (only about armed bandit)
 void print_ab_trace_probs()
 {
 	int i, j;
@@ -103,10 +95,9 @@ void print_ab_trace_probs()
 	fflush(ab_trace);
 
 }
-//this function is called during initialization. It initializes data structures used by this algorithm. 
-//the first scheduling algorithm is not randomly picked, but defined in AGIOS' configuration file (unless this definition makes no sense)
-//returns 1 on success
-int ARMED_BANDIT_init(void)
+
+//this function is different from ARMED_BANDIT_init because it is not called when the ARMED_BANDIT algorithm is being used, but by the PATTERN_MATCHING algorithm which uses ARMED_BANDIT as a helper mechanism. In this situation, when the PATTERN_MATCHING has no information to make a decision, it will use ARMED BANDIT to make it (because it will be still better than random).
+int ARMED_BANDIT_aux_init(void)
 {
 	int i;
 	struct timespec start_time;
@@ -142,10 +133,7 @@ int ARMED_BANDIT_init(void)
 		AB_table[i].sched = find_io_scheduler(i);
 		if(AB_table[i].sched->can_be_dynamically_selected == 1)  
 			useful_sched_nb++;
-		AB_table[i].bandwidth = 0.0;
-		AB_table[i].selection_counter=0;
-		AB_table[i].bandwidth_measurements = (struct performance_info_t *)malloc(sizeof(struct performance_info_t)*config_agios_performance_window);
-		AB_table[i].measurements_start = AB_table[i].measurements_end = 0;
+		reset_scheduler_info(&AB_table[i]);
 	}
 	debug("Initializing Armed Bandit approach with %d scheduling algorithms, %d of them can be selected", scheduler_nb, useful_sched_nb );
 
@@ -159,6 +147,14 @@ int ARMED_BANDIT_init(void)
 			sum_of_all_probabilities += AB_table[i].probability;
 		}
 	}
+}
+
+//this function is called during initialization. It initializes data structures used by this algorithm. 
+//the first scheduling algorithm is not randomly picked, but defined in AGIOS' configuration file (unless this definition makes no sense)
+//returns 1 on success
+int ARMED_BANDIT_init(void)
+{
+	ARMED_BANDIT_aux_init();
 	
 	//start with the starting algorithm (defined in the configuration file), unless it is something we cannot use here
 	current_sched = config_agios_starting_algorithm;
@@ -239,56 +235,11 @@ void recalculate_AB_probabilities(void)
 	}
 }
 
-//checks the performance measurement list for a scheduling algorithm, discarding everything older than the validity window 
-//receives as parameters the scheduler to be checked and the most recent timestamp;
-//returns 1 if something was discarded, 0 if the list if unchanged
-short int check_validity_window(int sched, unsigned long int now)
-{
-	short int changed=0;
-
-	while((AB_table[sched].measurements_start != AB_table[sched].measurements_end) //while we have measurements in the list
-	      &&
-	      ((now - AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp) >= config_agios_validity_window))
-	{
-		debug("we will discard a measurement to schedulre %s with timestamp %lu because now we have a timestamp %lu, and the difference %lu is larger than the validity window %lu", AB_table[sched].sched->name, AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp, now, (now - AB_table[sched].bandwidth_measurements[AB_table[sched].measurements_start].timestamp), config_agios_validity_window);
-		AB_table[sched].measurements_start++; //discard this measurement, it's too old
-		changed=1;
-		if(AB_table[sched].measurements_start == config_agios_performance_window)
-			AB_table[sched].measurements_start = 0;
-	}
-	return changed;
-}
-
-//updates bandwidth information for a scheduling algorithm by taking the average of its measurements
-//this function does not check the validity window, this needs to be done before calling it.
-void update_average_bandwidth(int sched)
-{
-	int i;
-	long double ret=0.0;
-	int counter=0;
-
-	i = AB_table[sched].measurements_start;
-	while(i != AB_table[sched].measurements_end)
-	{
-		ret += AB_table[sched].bandwidth_measurements[i].bandwidth;
-		counter++; 	
-		i++;
-		if(i == config_agios_performance_window)
-			i = 0;
-	}
-	if(counter > 0) //we could have an empty performance measurement list
-		AB_table[sched].bandwidth = ret / counter;
-	else
-		AB_table[sched].bandwidth = 0.0;
-}
-
-
-
 //update the observed bandwidth for a scheduling algorithm after using it for a period of time
 //we keep a best bandwidth cache (best bandwidth gives the index of the scheduling algorithm for which we have observed the highest bandwidth) to make it easier to recalculate the probabilities
-unsigned long long int update_bandwidth(void)
+//the cleanup flag says if the function needs to free recent_measurements before returning
+unsigned long long int ARMED_BANDIT_update_bandwidth(double *recent_measurements, short int cleanup)
 {
-	double *recent_measurements;
 	int i;
 	//int j;
 	struct timespec this_time;
@@ -299,57 +250,15 @@ unsigned long long int update_bandwidth(void)
 	agios_gettime(&this_time);
 	timestamp = get_timespec2llu(this_time);
 
-	// get all recent measurements from the performance model 
-	recent_measurements = agios_get_performance_bandwidth();
 
-	if(first_performance_measurement == 1) //we won't use the first performance measurement
-	{
-		agios_reset_performance_counters(); //we discard the first measurement
-		return timestamp;
-	}
-
-	// update the recent (other than the current) algorithms' performance measurements (this is necessary because some requests issued by an algorithm may arrive after changing algorithms, resulting in new measurements which were not considered on the last algorithm changes)
-/*	i = performance_start;
-	while(i != agios_performance_get_latest_index())
-	{
-		if(recent_measurements[i] > 0)
-		{
-			if(AB_table[performance_algs[i]].measurements_end != AB_table[performance_algs[i]].measurements_start) //if we have measurements stored for this algorithm (we could have discarded it)
-			{
-				//get the most recent performance measurement from this algorithm 
-				j = AB_table[performance_algs[i]].measurements_end - 1;
-				if(j < 0)
-					j = PERFORMANCE_WINDOW - 1;
-				//compare with the recent performance measurement from the performance module
-				if (recent_measurements[i] > AB_table[performance_algs[i]].bandwidth_measurements[j].bandwidth)
-				{
-					//here we actually have no way of knowing if we are comparing values for the same time this scheduling algorithm executed. We could even rewrite multiple times the same value. We have chosen to make it simpler, that's why we compare before rewritting, so we don't harm algorithms
-					AB_table[performance_algs[i]].bandwidth_measurements[j].bandwidth = recent_measurements[i];
-					AB_table[performance_algs[i]].bandwidth_measurements[j].timestamp = timestamp;
-				}
-			}
-		}
-		i++;
-		if(i == PERFORMANCE_VALUES)
-			i = 0;
-	}*/
 	// get new measurement for the current scheduling algorithm
-	AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].timestamp = timestamp;
-	AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth = recent_measurements[agios_performance_get_latest_index()];
-	debug("most recent performance measurement: %.2f with scheduler %s", AB_table[current_sched].bandwidth_measurements[AB_table[current_sched].measurements_end].bandwidth, AB_table[current_sched].sched->name);
-	AB_table[current_sched].measurements_end++;
-	if(AB_table[current_sched].measurements_end == config_agios_performance_window)
-	{
-		AB_table[current_sched].measurements_end=0;
-	}
-	if(AB_table[current_sched].measurements_end == AB_table[current_sched].measurements_start)
-	{
-		AB_table[current_sched].measurements_start++;
-		if(AB_table[current_sched].measurements_start == config_agios_performance_window)
-			AB_table[current_sched].measurements_start=0;
-	}
-	check_validity_window(current_sched, timestamp);
-	update_average_bandwidth(current_sched); //we need to check validity window and update average bandwidth for the current sched because it is the comparison basis for selecting the best performance algorithm 	
+	add_performance_measurement_to_sched_info(&AB_table[current_sched], timestamp, recent_measurements[agios_performance_get_latest_index()]);
+	debug("most recent performance measurement: %.2f with scheduler %s", recent_measurements[agios_performance_get_latest_index()], AB_table[current_sched].sched->name);
+	//check its performance measurements for measurements which are too old
+	if(check_validity_window(&AB_table[current_sched], timestamp))
+		debug("we will discard old measurements to scheduler %s\n", AB_table[current_sched].sched->name);
+ 
+	update_average_bandwidth(&AB_table[current_sched]); //we need to check validity window and update average bandwidth for the current sched because it is the comparison basis for selecting the best performance algorithm 	
 
 	//go through all scheduling algorithms removing performance measurements which are too old and updating their bandwidths. Also select the best bandwidth and update the sum of all values
 	sum_of_bandwidth = 0.0;
@@ -361,8 +270,8 @@ unsigned long long int update_bandwidth(void)
 			if(i != current_sched)
 			{
 				//discard old performance results and recalculate bandwidth (only if something was discarded)
-				if(check_validity_window(i, timestamp))
-					update_average_bandwidth(i);
+				if(check_validity_window(&AB_table[i], timestamp))
+					update_average_bandwidth(&AB_table[i]);
 				if(AB_table[i].measurements_start == AB_table[i].measurements_end) //by discarding old results, we may end up without measurements for an algorithm
 				{
 					debug("we've discarded old results to algorithm %s, so it is untested again", AB_table[i].sched->name);
@@ -379,22 +288,15 @@ unsigned long long int update_bandwidth(void)
 			sum_of_bandwidth += AB_table[i].bandwidth;
 		}
 	}
+	if(cleanup)
+		free(recent_measurements)
 	return timestamp;
 }
 
-//this function is called periodically to select a new scheduling algorithm
-int ARMED_BANDIT_select_next_algorithm(void)
+//this function does the selection of next algorithm, but without the part where we update performance information. This is useful because the PATTERN_MATCHING algorithm may use ARMED_BANDIT to  make decisions when it does not have enough information to do so itself
+int ARMED_BANDIT_aux_select_next_algorithm(unsigned long int timestamp)
 {
 	int next_alg=-1;
-	unsigned long long timestamp;
-
-	PRINT_FUNCTION_NAME;
-
-	print_all_armed_bandit_information();
-
-	//update bandwidth observed for the most recently selected scheduling algorithms
-	timestamp = update_bandwidth();
-
 	print_all_armed_bandit_information();
 
 	debug("we've already tried %d algorithms!", benchmarked_scheds+1);
@@ -432,11 +334,38 @@ int ARMED_BANDIT_select_next_algorithm(void)
 	{
 		current_sched = next_alg;
 		AB_table[current_sched].selection_counter++;	
-		fprintf(ab_trace, "Armed Bandit at timestamp %llu\n", timestamp);
+		fprintf(ab_trace, "Armed Bandit at timestamp %lu\n", timestamp);
 		print_ab_trace_probs();
 	}
 
 	return next_alg;
+		
+}
+
+//this function is called periodically to select a new scheduling algorithm
+int ARMED_BANDIT_select_next_algorithm(void)
+{
+	unsigned long int timestamp;
+
+	PRINT_FUNCTION_NAME;
+
+	print_all_armed_bandit_information();
+
+	//update bandwidth observed for the most recently selected scheduling algorithms
+	if(first_performance_measurement == 1) //we won't use the first performance measurement
+	{
+		struct timespec this_time; //we need to calculate timestamp because we won't call the function ARMED_BANDIT_update_bandwidth, which would normally calculate this for us
+		agios_gettime(&this_time);
+		timestamp = get_timespec2llu(this_time);
+		agios_reset_performance_counters(); //we discard the first measurement
+		benchmarked_scheds--;
+		return timestamp;
+	}
+	else
+		timestamp = ARMED_BANDIT_update_bandwidth(agios_get_performance_bandwidth(), 1);
+
+	return ARMED_BANDIT_aux_select_next_algorithm(timestamp);
+
 }
 void write_migration_end(unsigned long long int timestamp)
 {
