@@ -8,6 +8,7 @@
 struct warp_path_t {
 	int * tsIindexes;
 	int * tsJindexes;
+	int index;
 };
 
 struct time_warp_info_t {
@@ -19,6 +20,7 @@ struct time_series_t {
 	long long int *offset;
 	int size;
 }
+
 
 double FastDTW(struct access_pattern_t *A, struct access_pattern_t *B);
 

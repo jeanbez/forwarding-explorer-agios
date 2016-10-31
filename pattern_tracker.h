@@ -26,6 +26,10 @@ struct access_pattern_t {
 	//request list
 	struct agios_list_head requests; //while tracking we use the linked list, because it is easier(and we don't know how many requests we'll receive
 	struct pattern_tracker_req_info_t *time_series; //after tracking, we translate it to arrays because it will make DTW easier.
+
+	//used by DTW when creating shrunk version of the time series (which we represent by access pattern structs to facilitate implementation
+	unsigned int original_size; //request number in the time series from which we shrunk this one
+	int *aggPtSize; // vector with the number of requests aggregated in each point 
 };
 	
 #define MAXIMUM_FILE_NUMBER 10000 //TODO these numbers were completely arbitrary, make better predictions
