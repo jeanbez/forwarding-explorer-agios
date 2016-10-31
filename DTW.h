@@ -19,7 +19,15 @@ struct time_series_t {
 	unsigned long int *time;
 	long long int *offset;
 	int size;
-}
+};
+
+struct search_window_t {
+	int *minValues;
+	int *maxValues;
+	int maxJ_;
+	int size;
+	int modCount;
+};
 
 
 double FastDTW(struct access_pattern_t *A, struct access_pattern_t *B);

@@ -165,6 +165,170 @@ struct access_pattern_t * shrink_time_series(struct access_pattern_t *ts, int sh
 	return ret;
 }
 
+inline struct search_window_t * new_search_window(int tsIsize, int isJsize)
+{
+	int i;
+	struct search_window_t *ret = malloc(sizeof(struct search_window_t));
+	ret->minValues = malloc(sizeof(int)*(tsIsize+1));
+	for(i=0; i< tsIsize; i++)
+		ret->minValues[i]=-1;
+	ret->maxValues = malloc(sizeof(int)*(tsIsize+1));
+	//TODO check malloc error
+	ret->maxJ_ = tsJsize-1;
+	ret->size = 0;
+	ret->modCount=0;
+	return ret;
+}
+
+inline void SearchWindow_markVisited(struct search_window_t *window, int col, int row)
+{
+	if(window->minValues[col] < 0) //first value entered in the column
+	{
+		window->minValues[col] = row;
+		window->maxValues[col] = row;
+		window->size++;
+		window->modCount++; //structure has been changed
+	}
+	else if (window->minValues[col] > row) //minimum range in the column is expanded
+	{
+		window->size += window->minValues[col]-row;
+		window->minValues[col] = row;
+		window->modCount++; //structure has been changed
+	}
+	else if (window->maxValues[col] < row) //maximum range in the column is expanded
+	{
+		window->size += row - window->maxValues[col];
+		window->maxValues[col] = row;
+		window->modCount++;
+	}
+}
+
+inline struct search_window_t *SearchWindow_obtain(struct search_window_t *window)
+{
+	int currentI, currentJ;
+	short int hasMoreElements;
+	struct search_window_t *new = malloc(sizeof(struct search_window_t));
+	new->minValues = malloc(sizeof(int)*(window->size+1));
+	new->maxVales = malloc(sizeof(int)*(window->size+1));
+	new->size=0;
+	//TODO check malloc error
+
+	if(window->size > 0)
+		hasMoreElements = 1;
+	else
+		hasMoreElements=0;
+	currentI = 0;	
+	currentJ = 0;
+
+	while(hasMoreElements == 1)
+	{
+		new->minValues[new->size] = currentI;
+		new->maxValues[new->size] = currentJ;
+		new->size++;
+		if(++currentJ > window->maxValues[currentI])
+		{	
+			if(++currentI <= (window->size - 1))
+				currentJ = window->minValues[currentI];
+			else
+				hasMoreElements=0;
+		}
+	}
+	return new;
+}
+
+void SearchWindow_expandSearchWindow(struct search_window_t *window, int radius)
+{
+	unsigned int cell;
+	int targetCol, targetRow, cellsPastEdge;
+
+	if(radius > 0) //if radius <= 0 then no search is necessary, use the current search window
+	{
+		//add all cells in the current window to an array, iterating through the window and expanding the window
+		//at the same time it is not possible because the window can't be changed during iteration through the cells
+		struct search_window_t *windowCells = SearchWindow_obtain(window);
+		for(cell = 0; cell < windowCells->size; cell++)
+		{
+			if((windowCells->minValues[cell] != 0) && (windowCells->maxValues[cell] != window->maxJ_)) //move to upper left is possible
+			{
+				//either expand full search radius or some fraction until edges of matrix are met
+				targetCol = windowCells->minValues[cell] - radius;
+				targetRow = windowCells->maxValues[cell] + radius;
+				if((targetCol >= 0) && (targetRow <= window->maxJ_))
+					SearchWindow_markVisited(window, targetCol, targetRow);
+				else
+				{
+					//expand the window only to the edge of the matrix
+					cellsPastEdge = fmax(0 - targetCol, targetRow - window->maxJ_);
+					SearchWindow_markVisited(window, targetCol + cellsPastEdge, targetRow - cellsPastEdge);
+				}
+			} 
+			if(window->maxValues[cell] != window->maxJ_) //move up if possible
+			{
+			//HERE
+		}
+			
+
+
+	//TODO continue here	
+}
+
+inline void SearchWindow_expandWindow(struct search_window_t *window, int radius)
+{
+	if(radius > 0)
+	{
+		SearchWindow_expandSearchWindow(window, 1);
+		SearchWindow_expandSearchWindow(window, radius-1);
+	}
+}
+
+struct search_window_t *ExpandedResWindow(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, struct access_pattern_t *shrunkI, struct access_pattern_t *shrunkJ, struct warp_path_t *path, int searchRadius)
+{
+	int w, warpedI, warpedJ, blockIsize, blockJsize, x;
+	//variables to keep track of the current location of the higher resolution projected path
+	int currentI = path->tsIindexes[0];
+	int currentJ = path->tsJindexes[0];
+	//variables to keep track of the last part of the low-resolution warp path that was evaluated (to determine direction
+	int lastWarpedI = INT_MAX;
+	int lastWarpedJ = INT_MAX;
+	struct search_window_t *ret = new_search_window(tsI->reqnb, tsJ->reqnb);
+	//for each part of the low-resolution warp path, project that path to the higher resolution by filling in the path's corresponding cells at the higher resolution
+	for(w = 0; w < path->index; w++)
+	{
+		warpedI = path->tsIindexes[w];
+		warpedJ = path->tsJindexes[w];
+		blockIsize = shrunkI->aggPtSize[warpedI];
+		blockJsize = shrunkJ->aggPtSize[warpedJ];
+		//if the path moved up or diagonally, then the next cell's values on the J axis will be larger
+		if(warpedJ > lastWarpedJ)
+			currentJ += shrunkJ->aggPtSize[lastWarpedJ];	
+		if(warpedI > lastWarpedI)
+			currentI += shrunkI->aggPtSize[lastWarpedI];
+		//if a diagonal move was performed, add 2 cells to the edges of the 2 blocks in the projected path to create a continuous path (path with even width... avoid a path of boxes connected only at their corners
+	 	 //                        |_|_|x|x|     then mark      |_|_|x|x|
+	         //    ex: projected path: |_|_|x|x|  --2 more cells->  |_|X|x|x|
+	         //                        |x|x|_|_|        (X's)       |x|x|X|_|
+	         //                        |x|x|_|_|                    |x|x|_|_|
+		if((warpedJ > lastWarpedJ) & (warpedI > lastWarpedI))
+		{
+			SearchWindow_markVisited(ret, currentI-1, currentJ);
+			SearchWindow_markVisited(ret, currentI, currentJ-1);
+		}
+		//fill in the cells that are created by a projection from the crell in the low-resolution warp path to a higher resolution
+		for(x = 0; x < blockISize; x++)
+		{
+			markVisited(currentI+x, currentJ);
+			markVisited(currentI+x, currentJ + blockJSize-1);
+		}
+		//record the last position in the time warp path so the direction of the path can be determined when the next position of the path is evaluated
+		lastWarpedI = warpedI;
+		lastWarpedJ = warpedJ;
+	}
+	//expand the size of the projected warp path by the specified width
+	SearchWindow_expandWindow(ret, searchRadius);
+
+	return ret;
+}
+
 struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, int searchRadius)
 {
 	int minTSsize;
