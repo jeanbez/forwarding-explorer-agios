@@ -139,6 +139,8 @@ inline void reset_current_pattern(short int first_execution)
 	current_pattern->write_size = 0;
 	current_pattern->filenb = 0;
 	init_agios_list_head(&current_pattern->requests);
+	current_pattern->aggPtSize=NULL;
+	current_pattern->time_series=NULL;
 
 	//TODO if we are keeping the file handle to starting offset mapping through different executions, then we won't never reset this. Actually, we should start by reading it from some file and end by writing its new version.
 	for(i = 0; i <MAXIMUM_FILE_NUMBER; i++)
@@ -158,4 +160,36 @@ void pattern_tracker_init()
 	agios_is_pattern_tracking=1;
 	//initialize the current access pattern
 	reset_current_pattern(1);
+}
+
+//frees an access_pattern_t structure previously allocated
+inline void free_access_pattern_t(struct access_pattern_t **ap)
+{
+	if(*ap)
+	{
+		if(!agios_list_empty((*ap)->requests))
+		{
+			struct pattern_tracker_req_info_t *tmp, aux=NULL;
+			agios_list_for_each_entry(tmp, &((*ap)->requests), list)
+			{
+				if(aux)
+				{
+					agios_list_del(&aux->list);
+					free(aux);
+				}
+				aux = tmp;
+			}
+			if(aux)
+			{
+				agios_list_del(&aux->list);
+				free(aux);
+			}
+		}
+		if((*ap)->time_series)
+			free((*ap)->time_series);
+		if((*ap)->aggPtSize)
+			free((*ap)->aggPtSize);
+		free(*ap);
+	}
+	
 }

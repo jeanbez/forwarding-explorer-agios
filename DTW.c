@@ -3,10 +3,89 @@
 #include "DTW.h"
 
 
-struct time_warp_info_t * DTW_getWarpInfoBetween(struct access_pattern_t *tsI, struct access_pattern_t *tsJ)
+inline struct time_warp_info_t * DTW_getWarpInfoBetween(struct access_pattern_t *tsI, struct access_pattern_t *tsJ)
 {
 	return DTW_DynamicTimeWarp(tsI, tsJ);
 } 
+inline struct time_warp_info_t *DTW_getWarpInfoBetween(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, struct search_window_t *window)
+{
+	return DTW_constrainedTimeWarp(tsI, tsJ, window);
+}
+
+inline struct memory_resident_matrix_t *get_new_memory_resident_matrix_t(struct seach_window_t *window)
+{
+	int i;
+	int currentOffset=0;
+
+	struct memory_resident_matrix_t *ret = malloc(sizeof(struct memory_resident_matrix_t));
+	//TODO malloc error
+	ret->cellValues = malloc(sizeof(double)*window->size);
+	ret->cellValues_size=0;
+	ret->colOffsets = malloc(sizeof(int)*window->size);
+	ret->colOffsets_size=0;
+
+	for(i = 0; i < window->size; i++)
+	{
+		ret->colOffsets[i] = currentOffset;
+		ret->colOffsets_size++;
+		currentOffset += window->maxValues[i] - window->minValues[i] + 1;
+	}
+	return ret;	
+}
+inline void add_to_memory_resident_matrix_t(struct memory_resident_matrix_t *matrix, struct search_window_t *window, int col, int row, double value)
+{
+//	if((row < window->minValues[col]) || (row > window->maxValues[col]))
+	//TODO error
+	//else
+	matrix->cellValues[matrix->colOffsets[col]+row-window->minValues[col]] = value;
+}
+inline double get_from_memory_resident_matrix_t(struct memory_resident_matrix_t *matrix, struct search_window_t *window, int col, int row)
+{
+	if((row < window->minValues[col]) || (row > window->maxValues[col]))
+		return DBL_MAX;
+	else
+		return matrix->cellValues[matrix->colOffsets[col]+row - window->minValues[col]];
+}
+
+
+struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, struct search_window_t *window)
+{
+	unsigned int colu, i, j;
+
+	//     COST MATRIX:
+	//   5|_|_|_|_|_|_|E| E = min Global Cost
+	//   4|_|_|_|_|_|_|_| S = Start point
+	//   3|_|_|_|_|_|_|_| each cell = min global cost to get to that point
+	// j 2|_|_|_|_|_|_|_|
+	//   1|_|_|_|_|_|_|_|
+	//   0|S|_|_|_|_|_|_|
+	//     0 1 2 3 4 5 6
+	//            i
+	//   access is M(i,j)... column-row
+	struct memory_resident_matrix_t *costMatrix = get_new_memory_resident_matrix_t(window);
+	int maxI = tsI->reqnb-1;
+	int maxJ = tsJ->reqnb-1;
+	
+	//get an iterator that traverses the window cells in the order that the cost matrix is filled (first to last row (1...maxI), bottom to top (1...maxJ)
+	struct search_window_t *matrixIterator = SearchWindow_obtain(window);
+	for(colu = 0; colu < matrixIterator->size; colu++)
+	{
+		//current cell being filled
+		i = matrixIterator->minValues[colu];
+		j = matrixIterator->maxValues[colu];
+		if((i == 0) && (j == 0)) //bottom left cell (first row and first column)
+			add_to_memory_resident_matrix_t(costMatrix, window, i, j, DTW_euclideanDist(tsI->time_series[0].offset, tsJ->time_series[0].offset));
+		else if (i == 0) //first column
+			add_to_memory_resident_matrix_t(costMatrix, window, i, j, DTW_euclideanDist(tsI->time_series[0].offset, tsJ->time_series[j].offset) + get_from_memory_resident_matrix_t(CostMatrix, window, i, j-1));
+		else if (j == 0) //first row
+			add_to_memory_resident_matrix_t(costMatrix, window, i, j, DTW_euclideanDist(tsI->time_series[i].offset, tsJ->time_series[0]) + get_from_memory_resident_matrix_t(CostMatrix, window, i-1,j));
+		else //not first column or first row		
+			add_to_memory_resident_matrix_t(costMatrix, window, i, j, fmin(
+//HERE
+//TODO continue here
+	
+
+}
 
 //starts a new empty path and allocates memory for the provided maximum size
 inline void Initialize_TimeWarp_Path(struct warp_path_t *new, unsigned long int size)
@@ -428,6 +507,19 @@ struct search_window_t *SearchWindow_ExpandedResWindow(struct access_pattern_t *
 	return ret;
 }
 
+//frees a time_warp_info_t structure previously allocated, including the path
+inline void free_time_warp_info_t(struct time_warp_info_t **info)
+{
+	if(*info)
+	{
+		if((*info)->path.tsIindexes)
+			free((*info)->path.tsIindexes);
+		if((*info)->path.tsJindexes)
+			free((*info)->path.tsJindexes);
+		free(*info);
+	}
+}
+
 struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, int searchRadius)
 {
 	int minTSsize;
@@ -450,9 +542,14 @@ struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct ac
 		struct time_warp_info_t *tmp = fastDTW(shrunkI, shrunkJ, searchRadius);
 		struct search_window_t *window = SearchWindow_ExpandedResWindow(tsI, tsJ, shrunkI, shrunkJ, &tmp->path, searchRadius);
 		//find the optimal path through this search window constraint
-		//HERE
-		
-	//TODO continue
+		struct time_warp_info_t *ret = DTW_getWarpInfoBetween_withWindow(tsI, tsJ, window);
+		//cleanup
+		free_search_window_t(&window);
+		free_time_warp_info_t(&tmp);
+		free_access_pattern_t(&shrunkI);
+		free_access_pattern_t(&shrunkJ);
+		return ret;
+	}
 }
 
 struct time_warp_info_t *FastDTW_getWarpInfoBetween(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, int searchRadius)

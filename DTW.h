@@ -29,6 +29,12 @@ struct search_window_t {
 	int modCount;
 };
 
+struct memory_resident_matrix_t {
+	double *cellValues;
+	int cellValues_size;
+	int *colOffsets;
+	int colOffsets_size;
+};
 
 double FastDTW(struct access_pattern_t *A, struct access_pattern_t *B);
 
