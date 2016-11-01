@@ -202,7 +202,21 @@ inline void SearchWindow_markVisited(struct search_window_t *window, int col, in
 		window->modCount++;
 	}
 }
+//TODO free all the allocated stuff
 
+//free an existing search_window_t structure (freeing first its two lists of integers)
+inline void free_search_window_t(struct search_window_t **window)
+{
+	if(*window)
+	{
+		if((*window)->minValues)
+			free((*window)->minValues);
+		if((*window)->maxValues)
+			free((*window)->maxValues);
+		free(*window);
+	}
+}
+//obtain a new search window structure from an existing one (it will allocate a new structure, needs to free it later)
 inline struct search_window_t *SearchWindow_obtain(struct search_window_t *window)
 {
 	int currentI, currentJ;
@@ -262,14 +276,99 @@ void SearchWindow_expandSearchWindow(struct search_window_t *window, int radius)
 					SearchWindow_markVisited(window, targetCol + cellsPastEdge, targetRow - cellsPastEdge);
 				}
 			} 
-			if(window->maxValues[cell] != window->maxJ_) //move up if possible
+			if(windowCells->maxValues[cell] != window->maxJ_) //move up if possible
 			{
-			//HERE
-		}
+				//either extend full search radius or some fraction until edges of matrix are met
+				targetCol = windowCells->minValues[cell];
+				targetRow = windowCells->maxValues[cell] + radius;
 			
-
-
-	//TODO continue here	
+				if(targetRow <= window->maxJ_)
+					SearchWindow_markVisited(window, targetCol, targetRow); //radius does not go past the edges of the matrix
+				else
+				{
+					//expand the window only to the edge of the matrix
+					cellsPastEdge = targetRow - window->maxJ_;
+					searchWindow_markVisited(window, targetCol, targetRow - cellsPastEdge);
+				}
+			}
+			if((windowCells->minValues[cell] != (window->size-1)) && (windowCells->maxValues[cell] != window->maxJ_)) //move to upper-right if possible
+			{
+				//either extend full search radius or some fraction until edges of matrix are met
+				targetCol = windowCells->minValues[cell] + radius;
+				targetRow = windowCells->maxValues[cell] + radius;
+				if ((targetCol <= (window->size - 1)) && (targetRow <= window->maxJ_))
+					SearchWindow_markVisited(window,targetCol, targetRow); //radius does not go past the edges of the matrix
+				else
+				{
+					//expand the window only to the edge of the matrix
+					cellsPastEdge = fmax(targetCol - (window->size-1),targetRow - window->maxJ_);
+					SearchWindow_markVisited(window,targetCol - cellsPastEdge, targetRow - cellsPastEdge);
+				}
+			}
+			if(windowCells->minValues[cell] != 0) // move left if possible
+			{
+				//either extend full search radius or some fraction until edges of matrix are met
+				targetCol = windowCells->minValues[cell] - radius;
+				targetRow = windowCells->maxValues[cell];
+				if(targetCol >= 0)
+					SearchWindow_markVisited(window,targetCol, targetRow);
+				else
+				{
+					cellsPastEdge = 0 - targetCol;
+					SearchWindow_markVisited(window,targetCol + cellsPastEdge, targetRow);
+				}
+			}
+			if(windowCells->minValues[cell] != (window->size-1)) //move right if possible
+			{
+				targetCol = windowCells->minValues[cell]+radius;
+				targetRow = windowCells->maxValues[cell];
+				if(targetCol <= (window->size -1))
+					SearchWindow_markVisited(window, targetCol, targetRow);
+				else
+				{
+					cellsPastEdge = targetCol - (window->size-1);
+					SearchWindow_markVisited(window, targetCol - cellsPastEdge, targetRow);
+				}
+			}
+			if((windowCells->minValues[cell] != 0) && (windowCells->maxValues[cell] != 0)) //move to lower-left is possible
+			{
+				targetCol = windowCells->minValues[cell]-radius;
+				targetRow = windowCells->maxValues[cell]-radius;
+				if((targetCol >= 0) && (targetRow >= 0))
+					SearchWindow_markVisited(window, targetCol, targetRow);
+				else
+				{
+					cellsPastEdge = fmin(0 - targetCol, 0 - targetRow); //(fran) modified from the original version (it was max, changed to min) because it seemed wrong
+					SearchWindow_markVisited(window, targetCol + cellsPastEdge, targetRow + cellsPastEdge);
+				}
+			} 
+			if (windowCells->maxValues[cell] != 0) //move down if possible
+			{
+				targetCol = windowCells->minValues[cell];
+				targetRow = windowCells->maxValues[cell]-radius;
+				if(targetRow >= 0)
+					SearchWindow_markVisited(window, targetCol, targetRow);
+				else
+				{
+					cellsPastEdge = 0 - targetRow;
+					SearchWindow_markVisited(window, targetCol, targetRow + cellsPastEdge);
+				}
+			}
+			if((windowCells->minValues[cell] != (window->size-1)) && (windowCells->maxValues[cell] != 0)) //move to lower-right if possible
+			{
+				targetCol = windowCells->minValues[cell] + radius;
+				targetRow = windowCells->maxValues[cell] - radius;
+				if((targetCol <= (window->size-1)) && (targetRow >= 0))
+					SearchWindow_markVisited(window, targetCol, targetRow);
+				else
+				{
+					cellsPastEdge = fmax(targetCol - (window->size-1), 0 - targetRow);
+					SearchWindow_markVisited(window, targetCol - cellsPastEdge, targetRow+cellsPastEdge);
+				}
+			}
+		}//end for
+		free_search_window_t(&windowCells);
+	} //end if
 }
 
 inline void SearchWindow_expandWindow(struct search_window_t *window, int radius)
@@ -281,7 +380,7 @@ inline void SearchWindow_expandWindow(struct search_window_t *window, int radius
 	}
 }
 
-struct search_window_t *ExpandedResWindow(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, struct access_pattern_t *shrunkI, struct access_pattern_t *shrunkJ, struct warp_path_t *path, int searchRadius)
+struct search_window_t *SearchWindow_ExpandedResWindow(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, struct access_pattern_t *shrunkI, struct access_pattern_t *shrunkJ, struct warp_path_t *path, int searchRadius)
 {
 	int w, warpedI, warpedJ, blockIsize, blockJsize, x;
 	//variables to keep track of the current location of the higher resolution projected path
@@ -316,8 +415,8 @@ struct search_window_t *ExpandedResWindow(struct access_pattern_t *tsI, struct a
 		//fill in the cells that are created by a projection from the crell in the low-resolution warp path to a higher resolution
 		for(x = 0; x < blockISize; x++)
 		{
-			markVisited(currentI+x, currentJ);
-			markVisited(currentI+x, currentJ + blockJSize-1);
+			SearchWindow_markVisited(currentI+x, currentJ);
+			SearchWindow_markVisited(currentI+x, currentJ + blockJSize-1);
 		}
 		//record the last position in the time warp path so the direction of the path can be determined when the next position of the path is evaluated
 		lastWarpedI = warpedI;
@@ -349,6 +448,9 @@ struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct ac
 
 		//determine the search window that constrains the area of the cost matrix that will be evaluated based on the warp path found at the previous resolution (smaller time series)
 		struct time_warp_info_t *tmp = fastDTW(shrunkI, shrunkJ, searchRadius);
+		struct search_window_t *window = SearchWindow_ExpandedResWindow(tsI, tsJ, shrunkI, shrunkJ, &tmp->path, searchRadius);
+		//find the optimal path through this search window constraint
+		//HERE
 		
 	//TODO continue
 }
