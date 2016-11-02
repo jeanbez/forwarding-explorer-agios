@@ -35,6 +35,7 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	struct PM_pattern_t *seen_pattern;
 	int new_sched;
 	double *recent_measurements;
+	short int decided=0;
 
 	//get recent performance measurements
 	recent_measurements = agios_get_performance_bandwidth();
@@ -48,10 +49,31 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 		first_performance_measurement=0;	
 	}
 
+	//get the most recently tracked access pattern from the pattern tracker module
+	seen_pattern = get_current_pattern();
+
+	
+	if(seen_pattern->reqnb >= agios_config_minimum_pattern_size) //if the pattern has too few requests, we'll ignore it (at least for now)
+	{
+		//we'll look for a match among the patterns we know
+			
+	}
+	else
+		decided = 0;
+
+	if(decided == 0)
+	{
+		//TODO armed bandit will decide what to do
+	}	
+	else
+	{
+		//TODO
+		//tell ARMED BANDIT which one is the new current scheduler so it will keep updated performance measurements
+		ARMED_BANDIT_set_current_sched(new_sched);
+	}
+	
 
 	//first thing, we need to identify the pattern we've just experienced
-	//1 TODO we get something from the pattern tracker module, the representation of the pattern
-	//1.1 TODO if the pattern has zero requests, do we just stop? (maybe need to update the previous probabilities first) Maybe we should have a representation for the empty pattern (it could bring some relevant information)?
 	//2 TODO we look for this pattern in the all_observed_patterns list, put the match in seen_pattern
 	//2.1 TODO we get a performance measurement and save it for the current scheduling algorithm in seen_pattern
 	//3 TODO we look for the seen_pattern in the next patterns from previous_pattern so we can update its counters and probability
@@ -59,8 +81,6 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	//5 TODO based on the next pattern we're predicting, we choose the next scheduling algorithm
 	//6 TODO if we can't make predictions, we'll use the Armed Bandit
 
-	//tell ARMED BANDIT which one is the new current scheduler so it will keep updated performance measurements
-	ARMED_BANDIT_set_current_sched(new_sched);
 	return new_sched;
 	
 }

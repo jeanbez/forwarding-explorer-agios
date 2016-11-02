@@ -106,7 +106,7 @@ inline void translate_list_to_time_series()
 }
 
 //returns the current pattern and resets it so we will start to track the next pattern
-struct access_pattern_t *get_pattern()
+struct access_pattern_t *get_current_pattern()
 {
 	struct access_pattern_t *ret;
 	
