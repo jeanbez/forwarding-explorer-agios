@@ -7,7 +7,23 @@ struct PM_pattern_t *previous_pattern = NULL;
 AGIOS_LIST_HEAD(all_observed_patterns);
 short int first_performance_measurement;
 
+//TODO create configuration file parameters: minimum pattern size (patterns shorter than that will be ignored), pattern file name
+
 //TODO we should discard the first performance measurement
+
+void read_pattern_matching_file()
+{
+	FILE *fd;
+
+	//open file
+	
+	//initialize the list of patterns
+	init_agios_list_head(&all_observed_patterns);
+
+
+	//TODO continue here
+
+}
 
 int PATTERN_MATCHING_init(void)
 {
@@ -24,15 +40,14 @@ int PATTERN_MATCHING_init(void)
 	ARMED_BANDIT_aux_init();
 
 	//read the pattern matching file we keep between executions so we are always smart
-	//TODO read file
-	init_agios_list_head(&all_observed_patterns);
+	read_pattern_matching_file();
 
 	return 1;
-		
 }
 int PATTERN_MATCHING_select_next_algorithm(void)
 {
-	struct PM_pattern_t *seen_pattern;
+	struct access_pattern_t *seen_pattern;
+	struct PM_pattern_t *matched_pattern;
 	int new_sched;
 	double *recent_measurements;
 	short int decided=0;
@@ -50,7 +65,13 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	}
 
 	//get the most recently tracked access pattern from the pattern tracker module
-	seen_pattern = get_current_pattern();
+	seen_pattern = get_current_pattern(); //TODO remember to free memory used by seen_pattern
+
+
+	if(match_seen_pattern(seen_pattern)) //if we were able to get a match for this pattern
+	{
+
+
 
 	
 	if(seen_pattern->reqnb >= agios_config_minimum_pattern_size) //if the pattern has too few requests, we'll ignore it (at least for now)
