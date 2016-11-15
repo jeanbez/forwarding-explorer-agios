@@ -325,6 +325,7 @@ inline short int compatible_pattern(struct access_pattern_t *A, struct access_pa
 }
 
 //look for an access pattern in the list of patterns we know
+//return NULL if we can't find a match
 struct PM_pattern_t *match_seen_pattern(struct access_pattern_t *pattern)
 {
 	struct PM_pattern_t *tmp, *ret = NULL;
@@ -347,7 +348,8 @@ struct PM_pattern_t *match_seen_pattern(struct access_pattern_t *pattern)
 	}
 	return ret; 
 }
-//store a new access pattern
+//store a new access pattern in the list of known access patterns
+//returns a pointer to it
 struct PM_pattern_t *store_new_access_pattern(struct access_pattern_t *patter)
 {
 	//allocate new data structure
@@ -362,7 +364,9 @@ struct PM_pattern_t *store_new_access_pattern(struct access_pattern_t *patter)
 	init_agios_list_head(&ret->performance);
 	init_agios_list_head(&ret->next_patterns);
 	ret->all_counters = 0;
-	
+	//store it
+	agios_list_add_tail(&ret->list, &all_observed_patterns);
+	access_pattern_count++;
 	return ret;
 }
 
@@ -397,6 +401,7 @@ void update_probability_network(struct PM_pattern_t *new_pattern)
 	tmp->counter++;
 	previous_pattern->all_counters++; //we use a lazy approach to update probabilities (we only calculate them when writing the file or making a decision)
 }
+//look at the probability network from previous_pattern and returns the most likely pattern
 struct PM_pattern_t *predict_next_pattern(void)
 {
 	//we recalculate probabilities and get the highest one
@@ -419,9 +424,9 @@ struct PM_pattern_t *predict_next_pattern(void)
 	}
 	return ret;
 }
-int get_best_scheduler_for_pattern(struct agios_list_head *table)
+struct io_scheduler_instance_t *get_best_scheduler_for_pattern(struct agios_list_head *table)
 {
-	int ret = -1;
+	struct io_scheduler_instance_t *ret = NULL;
 	struct scheduler_info_t *tmp;
 	double best_performance=0;
 
@@ -432,7 +437,7 @@ int get_best_scheduler_for_pattern(struct agios_list_head *table)
 			if(tmp->bandwidth > best_performance)
 			{
 				best_performance = tmp->bandwidth;
-				ret = tmp->sched->index;
+				ret = tmp->sched;
 			}
 		}
 	}
@@ -444,7 +449,7 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 {
 	struct access_pattern_t *seen_pattern;
 	struct PM_pattern_t *matched_pattern=NULL;
-	int new_sched;
+	struct io_scheduler_instance_t *new_sched=NULL;
 	double *recent_measurements;
 	short int decided=0;
 	struct timespec this_time;
@@ -483,12 +488,12 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	else //the pattern is too short, we'll drop it
 		free_access_pattern_t(&seen_pattern);
 
-	//if we know this pattern, we store the performance information
+	//if we know this pattern, we store the performance information (if we have the information, because we might have dropped it if it was the first performance measurement)
 	if((matched_pattern) && (recent_measurements))
 	{
 		add_measurement_to_performance_table(&matched_pattern->performance, current_sched, timestamp, recent_measurements[agios_performance_get_latest_index()]); 
 	}
-	if(recent_measurements)
+	if(recent_measurements) //we may cleanup now, we already got what we needed
 		free(recent_measurements);
 	
 	//we link the previous pattern to this one we've just detected
@@ -497,36 +502,28 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 		if(previous_pattern)
 			update_probability_network(matched_pattern);
 		previous_pattern = matched_pattern;
+		//now we can try to predict the next pattern we'll see
+		matched_pattern = predict_next_pattern();
 	}
 
-	//now we can try to predict the next pattern we'll see
-	matched_pattern = predict_next_pattern();
-	
 	//if we found it, then we can try selecting the best algorithm for the situation
-	new_sched = -1;
 	if(matched_pattern)
 	{
-		new_sched = get_best_scheduler_for_pattern(matched_pattern->performance);	
+		new_sched = get_best_scheduler_for_pattern(&matched_pattern->performance);	
 	}
 
-	if(new_sched != -1) //if we were able	
-
-
-
-	
+	//if we were able to select a scheduling algorithm, we just have to return, otherwise we'll let armed bandit make the choice for us
+	if(new_sched)
 	{
-		//TODO
 		//tell ARMED BANDIT which one is the new current scheduler so it will keep updated performance measurements
-		ARMED_BANDIT_set_current_sched(new_sched);
+		ARMED_BANDIT_set_current_sched(new_sched->index);
+		return new_sched->index;
 	}
-	
-
-	//4 TODO based on the probability chain, we predict the next pattern
-	//5 TODO based on the next pattern we're predicting, we choose the next scheduling algorithm
-	//6 TODO if we can't make predictions, we'll use the Armed Bandit
-
-	return new_sched;
-	
+	else
+	{
+		//if we can't make predictions, we'll use the Armed Bandit
+		return ARMED_BANDIT_aux_select_next_algorithm(timestamp);
+	}
 }
 void PATTERN_MATCHING_exit(void)
 {
