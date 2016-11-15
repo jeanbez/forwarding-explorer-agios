@@ -45,6 +45,35 @@ inline void add_performance_measurement_to_sched_info(struct scheduler_info_t *i
 			info->measurements_start=0;
 	}
 }
+inline void add_measurement_to_performance_table(struct agios_list_head *table, int current_sched, unsigned long long timestamp, double bandwidth)
+{
+	struct scheduler_info_t *tmp;
+	short int found=0;
+	//look for the line corresponding to this scheduler
+	agios_list_for_each_entry(tmp, table, list)
+	{
+		if(tmp->sched->index == current_sched)
+		{
+			found=1;
+			break;
+		}
+	}
+	//if we can't find, we need to include a new one
+	tmp = malloc(sizeof(struct scheduler_info_t));
+	if(!tmp)
+	{
+		agios_print("PANIC! Could not allocate memory for performance table\n");
+		return;
+	}
+	reset_scheduler_info(tmp);
+	tmp->sched = find_io_scheduler(current_sched);
+	agios_list_add_tail(&tmp->list, table);
+	//now we have the line, so we add the new information
+	add_performance_measurement_to_sched_info(tmp, timestamp, bandwidth);
+	check_validity_window(tmp, timestamp);
+	update_average_bandwidth(tmp);
+	
+}
 //checks the performance measurement list for a scheduling algorithm, discarding everything older than the validity window 
 //receives as parameters the scheduler info struct to be checked and the most recent timestamp;
 //returns 1 if something was discarded, 0 if the list if unchanged

@@ -8,7 +8,7 @@ struct PM_pattern_t *previous_pattern = NULL;
 AGIOS_LIST_HEAD(all_observed_patterns);
 short int first_performance_measurement;
 unsigned int access_pattern_count=0;
-//TODO create configuration file parameters: minimum pattern size (patterns shorter than that will be ignored), pattern file name
+//TODO create configuration file parameters: minimum pattern size (patterns shorter than that will be ignored), pattern file name, config_pattern_matching_threshold, config_maximum_pattern_difference, config_minimum_pattern_size
 
 //TODO we should discard the first performance measurement
 
@@ -289,15 +289,172 @@ int PATTERN_MATCHING_init(void)
 
 	return 1;
 }
+
+//apply some heuristics to decide if two access patterns are close enough to compare their time series
+inline short int compatible_pattern(struct access_pattern_t *A, struct access_pattern_t *B)
+{
+	unsigned long diff;
+
+	//let's see the difference in the total number of requests
+	diff = ((A->reqnb - B->reqnb)*100)/A->reqnb;
+	if(diff < 0)
+		diff = 0 - diff;
+	if(diff > config_maximum_pattern_difference)
+		return 0;
+	//let`s see the difference in the number of reads
+	diff = ((A->read_nb - B->read_nb)*100)/A->read_nb;
+	if(diff < 0)
+		diff = 0 - diff;
+	if(diff > config_maximum_pattern_difference)
+		return 0;
+	//let's see the difference in the number of writes
+	diff = ((A->write_nb - B->write_nb)*100)/A->write_nb;
+	if(diff < 0)
+		diff = 0 - diff;
+	if(diff > config_maximum_pattern_difference)
+		return 0;
+	//let's see the difference in the number of accessed files
+	diff = ((A->filenb - B->filenb)*100)/A->filenb;
+	if(diff < 0)
+		diff = 0 - diff;
+	if(diff > config_maximum_pattern_difference)
+		return 0;
+	//ok, they passed all our tests, so we say they are compatible	
+	//TODO more heuristics?
+	return 1;
+}
+
+//look for an access pattern in the list of patterns we know
+struct PM_pattern_t *match_seen_pattern(struct access_pattern_t *pattern)
+{
+	struct PM_pattern_t *tmp, *ret = NULL;
+	double best_result = 0.0;
+	double this_result;
+
+	agios_list_for_each_entry(tmp, &all_observed_patterns, list)
+	{
+		//compare the patterns
+	 	if(compatible_pattern(tmp->description, pattern)) //first we apply some heuristics so we won't compare all patterns
+		{
+			this_result = FastDTW(tmp->description, pattern);
+			//among the similar ones, we get the most similar one
+			if((this_result >= config_pattern_matching_threshold) && (this_result > best_result)) //TODO we need to check what is the range of results given by FastDTW (to figure out the range of values to give the threshold
+			{
+				best_result = this_result;
+				ret = tmp;
+			}
+		}
+	}
+	return ret; 
+}
+//store a new access pattern
+struct PM_pattern_t *store_new_access_pattern(struct access_pattern_t *patter)
+{
+	//allocate new data structure
+	struct PM_pattern_t *ret = malloc(sizeof(struct PM_pattern_t));
+	if(!ret)
+	{
+		agios_print("PANIC! Could not allocate memory for pattern matching!\n");
+		return NULL;
+	}
+	//initialize the data structure
+	ret->description = pattern;
+	init_agios_list_head(&ret->performance);
+	init_agios_list_head(&ret->next_patterns);
+	ret->all_counters = 0;
+	
+	return ret;
+}
+
+void update_probability_network(struct PM_pattern_t *new_pattern)
+{
+	struct next_patterns_element_t *tmp;
+	short int found=0;
+
+	//look for this pattern in the next patterns of the previous pattern
+	if(!agios_list_empty(&(previous_pattern->next_patterns)))
+	{
+		agios_list_for_each_entry(tmp, &(previous_pattern->next_patterns), list)
+		{
+			if(tmp->pattern == new_pattern)
+			{
+				found =1;
+				break;
+			}
+		}
+	}	
+	//if we did not find it, we need to add a new data structure
+	tmp = malloc(sizeof(struct next_patterns_element_t));
+	if(!tmp)
+	{
+		agios_print("PANIC! Could not allocate memory for pattern matching\n");
+		return;
+	}
+	tmp->counter = 0;
+	tmp->pattern = new_pattern;
+	agios_list_add_tail(&tmp->list, &previous_pattern->next_patterns);
+	//we count this occurrence now
+	tmp->counter++;
+	previous_pattern->all_counters++; //we use a lazy approach to update probabilities (we only calculate them when writing the file or making a decision)
+}
+struct PM_pattern_t *predict_next_pattern(void)
+{
+	//we recalculate probabilities and get the highest one
+	int best_prob = 0;
+	struct next_patterns_element_t *tmp;
+	struct PM_pattern_t *ret=NULL;
+	if(!agios_list_empty(&(previous_pattern->next_patterns)))
+	{
+		agios_list_for_each_entry(tmp, &previous_pattern->next_patterns, list)
+		{
+			tmp->probability = (tmp->counter*100)/previous_pattern->all_counters;
+			if(tmp->probability == 0)
+				tmp->probability = 1;
+			if(tmp->probability > best_prob)
+			{
+				best_prob = tmp->probability;
+				ret = tmp->pattern;		
+			}
+		}
+	}
+	return ret;
+}
+int get_best_scheduler_for_pattern(struct agios_list_head *table)
+{
+	int ret = -1;
+	struct scheduler_info_t *tmp;
+	double best_performance=0;
+
+	if(!agios_list_head(table))
+	{
+		agios_list_for_each_entry(tmp, table, list)
+		{
+			if(tmp->bandwidth > best_performance)
+			{
+				best_performance = tmp->bandwidth;
+				ret = tmp->sched->index;
+			}
+		}
+	}
+	return ret;
+}
+
+
 int PATTERN_MATCHING_select_next_algorithm(void)
 {
 	struct access_pattern_t *seen_pattern;
-	struct PM_pattern_t *matched_pattern;
+	struct PM_pattern_t *matched_pattern=NULL;
 	int new_sched;
 	double *recent_measurements;
 	short int decided=0;
+	struct timespec this_time;
+	unsigned long long timestamp;
+
+	PRINT_FUNCTION_NAME;
 
 	//get recent performance measurements
+	agios_gettime(&this_time);
+	timestamp = get_timespec2llu(this_time);
 	recent_measurements = agios_get_performance_bandwidth();
 	
 	//give recent measurements to ARMED BANDIT so it will have updated information
@@ -306,32 +463,57 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	else
 	{
 		agios_reset_performance_counters(); //we really discard that first measurement		     
+		free(recent_measurements);
+		recent_measurements=NULL;
 		first_performance_measurement=0;	
 	}
 
 	//get the most recently tracked access pattern from the pattern tracker module
-	seen_pattern = get_current_pattern(); //TODO remember to free memory used by seen_pattern
+	seen_pattern = get_current_pattern(); 
 
-
-	if(match_seen_pattern(seen_pattern)) //if we were able to get a match for this pattern
+	//look for the recently observed pattern in our list of known patterns
+	if(seen_pattern->reqnb >= config_minimum_pattern_size) //we ignore patterns which are too small
 	{
+		matched_pattern = match_seen_pattern(seen_pattern);
+		if(matched_pattern) //we don't need the seen_pattern structure anymore, we can free it
+			free_access_pattern_t(&seen_pattern);
+		else	//if we did not find the pattern, we'll include it as a new one
+			matched_pattern = store_new_access_pattern(seen_pattern);
+	}
+	else //the pattern is too short, we'll drop it
+		free_access_pattern_t(&seen_pattern);
+
+	//if we know this pattern, we store the performance information
+	if((matched_pattern) && (recent_measurements))
+	{
+		add_measurement_to_performance_table(&matched_pattern->performance, current_sched, timestamp, recent_measurements[agios_performance_get_latest_index()]); 
+	}
+	if(recent_measurements)
+		free(recent_measurements);
+	
+	//we link the previous pattern to this one we've just detected
+	if(matched_pattern)
+	{
+		if(previous_pattern)
+			update_probability_network(matched_pattern);
+		previous_pattern = matched_pattern;
+	}
+
+	//now we can try to predict the next pattern we'll see
+	matched_pattern = predict_next_pattern();
+	
+	//if we found it, then we can try selecting the best algorithm for the situation
+	new_sched = -1;
+	if(matched_pattern)
+	{
+		new_sched = get_best_scheduler_for_pattern(matched_pattern->performance);	
+	}
+
+	if(new_sched != -1) //if we were able	
 
 
 
 	
-	if(seen_pattern->reqnb >= agios_config_minimum_pattern_size) //if the pattern has too few requests, we'll ignore it (at least for now)
-	{
-		//we'll look for a match among the patterns we know
-			
-	}
-	else
-		decided = 0;
-
-	if(decided == 0)
-	{
-		//TODO armed bandit will decide what to do
-	}	
-	else
 	{
 		//TODO
 		//tell ARMED BANDIT which one is the new current scheduler so it will keep updated performance measurements
@@ -339,10 +521,6 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	}
 	
 
-	//first thing, we need to identify the pattern we've just experienced
-	//2 TODO we look for this pattern in the all_observed_patterns list, put the match in seen_pattern
-	//2.1 TODO we get a performance measurement and save it for the current scheduling algorithm in seen_pattern
-	//3 TODO we look for the seen_pattern in the next patterns from previous_pattern so we can update its counters and probability
 	//4 TODO based on the probability chain, we predict the next pattern
 	//5 TODO based on the next pattern we're predicting, we choose the next scheduling algorithm
 	//6 TODO if we can't make predictions, we'll use the Armed Bandit
