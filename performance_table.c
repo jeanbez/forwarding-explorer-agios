@@ -1,6 +1,18 @@
 #include "performance_table.h"
 #include "agios_config.h"
 
+//cleanup a scheduler_info_t structure
+inline void free_scheduler_info_t(struct scheduler_info_t **info)
+{
+	if(*info)
+	{
+		//we don't need to free the sched structure, since it was not allocated (we just got the pointer)
+		if((*info)->bandwidth_measurements)
+			free((*info)->bandwidth_measurements);
+		free(*info);
+	}
+}
+
 //resets all information from a scheduler_info_t struct, except the "sched" field
 inline void reset_scheduler_info(struct scheduler_info_t *info)
 {
@@ -8,6 +20,11 @@ inline void reset_scheduler_info(struct scheduler_info_t *info)
 	info->selection_counter=0;
 	info->probability = 0;
 	info->bandwidth_measurements = (struct performance_info_t *)malloc(sizeof(struct performance_info_t)*config_agios_performance_window);
+	if(!info->bandwidth_measurements)
+	{
+		agios_print("PANIC! Could not allocate memory for performance table\n");
+		//now what?
+	}
 	info->measurements_start = info->measurements_end = 0;
 }
 

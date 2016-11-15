@@ -374,8 +374,16 @@ void write_migration_end(unsigned long long int timestamp)
 //cleanup function
 void ARMED_BANDIT_exit(void)
 {
+	int i;
 	if(AB_table)
+	{
+		for(i = 0; i< scheduler_nb; i++)
+		{
+			if(AB_table[i].bandwidth_measurements)
+				free(AB_table[i].bandwidth_measurements);
+		}
 		free(AB_table);
+	}
 	if(ab_trace)
 		fclose(ab_trace);
 }
