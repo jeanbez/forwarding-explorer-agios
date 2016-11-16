@@ -13,6 +13,7 @@ struct next_patterns_element_t {
 };
 
 struct PM_pattern_t {
+	int id;
 	struct access_pattern_t *description; //information on this access pattern;
 	struct agios_list_head list; //to be in a list of all patterns
 

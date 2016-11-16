@@ -101,13 +101,13 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 		return NULL;
 	}
 	error = 0;
-	for(i =0; i<reqnb; i++)
+	for(i =0; i<ret->description->reqnb; i++)
 	{
 		error += fread(&(ret->description->time_series[i].timestamp), sizeof(unsigned long int), 1, fd); 
 		error += fread(&(ret->description->time_series[i].offset), sizeof(long long int), 1, fd); 
 		init_agios_list_head(&(ret->description->time_series[i].list));
 	}
-	if(error != reqnb*2)
+	if(error != ret->description->reqnb*2)
 	{
 		free_PM_pattern_t(&ret);
 		return NULL;
@@ -190,6 +190,11 @@ void read_pattern_matching_file()
 
 	//open file
 	fd = fopen(config_pattern_filename, "r");
+	if(!fd)
+	{
+		agios_print("Could not open pattern matching file %s\n", config_pattern_filename);
+		return;
+	}
 
 	//read the number of access patterns
 	ret = fread(&access_pattern_count, sizeof(unsigned int), 1, fd);
@@ -213,6 +218,7 @@ void read_pattern_matching_file()
 	{
 		//get it
 		new = read_access_pattern_from_file(fd);
+		new->id = i;
 		//store it in our vector
 		patterns[i] = new;
 		//put it in the list
@@ -366,6 +372,7 @@ struct PM_pattern_t *store_new_access_pattern(struct access_pattern_t *patter)
 	ret->all_counters = 0;
 	//store it
 	agios_list_add_tail(&ret->list, &all_observed_patterns);
+	ret->id = access_pattern_count;
 	access_pattern_count++;
 	return ret;
 }
@@ -525,7 +532,91 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 		return ARMED_BANDIT_aux_select_next_algorithm(timestamp);
 	}
 }
+void write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
+{
+	int error=0;
+	int i, sched_count, measurements, start;
+	struct scheduler_info_t *tmp;
+
+	//description of the access pattern
+	error+= fwrite(&(pattern->description->reqnb), sizeof(unsigned int), 1, fd);
+	error+= fwrite(&(pattern->description->total_size), sizeof(unsigned long int), 1, fd);
+	error+= fwrite(&(pattern->description->read_nb), sizeof(unsigned int), 1, fd);
+	error+= fwrite(&(pattern->description->read_size), sizeof(unsigned long int), 1, fd);
+	error+= fwrite(&(pattern->description->write_nb), sizeof(unsigned int), 1, fd);
+	error+= fwrite(&(pattern->description->write_size), sizeof(unsigned long int), 1, fd);
+	error+= fwrite(&(pattern->description->filenb), sizeof(unsigned int), 1, fd);
+	if(error != 7)
+		return;
+	//the time series
+	error = 0;
+	for(i = 0; i < pattern->description->reqnb; i++)
+	{
+		error += fwrite(&(pattern->description->time_series[i].timestamp), sizeof(unsigned long int), 1, fd);
+		error += fwrite(&(pattern->description->time_series[i].offset), sizeof(long long int), 1, fd);
+	}
+	if(error != pattern->description->reqnb*2)
+		return;
+	//performance information for this access pattern
+	//(first we need to know to how many schedulers we have information)
+	sched_count=0;
+	agios_list_for_each_entry(tmp, &pattern->performance, list)
+	{
+		sched_count++;
+	}
+	error = fwrite(&sched_count, sizeof(int), 1, fd);
+	if(error != 1)
+		return;
+	error = 0;
+	agios_list_for_each_entry(tmp, &pattern->performance, list)
+	{
+		error += fwrite(&tmp->sched->index, sizeof(int), 1, fd);
+		start = measurements_start;
+		measurements=0;
+		while(start != measurements_end)
+		{
+			measurements++;
+			start++;
+			//TODO continue here
+		error += fwrite(
+	}
+	
+	
+}
+void write_pattern_matching_file(void)
+{
+	FILE *fd;
+	int ret,i;
+	struct PM_pattern_t *tmp;
+
+	fd = fopen(config_pattern_filename, "w");
+	if(!fd)
+	{
+		agios_print("Could not open pattern matching file %s\n", config_pattern_filename);
+		return;
+	}
+	else
+	{
+		//write the number of access patterns
+		ret = fwrite(&access_pattern_count, sizeof(unsigned int), 1, fd);		
+		if(!ret)
+		{
+			agios_print("PANIC! Could not write to pattern matching file\n");
+			fclose(fd);
+			return;	
+		}
+		agios_list_for_each_entry(tmp, &all_observed_patterns, list)
+		{
+			write_access_pattern_to_file(tmp, fd);
+		}
+
+		//TODO continue here
+		fclose(fd);
+	}
+}
 void PATTERN_MATCHING_exit(void)
 {
-	//TODO write file with what we have learned in this execution
+	//write file with what we have learned in this execution
+	write_pattern_matching_file();
+	//TODO continue here
 }
