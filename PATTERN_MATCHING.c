@@ -225,7 +225,7 @@ void read_pattern_matching_file()
 		agios_list_add_tail(&new->list, &all_observed_patterns);
 	}
 
-	//then we read performance information for the known access patterns
+	//then we read the probability network
 	ret = 0;
 	agios_list_for_each_entry(new, &all_observed_patterns, list)
 	{
@@ -532,9 +532,12 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 		return ARMED_BANDIT_aux_select_next_algorithm(timestamp);
 	}
 }
-void write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
+//writes information about an access pattern to the file (including performance observed with different scheduling algorithms, NOT including the probability network)
+//returns 1 on success, 0 otherwise
+int write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
 {
 	int error=0;
+	int this_error;
 	int i, sched_count, measurements, start;
 	struct scheduler_info_t *tmp;
 
@@ -547,7 +550,7 @@ void write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
 	error+= fwrite(&(pattern->description->write_size), sizeof(unsigned long int), 1, fd);
 	error+= fwrite(&(pattern->description->filenb), sizeof(unsigned int), 1, fd);
 	if(error != 7)
-		return;
+		return 0;
 	//the time series
 	error = 0;
 	for(i = 0; i < pattern->description->reqnb; i++)
@@ -556,32 +559,43 @@ void write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
 		error += fwrite(&(pattern->description->time_series[i].offset), sizeof(long long int), 1, fd);
 	}
 	if(error != pattern->description->reqnb*2)
-		return;
+		return 0;
 	//performance information for this access pattern
 	//(first we need to know to how many schedulers we have information)
-	sched_count=0;
-	agios_list_for_each_entry(tmp, &pattern->performance, list)
-	{
-		sched_count++;
-	}
+	sched_count=get_sched_info_number(&pattern->performance);
 	error = fwrite(&sched_count, sizeof(int), 1, fd);
 	if(error != 1)
-		return;
+		return 0;
 	error = 0;
 	agios_list_for_each_entry(tmp, &pattern->performance, list)
 	{
 		error += fwrite(&tmp->sched->index, sizeof(int), 1, fd);
-		start = measurements_start;
-		measurements=0;
-		while(start != measurements_end)
+		measurements=get_performance_measurements_number(tmp);
+		error += fwrite(&measurements, sizeof(int), 1, fd);
+		start = tmp->measurements_start;
+		this_error = 0;
+		while(start != tmp->measurements_end)
 		{
-			measurements++;
-			start++;
-			//TODO continue here
-		error += fwrite(
+			this_error += fwrite(&(tmp->bandwidth_measurements[start].timestamp), sizeof(unsigned long int), 1, fd);
+			this_error += fwrite(&(tmp->bandwidth_measurements[start].bandwidth), sizeof(double), 1, fd);
+		}	
+		if(this_error != measurements*2)
+			return 0;
+		error += fwrite(&tmp->bandwidth, sizeof(double), 1, fd);
+		error += fwrite(&tmp->selection_counter, sizeof(int), 1, fd);
+		error += fwrite(&tmp->probability, sizeof(int), 1, fd);
 	}
-	
-	
+	if(error != 5*sched_count)
+		return 0;
+	return 1;
+}
+//returns the number of future patters (the size of the provided list)
+int get_next_pattern_number(struct agios_list_head *chain)
+{
+	int ret = 0;
+	struct next_patterns_element_t *tmp;
+	if(!agios_list_empty
+	//TODO continue here 
 }
 void write_pattern_matching_file(void)
 {
@@ -605,10 +619,28 @@ void write_pattern_matching_file(void)
 			fclose(fd);
 			return;	
 		}
+		//write basic information on the access patterns (general information, the time series and performance observed with scheduling algorithms)
 		agios_list_for_each_entry(tmp, &all_observed_patterns, list)
 		{
-			write_access_pattern_to_file(tmp, fd);
+			ret = write_access_pattern_to_file(tmp, fd);
+			if(ret != 1)
+			{
+				agios_print("PANIC! Could not write to pattern matching file!\n");
+				fclose(fd);
+				break;
+			}
 		}
+		if(ret != 1)
+			return;
+		//write the probability network, we'll write something about every pattern we know
+		agios_list_for_each_entry(tmp, &all_observed_patterns, list)
+		{
+			//write the number of future patterns we know for this one
+				
+		}
+		
+		
+		
 
 		//TODO continue here
 		fclose(fd);

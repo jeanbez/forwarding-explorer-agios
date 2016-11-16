@@ -28,6 +28,36 @@ inline void reset_scheduler_info(struct scheduler_info_t *info)
 	info->measurements_start = info->measurements_end = 0;
 }
 
+//gets the number of schedulers to which we have performance measurements in a performance table (the size of the list)
+inline int get_sched_info_number(struct agios_list_head *table)
+{
+	int ret =0;
+	struct scheduler_info_t *tmp;
+
+	if(!agios_list_empty(table))
+	{
+		agios_list_for_each_entry(tmp, table, list)
+		{
+			ret++;
+		}
+	}
+	return ret;
+}
+//gets the number of measurements in a scheduler_info-t structure (they are stored in a circular list)
+inline int get_performance_measurements_number(struct scheduler_info_t *info)
+{
+	int start = info->measurements_start;
+	int ret=0;
+	while(start != info->measurements_end)
+	{
+		ret++;
+		start++;
+		if(start == config_agios_performance_window)
+			start = 0;
+	}
+	return ret;
+}
+
 //updates information about a scheduler with a new performance measurement
 inline void add_performance_measurement_to_sched_info(struct scheduler_info_t *info, unsigned long long timestamp, double bandwidth)
 {

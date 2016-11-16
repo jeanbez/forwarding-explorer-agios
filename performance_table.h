@@ -27,4 +27,6 @@ inline void add_performance_measurement_to_sched_info(struct scheduler_info_t *i
 short int check_validity_window(struct scheduler_info_t *info, unsigned long int now);
 void update_average_bandwidth(struct scheduler_info_t *info);
 inline void free_scheduler_info_t(struct scheduler_info_t **info);
+inline int get_performance_measurements_number(struct scheduler_info_t *info);
+inline int get_sched_info_number(struct agios_list_head *table);
 #endif
