@@ -280,6 +280,7 @@ void check_update_time()
 {
 	int next_alg = current_alg;
 
+
 	//is it time to change the scheduling algorithm?
 	//TODO it is possible that at this moment the prediction thread is reading traces and making predictions, i.e., accessing the hashtable. This could lead to awful problems. If we want to test with recalculate_alpha_period, we need to take care of that!
 	if((dynamic_scheduler->is_dynamic) && (config_agios_select_algorithm_period >= 0) && (agios_processed_reqnb >= config_agios_select_algorithm_min_reqnumber) && (get_nanoelapsed(last_algorithm_update) >= config_agios_select_algorithm_period))
@@ -287,6 +288,7 @@ void check_update_time()
 		//make a decision on the next scheduling algorithm
 		next_alg = dynamic_scheduler->select_algorithm();
 		//change it
+		debug("HEYYYYYYYYYYYYYYYY I'M HEEEEEEEEEEEEEEEERREEEEEEEEEEEEEE\n\n\n\n");
 		change_selected_alg(next_alg);
 		proc_set_new_algorithm(current_alg);
 		performance_set_new_algorithm(current_alg);

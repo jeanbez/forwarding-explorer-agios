@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <agios.h>
 #include <string.h>
+#include <math.h>
 
 struct client clnt;
 
@@ -22,6 +23,30 @@ double calculate_timestamp(int hour, int minute, double seconds)
 
 	return (((day_carry*24) + hour)*60 + minute)*60 + seconds;
 }
+void wait_for_some_time(double some_time)
+{
+	struct timespec wait_time, rem_time;
+
+	if(some_time < 0)
+	{
+		printf("PANIC! Cannot wait for %f\n", some_time);
+		return;
+	}
+	
+	wait_time.tv_sec = floor(some_time);
+	wait_time.tv_nsec = (some_time - floor(some_time))*1000000000L;
+	nanosleep(&wait_time, &rem_time);
+}
+void test_process(void * req_id)
+{
+	pthread_mutex_lock(&processed_reqnb_mutex);
+	processed_reqnb++;
+	if(processed_reqnb >= reqnb)
+		pthread_cond_signal(&processed_reqnb_cond);
+	pthread_mutex_unlock(&processed_reqnb_mutex);	
+}
+
+
 
 int main(int argc, char *argv[])
 {
@@ -31,7 +56,7 @@ int main(int argc, char *argv[])
 	int type;
 	long offset, len;
 	int hour, minute;
-	double seconds, timestamp;
+	double seconds, timestamp, last_timestamp;
 
 	//get arguments: input_file
 	// and open file
@@ -51,7 +76,7 @@ int main(int argc, char *argv[])
 	//start AGIOS
 	clnt.process_requests = NULL;
 	clnt.process_request = test_process;
-	if(agios_init(&clnt, "tmp/agios.conf", 3) != 0)
+	if(agios_init(&clnt, "/tmp/agios.conf", 3) != 0)
 	{
 		printf("PANIC! Could not initialize AGIOS!\n");
 		exit(-1);
@@ -88,14 +113,15 @@ int main(int argc, char *argv[])
 		minute = atoi(strtok(NULL, ":"));
 		seconds = atof(strtok(NULL, ":"));
 		timestamp = calculate_timestamp(hour, minute, seconds);
+		wait_for_some_time(timestamp - last_timestamp);
+		last_timestamp = timestamp;
 
 		reqnb++;
-
-	//	printf("%d:%d:%f %f %s %d %ld %ld\n", hour, minute, seconds, timestamp, handle, type, offset, len);
-		
-		
+		agios_add_request(handle, type, offset, len, &handle, &clnt, 1);
+	//	printf("%d:%d:%f %f %s %d %ld %ld\n", hour, minute, seconds, timestamp, handle, type, offset, len);	     
 	}
 	fclose(fd_in);
+	printf("FINISHED ISSUING ALL REQUESTS, WILL WAIT NOW\n");
 
 	//wait until we've processed all issued requests
 	pthread_mutex_lock(&processed_reqnb_mutex);
