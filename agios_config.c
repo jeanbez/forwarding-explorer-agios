@@ -140,7 +140,7 @@ inline void config_set_pattern_filename(const char *value)
 	if(!config_pattern_filename)
 		agios_print("PANIC! Could not allocate memory for configuration parameters\n");
 	else
-		strcpy(contig_pattern_filename, value);	
+		strcpy(config_pattern_filename, value);	
 }
 inline void config_agios_cleanup(void)
 {
@@ -239,7 +239,7 @@ inline short int read_configuration_file(char *config_file)
 	config_lookup_int(&agios_config, "library_options.minimum_pattern_size", &ret);
 	config_minimum_pattern_size = ret;
 	config_lookup_int(&agios_config, "library_options.maximum_pattern_difference", &config_maximum_pattern_difference);
-	config_lookup_int(&agios_config "library_options.pattern_matching_threshold", &config_pattern_matching_threshold);
+	config_lookup_int(&agios_config, "library_options.pattern_matching_threshold", &config_pattern_matching_threshold);
 	config_lookup_string(&agios_config, "library_options.pattern_matching_filename", &ret_str);	
 	config_set_pattern_filename(ret_str);
 

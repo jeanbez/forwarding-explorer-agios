@@ -1,13 +1,21 @@
+#include <stdlib.h>
+#include <stdio.h>
+
 #include "pattern_tracker.h"
 #include "performance.h"
 #include "performance_table.h"
 #include "ARMED_BANDIT.h"
+#include "common_functions.h"
+#include "agios_config.h"
+#include "DTW.h"
+#include "mylist.h"
 #include "PATTERN_MATCHING.h"
 
 struct PM_pattern_t *previous_pattern = NULL;
 AGIOS_LIST_HEAD(all_observed_patterns);
 short int first_performance_measurement;
 unsigned int access_pattern_count=0;
+int current_selection;
 
 //cleanup a PM_pattern_t structure
 inline void free_PM_pattern_t(struct PM_pattern_t **pattern)
@@ -91,7 +99,7 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 	}
 	init_agios_list_head(&ret->description->requests);
 	//the time series
-	ret->description->time_series = malloc(sizeof(struct pattern_tracker_req_info_t)*(reqnb+1));
+	ret->description->time_series = malloc(sizeof(struct pattern_tracker_req_info_t)*((ret->description->reqnb)+1));
 	if(!ret->description->time_series)
 	{
 		free_PM_pattern_t(&ret);
@@ -275,7 +283,7 @@ void read_pattern_matching_file()
 
 int PATTERN_MATCHING_init(void)
 {
-	int ret;
+	struct timespec start_time;
 
 	first_performance_measurement = 1;
 	//start the pattern tracker
@@ -285,10 +293,16 @@ int PATTERN_MATCHING_init(void)
 	config_agios_select_algorithm_min_reqnumber = 0;
 
 	//initialize the armed bandit approach so we can use it when we don't know what to do
-	ARMED_BANDIT_aux_init();
+	if(ARMED_BANDIT_aux_init(&start_time) != 1)
+	{
+		agios_print("PANIC! Could not initialize Armed Bandit\n");
+		return 0;
+	}
 
 	//read the pattern matching file we keep between executions so we are always smart
 	read_pattern_matching_file();
+
+	current_selection = config_agios_starting_algorithm;
 
 	return 1;
 }
@@ -353,7 +367,7 @@ struct PM_pattern_t *match_seen_pattern(struct access_pattern_t *pattern)
 }
 //store a new access pattern in the list of known access patterns
 //returns a pointer to it
-struct PM_pattern_t *store_new_access_pattern(struct access_pattern_t *patter)
+struct PM_pattern_t *store_new_access_pattern(struct access_pattern_t *pattern)
 {
 	//allocate new data structure
 	struct PM_pattern_t *ret = malloc(sizeof(struct PM_pattern_t));
@@ -392,15 +406,18 @@ void update_probability_network(struct PM_pattern_t *new_pattern)
 		}
 	}	
 	//if we did not find it, we need to add a new data structure
-	tmp = malloc(sizeof(struct next_patterns_element_t));
-	if(!tmp)
+	if(!found)
 	{
-		agios_print("PANIC! Could not allocate memory for pattern matching\n");
-		return;
+		tmp = malloc(sizeof(struct next_patterns_element_t));
+		if(!tmp)
+		{
+			agios_print("PANIC! Could not allocate memory for pattern matching\n");
+			return;
+		}
+		tmp->counter = 0;
+		tmp->pattern = new_pattern;
+		agios_list_add_tail(&tmp->list, &previous_pattern->next_patterns);
 	}
-	tmp->counter = 0;
-	tmp->pattern = new_pattern;
-	agios_list_add_tail(&tmp->list, &previous_pattern->next_patterns);
 	//we count this occurrence now
 	tmp->counter++;
 	previous_pattern->all_counters++; //we use a lazy approach to update probabilities (we only calculate them when writing the file or making a decision)
@@ -434,7 +451,7 @@ struct io_scheduler_instance_t *get_best_scheduler_for_pattern(struct agios_list
 	struct scheduler_info_t *tmp;
 	double best_performance=0;
 
-	if(!agios_list_head(table))
+	if(!agios_list_empty(table))
 	{
 		agios_list_for_each_entry(tmp, table, list)
 		{
@@ -455,7 +472,6 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	struct PM_pattern_t *matched_pattern=NULL;
 	struct io_scheduler_instance_t *new_sched=NULL;
 	double *recent_measurements;
-	short int decided=0;
 	struct timespec this_time;
 	unsigned long long timestamp;
 
@@ -495,7 +511,7 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	//if we know this pattern, we store the performance information (if we have the information, because we might have dropped it if it was the first performance measurement)
 	if((matched_pattern) && (recent_measurements))
 	{
-		add_measurement_to_performance_table(&matched_pattern->performance, current_sched, timestamp, recent_measurements[agios_performance_get_latest_index()]); 
+		add_measurement_to_performance_table(&matched_pattern->performance, current_selection, timestamp, recent_measurements[agios_performance_get_latest_index()]); 
 	}
 	if(recent_measurements) //we may cleanup now, we already got what we needed
 		free(recent_measurements);
@@ -521,12 +537,14 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	{
 		//tell ARMED BANDIT which one is the new current scheduler so it will keep updated performance measurements
 		ARMED_BANDIT_set_current_sched(new_sched->index);
+		current_selection = new_sched->index;
 		return new_sched->index;
 	}
 	else
 	{
 		//if we can't make predictions, we'll use the Armed Bandit
-		return ARMED_BANDIT_aux_select_next_algorithm(timestamp);
+		current_selection =  ARMED_BANDIT_aux_select_next_algorithm(timestamp);
+		return current_selection;
 	}
 }
 //writes information about an access pattern to the file (including performance observed with different scheduling algorithms, NOT including the probability network)
@@ -603,7 +621,7 @@ int get_next_pattern_number(struct agios_list_head *chain)
 void write_pattern_matching_file(void)
 {
 	FILE *fd;
-	int ret,i, pat_count, error;
+	int ret, pat_count, error, this_error;
 	struct PM_pattern_t *tmp;
 	struct next_patterns_element_t *next;
 

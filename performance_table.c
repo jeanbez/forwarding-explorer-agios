@@ -1,5 +1,7 @@
+#include <stdlib.h>
 #include "performance_table.h"
 #include "agios_config.h"
+#include "common_functions.h"
 
 //cleanup a scheduler_info_t structure
 inline void free_scheduler_info_t(struct scheduler_info_t **info)
@@ -89,15 +91,18 @@ inline void add_measurement_to_performance_table(struct agios_list_head *table, 
 		}
 	}
 	//if we can't find, we need to include a new one
-	tmp = malloc(sizeof(struct scheduler_info_t));
-	if(!tmp)
+	if(!found)
 	{
-		agios_print("PANIC! Could not allocate memory for performance table\n");
-		return;
+		tmp = malloc(sizeof(struct scheduler_info_t));
+		if(!tmp)
+		{	
+			agios_print("PANIC! Could not allocate memory for performance table\n");
+			return;
+		}
+		reset_scheduler_info(tmp);
+		tmp->sched = find_io_scheduler(current_sched);
+		agios_list_add_tail(&tmp->list, table);
 	}
-	reset_scheduler_info(tmp);
-	tmp->sched = find_io_scheduler(current_sched);
-	agios_list_add_tail(&tmp->list, table);
 	//now we have the line, so we add the new information
 	add_performance_measurement_to_sched_info(tmp, timestamp, bandwidth);
 	check_validity_window(tmp, timestamp);

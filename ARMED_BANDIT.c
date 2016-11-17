@@ -3,6 +3,7 @@
 #include "common_functions.h"
 #include "performance.h"
 #include "agios_request.h"
+#include "performance_table.h"
 
 static int scheduler_nb=0; //number of possible scheduling algorithms
 static int useful_sched_nb=0; //from the possible scheduling algorithms, how many can be dynamically selected (whe have to exclude the dynamic ones, the ones still being tested, etc)
@@ -98,18 +99,18 @@ void print_ab_trace_probs()
 }
 
 //this function is different from ARMED_BANDIT_init because it is not called when the ARMED_BANDIT algorithm is being used, but by the PATTERN_MATCHING algorithm which uses ARMED_BANDIT as a helper mechanism. In this situation, when the PATTERN_MATCHING has no information to make a decision, it will use ARMED BANDIT to make it (because it will be still better than random).
-int ARMED_BANDIT_aux_init(void)
+//return 1 on success
+int ARMED_BANDIT_aux_init(struct timespec *start_time)
 {
 	int i;
-	struct timespec start_time;
 
 	PRINT_FUNCTION_NAME;
 
 	first_performance_measurement=1; //we'll need to discard the first measurement because it is not stable yet
 
 	//initialize the pseudo-random number generator
-	agios_gettime(&start_time);
-	srand(get_timespec2llu(start_time));
+	agios_gettime(start_time);
+	srand(get_timespec2llu(*start_time));
 
 	//open ab trace file
 	ab_trace = fopen("/tmp/agios_ab_trace.txt", "w");
@@ -148,6 +149,7 @@ int ARMED_BANDIT_aux_init(void)
 			sum_of_all_probabilities += AB_table[i].probability;
 		}
 	}
+	return 1;
 }
 
 //this function is called during initialization. It initializes data structures used by this algorithm. 
@@ -155,7 +157,12 @@ int ARMED_BANDIT_aux_init(void)
 //returns 1 on success
 int ARMED_BANDIT_init(void)
 {
-	ARMED_BANDIT_aux_init();
+	struct timespec start_time;
+	if(ARMED_BANDIT_aux_init(&start_time) != 1)
+	{
+		agios_print("PANIC! could not initialize Armed Bandit\n");
+		return 0;
+	}
 	
 	//start with the starting algorithm (defined in the configuration file), unless it is something we cannot use here
 	current_sched = config_agios_starting_algorithm;
@@ -173,7 +180,7 @@ int ARMED_BANDIT_init(void)
 	}
 //	AB_table[current_sched].selection_counter++;  (because we'll skip the first window)
 
-	fprintf(ab_trace, "Starting Armed Bandit at timestamp %llu\n", get_timespec2llu(start_time));
+	fprintf(ab_trace, "Starting Armed Bandit at timestamp %lu\n", get_timespec2llu(start_time));
 	print_ab_trace_probs();
 
 	return 1;
@@ -294,7 +301,7 @@ unsigned long long int ARMED_BANDIT_update_bandwidth(double *recent_measurements
 		}
 	}
 	if(cleanup)
-		free(recent_measurements)
+		free(recent_measurements);
 	return timestamp;
 }
 

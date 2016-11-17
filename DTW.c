@@ -50,6 +50,8 @@ THE SOFTWARE.
  */
 
 #include <math.h>
+#include <float.h>
+#include <limits.h>
 
 #include "common_functions.h"
 #include "DTW.h"
@@ -65,7 +67,7 @@ inline struct time_warp_info_t *DTW_getWarpInfoBetween_withWindow(struct access_
 }
 
 //allocates and initializes a new memory_resident_matrix_t structure, used by constrained DTW. Returns NULL on error
-inline struct memory_resident_matrix_t *get_new_memory_resident_matrix_t(struct seach_window_t *window)
+inline struct memory_resident_matrix_t *get_new_memory_resident_matrix_t(struct search_window_t *window)
 {
 	int i;
 	int currentOffset=0;
@@ -76,14 +78,14 @@ inline struct memory_resident_matrix_t *get_new_memory_resident_matrix_t(struct 
 		agios_print("PANIC! Could not allocate memory for DTW\n");
 		return NULL;
 	}
-	ret->cellValues = malloc(sizeof(double)*window->size);
+	ret->cellValues = (double *)malloc(sizeof(double)*(window->size));
 	if(ret->cellValues == NULL)
 	{
 		agios_print("PANIC! Could not allocate memory for DTW\n");
 		return NULL;
 	}
 	ret->cellValues_size=0;
-	ret->colOffsets = malloc(sizeof(int)*window->size);
+	ret->colOffsets = (int *)malloc(sizeof(int)*(window->size));
 	if(ret->colOffsets == NULL)
 	{
 		agios_print("PANIC! Could not allocate memory for DTW\n");
@@ -132,7 +134,7 @@ struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, s
 {
 	unsigned int colu, i, j;
 	double diagCost, leftCost, downCost;
-	struct time_warp_info_t *ret = malloc(sizeof(struct time_warp_info)); 
+	struct time_warp_info_t *ret = malloc(sizeof(struct time_warp_info_t)); 
 	if(ret == NULL)
 	{
 		agios_print("PANIC! Could not allocate memory for DTW\n");
@@ -173,7 +175,7 @@ struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, s
 		else if (i == 0) //first column
 			add_to_memory_resident_matrix_t(costMatrix, window, i, j, DTW_euclideanDist(tsI->time_series[0].offset, tsJ->time_series[j].offset) + get_from_memory_resident_matrix_t(costMatrix, window, i, j-1));
 		else if (j == 0) //first row
-			add_to_memory_resident_matrix_t(costMatrix, window, i, j, DTW_euclideanDist(tsI->time_series[i].offset, tsJ->time_series[0]) + get_from_memory_resident_matrix_t(costMatrix, window, i-1,j));
+			add_to_memory_resident_matrix_t(costMatrix, window, i, j, DTW_euclideanDist(tsI->time_series[i].offset, tsJ->time_series[0].offset) + get_from_memory_resident_matrix_t(costMatrix, window, i-1,j));
 		else //not first column or first row		
 			add_to_memory_resident_matrix_t(costMatrix, window, i, j, fmin(get_from_memory_resident_matrix_t(costMatrix, window, i-1, j), fmin(get_from_memory_resident_matrix_t(costMatrix, window, i-1,j-1), get_from_memory_resident_matrix_t(costMatrix, window, i,j-1))) + DTW_euclideanDist(tsI->time_series[i].offset, tsJ->time_series[j].offset));
 	} // end for
@@ -270,7 +272,7 @@ inline void Add_to_TimeWarp_Path(struct warp_path_t *path, int a, int b)
 struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ)
 {
 	int i,j;
-	struct time_warp_info_t *ret = malloc(sizeof(time_warp_info_t));
+	struct time_warp_info_t *ret = malloc(sizeof(struct time_warp_info_t));
 	if(ret == NULL)
 	{
 		agios_print("PANIC! Could not allocate memory for DTW");
@@ -304,17 +306,17 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	}
 
 	//calculate the values for the first column, from the bottom up
-	costMatrix[0][0] = DTW_euclideanDist(tsI,0, tsJ,0);
+	costMatrix[0][0] = DTW_euclideanDist(tsI->time_series[0].offset, tsJ->time_series[0].offset);
 	for(j = 1; j < tsJ->reqnb; j++)
-		costMatrix[0][j] = costMatrix[0][j-1] + DTW_euclideanDist(tsI, 0, tsJ, j);
+		costMatrix[0][j] = costMatrix[0][j-1] + DTW_euclideanDist(tsI->time_series[0].offset, tsJ->time_series[j].offset);
 	//now for the rest of the matrix
 	for(i = 1; i< tsI->reqnb; i++) 
 	{
 		//calculate for the bottom row
-		costMatrix[i][0] = costMatrix[i-1][0] + DTW_euclideanDist(tsI, i, tsJ, 0);
+		costMatrix[i][0] = costMatrix[i-1][0] + DTW_euclideanDist(tsI->time_series[i].offset, tsJ->time_series[0].offset);
 		//now for the other rows
 		for(j = 1; j < tsJ->reqnb; j++)
-			costMatrix[i][j] = (fmin(costMatrix[i-1][j], fmin(costMatrix[i-1][j-1], costMatrix[i][j-1]))) + DTW_euclideanDist(tsI, i, tsJ, j);
+			costMatrix[i][j] = (fmin(costMatrix[i-1][j], fmin(costMatrix[i-1][j-1], costMatrix[i][j-1]))) + DTW_euclideanDist(tsI->time_series[i].offset, tsJ->time_series[j].offset);
 	}
 	//ok, now we have minimum cost
 	ret->distance = costMatrix[tsI->reqnb-1][tsJ->reqnb-1];
@@ -367,9 +369,11 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	return ret;
 }
 
-inline double DTW_euclideanDist(struct access_pattern_t *tsI, int indexI, struct access_pattern_t *tsJ, int indexJ)
+inline double DTW_euclideanDist(long long int value1, long long int value2)
 {
-	return pow(sqrt(pow(tsI->time_series[indexI].offset - tsJ->time_series[indexJ].offset, 2.0)), 2.0);
+//	return pow(sqrt(pow(tsI->time_series[indexI].offset - tsJ->time_series[indexJ].offset, 2.0)), 2.0);
+//actually this was to compare vectors, since we are using 1d dtw, we will only compare pairs of doubles, so:
+	return abs(value1-value2);
 }
 
 struct access_pattern_t * shrink_time_series(struct access_pattern_t *ts, int shrunkSize)
@@ -408,7 +412,7 @@ struct access_pattern_t * shrink_time_series(struct access_pattern_t *ts, int sh
 		free_access_pattern_t(&ret);
 		return NULL;
 	}
-	ret->renqb=0;
+	ret->reqnb=0;
 	ret->original_size = ts->reqnb;
 
 	ptToReadFrom=0;
@@ -436,7 +440,7 @@ struct access_pattern_t * shrink_time_series(struct access_pattern_t *ts, int sh
 	return ret;
 }
 
-inline struct search_window_t * new_search_window(int tsIsize, int isJsize)
+inline struct search_window_t * new_search_window(int tsIsize, int tsJsize)
 {
 	int i;
 	struct search_window_t *ret = malloc(sizeof(struct search_window_t));
@@ -580,7 +584,7 @@ void SearchWindow_expandSearchWindow(struct search_window_t *window, int radius)
 				{
 					//expand the window only to the edge of the matrix
 					cellsPastEdge = targetRow - window->maxJ_;
-					searchWindow_markVisited(window, targetCol, targetRow - cellsPastEdge);
+					SearchWindow_markVisited(window, targetCol, targetRow - cellsPastEdge);
 				}
 			}
 			if((windowCells->minValues[cell] != (window->size-1)) && (windowCells->maxValues[cell] != window->maxJ_)) //move to upper-right if possible
@@ -709,10 +713,10 @@ struct search_window_t *SearchWindow_ExpandedResWindow(struct access_pattern_t *
 			SearchWindow_markVisited(ret, currentI, currentJ-1);
 		}
 		//fill in the cells that are created by a projection from the crell in the low-resolution warp path to a higher resolution
-		for(x = 0; x < blockISize; x++)
+		for(x = 0; x < blockIsize; x++)
 		{
-			SearchWindow_markVisited(currentI+x, currentJ);
-			SearchWindow_markVisited(currentI+x, currentJ + blockJSize-1);
+			SearchWindow_markVisited(ret, currentI+x, currentJ);
+			SearchWindow_markVisited(ret, currentI+x, currentJ + blockJsize-1);
 		}
 		//record the last position in the time warp path so the direction of the path can be determined when the next position of the path is evaluated
 		lastWarpedI = warpedI;
@@ -753,7 +757,7 @@ struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct ac
 	else
 	{
 		struct access_pattern_t *shrunkI = shrink_time_series(tsI, (tsI->reqnb / 2));
-		struct access_pattern_t *shrunkJ = shrink_time_series(isJ, (tsJ->reqnb / 2));
+		struct access_pattern_t *shrunkJ = shrink_time_series(tsJ, (tsJ->reqnb / 2));
 		if((shrunkI == NULL) || (shrunkJ == NULL))
 		{
 			agios_print("PANIC! Could not shrink time series from access patterns\n");
@@ -808,7 +812,7 @@ double FastDTW(struct access_pattern_t *A, struct access_pattern_t *B)
 	if(info)
 	{
 		ret = info->distance;
-		free_time_warp_info_t(info);
+		free_time_warp_info_t(&info);
 	}
 	else
 	{

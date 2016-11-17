@@ -20,6 +20,8 @@
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
+#include <string.h>
+
 #include "agios.h"
 #include "request_cache.h"
 #include "hash.h"
@@ -38,11 +40,8 @@ int agios_cancel_request(char *file_id, short int type, unsigned long int len, u
 	struct request_file_t *req_file;
 	unsigned long hash_val;
 	struct agios_list_head *list;
-	struct related_list_t *related;
 	struct request_t *req, *aux_req;
 	short int found=0;
-	unsigned long int elapsed_time;
-	int index;
 	short int previous_needs_hashtable;
 
 	PRINT_FUNCTION_NAME;
@@ -150,6 +149,9 @@ int agios_cancel_request(char *file_id, short int type, unsigned long int len, u
 		}
 		else	//it's inside an aggregated request
 		{
+			int first;
+			struct request_t *tmp;
+
 			agios_list_del(&aux_req->related);
 			//we need to update offset and len for the aggregated request without this one (and also timestamp)
 			first = 1; //we will recalculate offset and len of the aggregation
@@ -187,6 +189,8 @@ int agios_cancel_request(char *file_id, short int type, unsigned long int len, u
 			
 			if(req->reqnb == 1) //it was aggregated, now it's not anymore
 			{
+				struct agios_list_head *prev, *next;
+
 				//remove the virtual request from the queue and add its only request in its place
 				prev = req->related.prev;
 				next = req->related.next;

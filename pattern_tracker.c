@@ -25,7 +25,7 @@ inline void add_request_to_pattern(unsigned long int timestamp, unsigned long in
 	if(agios_is_pattern_tracking) //so if the flag is not set (only the pattern matching algorithm sets it), this function will do nothing
 	{
 		int i;
-		unsigned long long int offset;
+		unsigned long long int calculated_offset;
 
 		agios_mutex_lock(&pattern_tracker_lock);
 
@@ -64,9 +64,9 @@ inline void add_request_to_pattern(unsigned long int timestamp, unsigned long in
 		struct pattern_tracker_req_info_t *new = agios_alloc(sizeof(struct pattern_tracker_req_info_t));
 		init_agios_list_head(&new->list);
 		new->timestamp = timestamp;
-		offset = i*MAXIMUM_FILE_SIZE + offset/1024; //we keep offsets in KB
-		new->offset = offset - last_offset; //the offset difference, actually
-		last_offset = offset;
+		calculated_offset = i*MAXIMUM_FILE_SIZE + (offset/1024); //we keep offsets in KB
+		new->offset = calculated_offset - last_offset; //the offset difference, actually
+		last_offset = calculated_offset;
 		
 
 		//put the new structure in the pattern
@@ -170,9 +170,9 @@ inline void free_access_pattern_t(struct access_pattern_t **ap)
 {
 	if(*ap)
 	{
-		if(!agios_list_empty((*ap)->requests))
+		if(!agios_list_empty(&((*ap)->requests)))
 		{
-			struct pattern_tracker_req_info_t *tmp, aux=NULL;
+			struct pattern_tracker_req_info_t *tmp, *aux=NULL;
 			agios_list_for_each_entry(tmp, &((*ap)->requests), list)
 			{
 				if(aux)

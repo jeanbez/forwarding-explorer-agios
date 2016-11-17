@@ -89,4 +89,13 @@ struct memory_resident_matrix_t {
 
 double FastDTW(struct access_pattern_t *A, struct access_pattern_t *B);
 
+struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ);
+struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, struct search_window_t *window);
+inline void free_time_warp_info_t(struct time_warp_info_t **info);
+inline struct search_window_t *SearchWindow_obtain(struct search_window_t *window);
+//inline double DTW_euclideanDist(struct access_pattern_t *tsI, int indexI, struct access_pattern_t *tsJ, int indexJ);
+inline double DTW_euclideanDist(long long int value1, long long int value2);
+inline void free_search_window_t(struct search_window_t **window);
+inline void Initialize_TimeWarp_Path(struct warp_path_t *new, unsigned long int size);
+inline void Add_to_TimeWarp_Path(struct warp_path_t *path, int a, int b);
 #endif

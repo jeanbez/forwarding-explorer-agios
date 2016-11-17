@@ -2,6 +2,7 @@
 #define _PERFORMANCE_TABLE_H_
 
 #include "iosched.h"
+#include "mylist.h"
 
 //struct to hold information of a single performance measurement
 struct performance_info_t
@@ -29,4 +30,5 @@ void update_average_bandwidth(struct scheduler_info_t *info);
 inline void free_scheduler_info_t(struct scheduler_info_t **info);
 inline int get_performance_measurements_number(struct scheduler_info_t *info);
 inline int get_sched_info_number(struct agios_list_head *table);
+inline void add_measurement_to_performance_table(struct agios_list_head *table, int current_sched, unsigned long long timestamp, double bandwidth);
 #endif
