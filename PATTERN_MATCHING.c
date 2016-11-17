@@ -8,9 +8,6 @@ struct PM_pattern_t *previous_pattern = NULL;
 AGIOS_LIST_HEAD(all_observed_patterns);
 short int first_performance_measurement;
 unsigned int access_pattern_count=0;
-//TODO create configuration file parameters: minimum pattern size (patterns shorter than that will be ignored), pattern file name, config_pattern_matching_threshold, config_maximum_pattern_difference, config_minimum_pattern_size
-
-//TODO we should discard the first performance measurement
 
 //cleanup a PM_pattern_t structure
 inline void free_PM_pattern_t(struct PM_pattern_t **pattern)
@@ -594,14 +591,21 @@ int get_next_pattern_number(struct agios_list_head *chain)
 {
 	int ret = 0;
 	struct next_patterns_element_t *tmp;
-	if(!agios_list_empty
-	//TODO continue here 
+	if(!agios_list_empty(chain))
+	{
+		agios_list_for_each_entry(tmp, chain, list)
+		{
+			ret++;
+		}
+	}
+	return ret;
 }
 void write_pattern_matching_file(void)
 {
 	FILE *fd;
-	int ret,i;
+	int ret,i, pat_count, error;
 	struct PM_pattern_t *tmp;
+	struct next_patterns_element_t *next;
 
 	fd = fopen(config_pattern_filename, "w");
 	if(!fd)
@@ -633,22 +637,55 @@ void write_pattern_matching_file(void)
 		if(ret != 1)
 			return;
 		//write the probability network, we'll write something about every pattern we know
+		error = 0;
 		agios_list_for_each_entry(tmp, &all_observed_patterns, list)
 		{
 			//write the number of future patterns we know for this one
-				
+			pat_count = get_next_pattern_number(&tmp->next_patterns);
+			error += fwrite(&pat_count, sizeof(int), 1, fd);
+			//write the future patterns and associated information
+			this_error = 0;
+			agios_list_for_each_entry(next, &tmp->next_patterns, list)
+			{
+				this_error += fwrite(&next->pattern->id, sizeof(int), 1, fd);
+				this_error += fwrite(&next->counter, sizeof(unsigned int), 1, fd);
+				this_error += fwrite(&next->probability, sizeof(int), 1, fd);
+			}	
+			if(this_error != pat_count*3)
+			{
+				agios_print("PANIC! Could not write probability network to pattern matching file\n");
+				fclose(fd);
+				return;
+			}
 		}
-		
-		
-		
-
-		//TODO continue here
+		if(error != access_pattern_count)
+		{
+			agios_print("PANIC! Could not write probability network to pattern matching file\n");
+			fclose(fd);
+			return;
+		}
 		fclose(fd);
 	}
 }
 void PATTERN_MATCHING_exit(void)
 {
+	struct PM_pattern_t *tmp, *aux=NULL;
+
 	//write file with what we have learned in this execution
 	write_pattern_matching_file();
-	//TODO continue here
+	//cleanup
+	agios_list_for_each_entry(tmp, &all_observed_patterns, list)
+	{
+		if(aux)
+		{	
+			agios_list_del(&aux->list);
+			free_PM_pattern_t(&aux);
+		}
+		aux = tmp;
+	}	
+	if(aux)
+	{	
+		agios_list_del(&aux->list);
+		free_PM_pattern_t(&aux);
+	}
 }

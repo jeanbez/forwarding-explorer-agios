@@ -65,6 +65,12 @@ int config_mlf_quantum = 8192;
 unsigned long int config_tw_size = 1000000000L;
 unsigned long int config_exclusive_tw_window_duration=250000000L; //250ms
 
+int config_minimum_pattern_size = 5;
+int config_maximum_pattern_difference = 10;
+int config_pattern_matching_threshold; //TODO what is a good threshold???
+char *config_pattern_filename=NULL;
+
+
 inline void config_set_waiting_time(int value)
 {
 	config_waiting_time = value;
@@ -209,11 +215,18 @@ inline short int read_configuration_file(char *config_file)
 	config_lookup_int(&agios_config, "library_options.exclusive_tw_window_duration", &ret);
 	config_exclusive_tw_window_duration = ret*1000L; //convert us to ns
 
+	config_lookup_int(&agios_config, "library_options.minimum_pattern_size", &ret);
+	config_minimum_pattern_size = ret;
+	config_lookup_int(&agios_config, "library_options.maximum_pattern_difference", &config_maximum_pattern_difference);
+	config_lookup_int(&agios_config "library_options.pattern_matching_threshold", &config_pattern_matching_threshold);
+	config_lookup_string(&agios_config, "library_options.pattern_matching_filename", &ret_str);	
+//char *config_pattern_filename=NULL;
+	//TODO continue here
+
 	/*2. user info*/
 	config_lookup_int(&agios_config, "user_info.stripe_size", &config_agios_stripe_size);
 	config_lookup_int(&agios_config, "user_info.max_trace_buffer_size", &ret);
 	config_agios_max_trace_buffer_size = ret*1024; //it comes in KB, we store in bytes
-
 	config_destroy(&agios_config);
 #else
 	//TODO make these options kernel friendly. For now, we cannot use them in the kernel module version
