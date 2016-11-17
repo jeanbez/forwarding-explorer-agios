@@ -83,8 +83,11 @@ inline void translate_list_to_time_series()
 	int i=0;
 
 	current_pattern->time_series = malloc(sizeof(struct pattern_tracker_req_info_t)*(current_pattern->reqnb+1));
-	//if(!current_pattern->time_series)
-		//TODO error
+	if(!current_pattern->time_series)
+	{
+		agios_print("PANIC! Could not allocate memory for access pattern tracking\n");
+		return;
+	}
 	
 	agios_list_for_each_entry(tmp, &current_pattern->requests, list)
 	{

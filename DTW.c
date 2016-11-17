@@ -483,7 +483,6 @@ inline void SearchWindow_markVisited(struct search_window_t *window, int col, in
 		window->modCount++;
 	}
 }
-//TODO free all the allocated stuff
 
 //free an existing search_window_t structure (freeing first its two lists of integers)
 inline void free_search_window_t(struct search_window_t **window)

@@ -197,6 +197,7 @@ void agios_exit(void)
 	if(config_trace_agios)
 		agios_trace_close();
 	proc_stats_exit();
+	config_agios_cleanup();
 	agios_print("stopped for this client. It can already be used by calling agios_init\n");
 #ifdef AGIOS_KERNEL_MODULE
 	agios_in_use = 0;

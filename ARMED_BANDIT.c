@@ -191,8 +191,11 @@ void recalculate_AB_probabilities(void)
 
 	//we'll use an array to keep track of the algorithms to which we already recalculated the probability
 	calculated_algs = malloc(sizeof(int)*scheduler_nb);
-	//if(!calculated_algs)
-		//TODO error
+	if(!calculated_algs)
+	{
+		agios_print("PANIC! Could not allocate memory for ARMED BANDIT\n");
+		return;
+	}
 	for(i=0; i< scheduler_nb; i++)
 		calculated_algs[i]=0;
 

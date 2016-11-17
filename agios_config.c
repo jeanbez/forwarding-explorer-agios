@@ -134,6 +134,27 @@ inline void config_set_access_times_file(const char *value)
 	config_agios_access_times_file = (char *)malloc(sizeof(char)*(strlen(value)+1));
 	strcpy(config_agios_access_times_file, value);
 }
+inline void config_set_pattern_filename(const char *value)
+{
+	config_pattern_filename = (char *)malloc(sizeof(char)*(strlen(value)+1));
+	if(!config_pattern_filename)
+		agios_print("PANIC! Could not allocate memory for configuration parameters\n");
+	else
+		strcpy(contig_pattern_filename, value);	
+}
+inline void config_agios_cleanup(void)
+{
+	if(config_trace_agios_file_prefix)
+		free(config_trace_agios_file_prefix);
+	if(config_trace_agios_file_sufix)
+		free(config_trace_agios_file_sufix);
+	if(config_simple_trace_agios_file_prefix)
+		free(config_simple_trace_agios_file_prefix);
+	if(config_agios_access_times_file)
+		free(config_agios_access_times_file);
+	if(config_pattern_filename)
+		free(config_pattern_filename);
+}
 
 //-------------------------------------------------------------------------------------------------------
 //USER INFO
@@ -220,8 +241,7 @@ inline short int read_configuration_file(char *config_file)
 	config_lookup_int(&agios_config, "library_options.maximum_pattern_difference", &config_maximum_pattern_difference);
 	config_lookup_int(&agios_config "library_options.pattern_matching_threshold", &config_pattern_matching_threshold);
 	config_lookup_string(&agios_config, "library_options.pattern_matching_filename", &ret_str);	
-//char *config_pattern_filename=NULL;
-	//TODO continue here
+	config_set_pattern_filename(ret_str);
 
 	/*2. user info*/
 	config_lookup_int(&agios_config, "user_info.stripe_size", &config_agios_stripe_size);

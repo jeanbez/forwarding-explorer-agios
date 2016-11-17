@@ -64,6 +64,10 @@ extern int config_agios_performance_values;
 // 7. proc module (writing stats file)
 extern int config_agios_proc_algs;
 // 8. DTW
+extern int config_minimum_pattern_size;
+extern int config_maximum_pattern_difference;
+extern int config_pattern_matching_threshold; 
+extern char *config_pattern_filename;
 
 //user info
 extern int config_agios_stripe_size;
@@ -75,5 +79,6 @@ void config_gossip_algorithm_parameters(int alg, struct io_scheduler_instance_t 
 
 void config_print(void);
 
+inline void config_agios_cleanup(void);
 
 #endif
