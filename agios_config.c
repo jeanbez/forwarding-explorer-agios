@@ -67,7 +67,7 @@ unsigned long int config_exclusive_tw_window_duration=250000000L; //250ms
 
 int config_minimum_pattern_size = 5;
 int config_maximum_pattern_difference = 10;
-int config_pattern_matching_threshold; //TODO what is a good threshold???
+int config_pattern_matching_threshold=75; 
 char *config_pattern_filename=NULL;
 
 

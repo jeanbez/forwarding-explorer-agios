@@ -78,7 +78,7 @@ inline struct memory_resident_matrix_t *get_new_memory_resident_matrix_t(struct 
 		agios_print("PANIC! Could not allocate memory for DTW\n");
 		return NULL;
 	}
-	ret->cellValues = (double *)malloc(sizeof(double)*(window->size));
+	ret->cellValues = malloc(sizeof(unsigned long long int)*(window->size));
 	if(ret->cellValues == NULL)
 	{
 		agios_print("PANIC! Could not allocate memory for DTW\n");
@@ -101,7 +101,7 @@ inline struct memory_resident_matrix_t *get_new_memory_resident_matrix_t(struct 
 	}
 	return ret;	
 }
-inline void add_to_memory_resident_matrix_t(struct memory_resident_matrix_t *matrix, struct search_window_t *window, int col, int row, double value)
+inline void add_to_memory_resident_matrix_t(struct memory_resident_matrix_t *matrix, struct search_window_t *window, int col, int row, unsigned long long int value)
 {
 	if((row < window->minValues[col]) || (row > window->maxValues[col]))
 	{
@@ -111,10 +111,10 @@ inline void add_to_memory_resident_matrix_t(struct memory_resident_matrix_t *mat
 	else
 		matrix->cellValues[matrix->colOffsets[col]+row-window->minValues[col]] = value;
 }
-inline double get_from_memory_resident_matrix_t(struct memory_resident_matrix_t *matrix, struct search_window_t *window, int col, int row)
+inline unsigned long long int get_from_memory_resident_matrix_t(struct memory_resident_matrix_t *matrix, struct search_window_t *window, int col, int row)
 {
 	if((row < window->minValues[col]) || (row > window->maxValues[col]))
-		return DBL_MAX;
+		return ULLONG_MAX;
 	else
 		return matrix->cellValues[matrix->colOffsets[col]+row - window->minValues[col]];
 }
@@ -133,7 +133,7 @@ inline void free_memory_resident_matrix_t(struct memory_resident_matrix_t **matr
 struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, struct search_window_t *window)
 {
 	unsigned int colu, i, j;
-	double diagCost, leftCost, downCost;
+	unsigned long long int diagCost, leftCost, downCost;
 	struct time_warp_info_t *ret = malloc(sizeof(struct time_warp_info_t)); 
 	if(ret == NULL)
 	{
@@ -195,15 +195,15 @@ struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, s
 		if((i > 0)&& (j > 0))
 			diagCost = get_from_memory_resident_matrix_t(costMatrix, window, i-1, j-1);
 		else
-			diagCost = DBL_MAX;
+			diagCost = ULLONG_MAX;
 		if(i > 0)
 			leftCost = get_from_memory_resident_matrix_t(costMatrix, window, i-1,j);
 		else
-			leftCost = DBL_MAX;
+			leftCost = ULLONG_MAX;
 		if(j > 0)
 			downCost = get_from_memory_resident_matrix_t(costMatrix, window, i, j-1);
 		else
-			downCost = DBL_MAX;
+			downCost = ULLONG_MAX;
 		//determine which direction to move in. Prefer moving diagonally and towards the i==j axis of the matrix if there are ties
 		if((diagCost <=	leftCost) && (diagCost <= downCost))
 		{
@@ -280,8 +280,8 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	}
 
 	//allocate a cost matrix
-	double **costMatrix;
-	costMatrix = (double **)malloc(sizeof(double *)*(tsI->reqnb+1));
+	unsigned long long int **costMatrix;
+	costMatrix = malloc(sizeof(unsigned long long int *)*(tsI->reqnb+1));
 	if(costMatrix == NULL)
 	{
 		agios_print("PANIC! Could not allocate memory for DTW");
@@ -290,7 +290,7 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	}
 	for(i = 0; i < tsI->reqnb; i++)
 	{
-		costMatrix[i] = (double *)malloc(sizeof(double)*(tsJ->reqnb+1));
+		costMatrix[i] = malloc(sizeof(unsigned long long int)*(tsJ->reqnb+1));
 		if(costMatrix[i] == NULL)
 		{
 			int index;
@@ -329,20 +329,20 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	while((i > 0) || (j > 0))
 	{
 		//find the costs of moving in all three possible directions (left, down, and diagonal (down and left at the same time)
-		double diagCost, leftCost, downCost;
+		unsigned long long int diagCost, leftCost, downCost;
 		
 		if(( i > 0) & (j > 0))
 			diagCost = costMatrix[i-1][j-1];
 		else
-			diagCost = DBL_MAX;
+			diagCost = ULLONG_MAX;
 		if (i > 0)
 			leftCost = costMatrix[i-1][j];
 		else
-			leftCost = DBL_MAX;
+			leftCost = ULLONG_MAX;
 		if(j > 0)
 			downCost = costMatrix[i][j-1];
 		else
-			downCost = DBL_MAX;
+			downCost = ULLONG_MAX;
 		//determine which direction to move in. Prefer moving diagonally and moving towards i == j axis of the matrixif there are ties
 		if((diagCost <= leftCost) && (diagCost <= downCost))
 		{
@@ -369,7 +369,7 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	return ret;
 }
 
-inline double DTW_euclideanDist(long long int value1, long long int value2)
+inline unsigned long long int DTW_euclideanDist(long long int value1, long long int value2)
 {
 //	return pow(sqrt(pow(tsI->time_series[indexI].offset - tsJ->time_series[indexJ].offset, 2.0)), 2.0);
 //actually this was to compare vectors, since we are using 1d dtw, we will only compare pairs of doubles, so:
@@ -805,9 +805,9 @@ struct time_warp_info_t *FastDTW_getWarpInfoBetween(struct access_pattern_t *tsI
 	return FastDTW_fastDTW(tsI, tsJ, searchRadius);
 }
 
-double FastDTW(struct access_pattern_t *A, struct access_pattern_t *B)
+unsigned long long int FastDTW(struct access_pattern_t *A, struct access_pattern_t *B)
 {
-	double ret;
+	unsigned long long int ret;
 	struct time_warp_info_t *info = FastDTW_getWarpInfoBetween(A, B, 1);
 	if(info)
 	{
@@ -817,7 +817,7 @@ double FastDTW(struct access_pattern_t *A, struct access_pattern_t *B)
 	else
 	{
 		agios_print("PANIC! Could not apply fast DTW");
-		ret = DBL_MAX;
+		ret = ULLONG_MAX;
 	}
 	return ret;
 }

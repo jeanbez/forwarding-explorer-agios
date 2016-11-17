@@ -63,7 +63,7 @@ struct warp_path_t {
 };
 
 struct time_warp_info_t {
-	double distance;
+	unsigned long long int distance;
 	struct warp_path_t path;
 };
 struct time_series_t {
@@ -81,20 +81,20 @@ struct search_window_t {
 };
 
 struct memory_resident_matrix_t {
-	double *cellValues;
+	unsigned long long int *cellValues;
 	int cellValues_size;
 	int *colOffsets;
 	int colOffsets_size;
 };
 
-double FastDTW(struct access_pattern_t *A, struct access_pattern_t *B);
+unsigned long long int FastDTW(struct access_pattern_t *A, struct access_pattern_t *B);
 
 struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ);
 struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, struct search_window_t *window);
 inline void free_time_warp_info_t(struct time_warp_info_t **info);
 inline struct search_window_t *SearchWindow_obtain(struct search_window_t *window);
 //inline double DTW_euclideanDist(struct access_pattern_t *tsI, int indexI, struct access_pattern_t *tsJ, int indexJ);
-inline double DTW_euclideanDist(long long int value1, long long int value2);
+inline unsigned long long int DTW_euclideanDist(long long int value1, long long int value2);
 inline void free_search_window_t(struct search_window_t **window);
 inline void Initialize_TimeWarp_Path(struct warp_path_t *new, unsigned long int size);
 inline void Add_to_TimeWarp_Path(struct warp_path_t *path, int a, int b);

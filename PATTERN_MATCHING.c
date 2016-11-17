@@ -11,11 +11,15 @@
 #include "mylist.h"
 #include "PATTERN_MATCHING.h"
 
+//TODO keep a trace from the pattern matching so we can debug it
+//TODO keep statistics about what happens so we can analyze it
+
 struct PM_pattern_t *previous_pattern = NULL;
 AGIOS_LIST_HEAD(all_observed_patterns);
 short int first_performance_measurement;
 unsigned int access_pattern_count=0;
 int current_selection;
+unsigned long long int max_dtw_result=1;
 
 //cleanup a PM_pattern_t structure
 inline void free_PM_pattern_t(struct PM_pattern_t **pattern)
@@ -274,6 +278,13 @@ void read_pattern_matching_file()
 		return;
 	}
 
+	//last information: maximum DTW result observed so far (we use it to calculate % difference between patterns)
+	ret = fread(&max_dtw_result, sizeof(unsigned long long int), 1, fd);
+	if(ret != 1)
+	{
+		agios_print("Error! Could not read maximum dtw result from pattern matching file\n");
+	}	
+
 	//close file
 	fclose(fd);
 	//free memory
@@ -341,22 +352,31 @@ inline short int compatible_pattern(struct access_pattern_t *A, struct access_pa
 	return 1;
 }
 
+//apply FastDTW to get the distance between the two time series (from the two access patterns), and then use the maximum distance ever observed (possibly updating it) to give it a similarity degree between 0 and 100%.
+int apply_DTW(struct access_pattern_t *A, struct access_pattern_t *B)
+{
+	unsigned long long int dtw_result = FastDTW(A, B);
+	if(dtw_result > max_dtw_result)
+		max_dtw_result = dtw_result;
+	return ((max_dtw_result - dtw_result)*100)/max_dtw_result;
+}
+
 //look for an access pattern in the list of patterns we know
 //return NULL if we can't find a match
 struct PM_pattern_t *match_seen_pattern(struct access_pattern_t *pattern)
 {
 	struct PM_pattern_t *tmp, *ret = NULL;
-	double best_result = 0.0;
-	double this_result;
+	int best_result = 0.0;
+	int this_result;
 
 	agios_list_for_each_entry(tmp, &all_observed_patterns, list)
 	{
 		//compare the patterns
 	 	if(compatible_pattern(tmp->description, pattern)) //first we apply some heuristics so we won't compare all patterns
 		{
-			this_result = FastDTW(tmp->description, pattern);
+			this_result = apply_DTW(tmp->description, pattern);
 			//among the similar ones, we get the most similar one
-			if((this_result >= config_pattern_matching_threshold) && (this_result > best_result)) //TODO we need to check what is the range of results given by FastDTW (to figure out the range of values to give the threshold
+			if((this_result >= config_pattern_matching_threshold) && (this_result > best_result)) 
 			{
 				best_result = this_result;
 				ret = tmp;
@@ -682,6 +702,11 @@ void write_pattern_matching_file(void)
 			fclose(fd);
 			return;
 		}
+
+		//last information for the pattern matching file: the maximum dtw difference observed so far
+		error = fwrite(&max_dtw_result, sizeof(unsigned long long int), 1, fd);
+		if(error != 1)
+			agios_print("PANIC! Could not write maximum dtw result to pattern matching file\n");
 		fclose(fd);
 	}
 }
