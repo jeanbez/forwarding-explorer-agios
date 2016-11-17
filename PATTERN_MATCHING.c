@@ -13,6 +13,7 @@
 
 //TODO keep a trace from the pattern matching so we can debug it
 //TODO keep statistics about what happens so we can analyze it
+//TODO we write the file at cleanup phase, but in our tests we may not call it. It would be better to have another way of calling it (like when we write stats file)
 
 struct PM_pattern_t *previous_pattern = NULL;
 AGIOS_LIST_HEAD(all_observed_patterns);
@@ -304,7 +305,7 @@ int PATTERN_MATCHING_init(void)
 	config_agios_select_algorithm_min_reqnumber = 0;
 
 	//initialize the armed bandit approach so we can use it when we don't know what to do
-	if(ARMED_BANDIT_aux_init(&start_time) != 1)
+	if((!config_static_pattern_matching) && (ARMED_BANDIT_aux_init(&start_time) != 1))
 	{
 		agios_print("PANIC! Could not initialize Armed Bandit\n");
 		return 0;
@@ -491,26 +492,29 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	struct access_pattern_t *seen_pattern;
 	struct PM_pattern_t *matched_pattern=NULL;
 	struct io_scheduler_instance_t *new_sched=NULL;
-	double *recent_measurements;
+	double *recent_measurements=NULL;
 	struct timespec this_time;
 	unsigned long long timestamp;
 
 	PRINT_FUNCTION_NAME;
 
-	//get recent performance measurements
-	agios_gettime(&this_time);
-	timestamp = get_timespec2llu(this_time);
-	recent_measurements = agios_get_performance_bandwidth();
-	
-	//give recent measurements to ARMED BANDIT so it will have updated information
-	if(!first_performance_measurement)	
-		ARMED_BANDIT_update_bandwidth(recent_measurements,0);
-	else
+	if(!config_static_pattern_matching) //if it is static, we won't worry about performance at all
 	{
-		agios_reset_performance_counters(); //we really discard that first measurement		     
-		free(recent_measurements);
-		recent_measurements=NULL;
-		first_performance_measurement=0;	
+		//get recent performance measurements
+		agios_gettime(&this_time);
+		timestamp = get_timespec2llu(this_time);
+		recent_measurements = agios_get_performance_bandwidth();
+	
+		//give recent measurements to ARMED BANDIT so it will have updated information
+		if(!first_performance_measurement)	
+			ARMED_BANDIT_update_bandwidth(recent_measurements,0);
+		else
+		{
+			agios_reset_performance_counters(); //we really discard that first measurement		     
+			free(recent_measurements);
+			recent_measurements=NULL;
+			first_performance_measurement=0;	
+		}
 	}
 
 	//get the most recently tracked access pattern from the pattern tracker module
@@ -545,6 +549,8 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 		//now we can try to predict the next pattern we'll see
 		matched_pattern = predict_next_pattern();
 	}
+	if(config_static_pattern_matching)
+		return current_selection; //if we are running static, we won't ever change the scheduling algorithm, all we do is recognize the pattern
 
 	//if we found it, then we can try selecting the best algorithm for the situation
 	if(matched_pattern)

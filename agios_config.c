@@ -69,6 +69,7 @@ int config_minimum_pattern_size = 5;
 int config_maximum_pattern_difference = 10;
 int config_pattern_matching_threshold=75; 
 char *config_pattern_filename=NULL;
+int config_static_pattern_matching=0;
 
 
 inline void config_set_waiting_time(int value)
@@ -242,6 +243,7 @@ inline short int read_configuration_file(char *config_file)
 	config_lookup_int(&agios_config, "library_options.pattern_matching_threshold", &config_pattern_matching_threshold);
 	config_lookup_string(&agios_config, "library_options.pattern_matching_filename", &ret_str);	
 	config_set_pattern_filename(ret_str);
+	config_lookup_bool(&agios_config, "library_options.pattern_matching_static_algorithm", &config_static_pattern_matching);
 
 	/*2. user info*/
 	config_lookup_int(&agios_config, "user_info.stripe_size", &config_agios_stripe_size);

@@ -68,6 +68,7 @@ extern int config_minimum_pattern_size;
 extern int config_maximum_pattern_difference;
 extern int config_pattern_matching_threshold; 
 extern char *config_pattern_filename;
+extern int config_static_pattern_matching;
 
 //user info
 extern int config_agios_stripe_size;

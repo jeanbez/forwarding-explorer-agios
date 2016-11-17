@@ -9,12 +9,16 @@ all:
 	gcc -o throughput_test throughput_test.c -lagios -lrt -lpthread -lm
 	gcc -o addrequest_test addrequest_test.c -lagios -lrt -lpthread -lm
 	gcc -o timewindow_test timewindow_test.c -lagios -lrt -lpthread -lm
+	gcc -o dtw_test dtw_test.c -lagios -lrt -lpthread -lm
 
 throughput:
 	gcc -lm -lpthread -lagios -o throughput_test throughput_test.c 
 
+dtw:
+	gcc -o dtw_test dtw_test.c -lagios -lrt -lpthread -lm
+
 clean:
-	rm -rf throughput_test addrequest_test timewindow_test
+	rm -rf throughput_test addrequest_test timewindow_test dtw_test
 
 local:
 	gcc -o throughput_test throughput_test.c ../libagios.so.1.0.1 -lrt -lpthread -lm
