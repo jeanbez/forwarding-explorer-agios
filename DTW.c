@@ -23,8 +23,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
  *  Translated from JAVA to C++ by Ramon Nou - Barcelona Supercomputing Center - IOLanes EU Project
- * Translated to C and adapted by Francieli Zanon Boito
+ *  Translated to C and adapted and optimized by Francieli Zanon Boito - Federal University of Santa Catarina (Brazil)
  */
 
 /* File:	DTW.c
@@ -41,13 +42,14 @@ THE SOFTWARE.
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
  *		INRIA France
- *
- *		inspired in Adrien Lebre's aIOLi framework implementation
+ *		Federal University of Santa Catarina (UFSC)
  *	
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
+
+/* TO UNDERSTAND THIS PART: Go and look to the last function, which is the one called from outside this module, and then see the path to the other function calls */
 
 #include <math.h>
 #include <float.h>
@@ -56,7 +58,7 @@ THE SOFTWARE.
 #include "common_functions.h"
 #include "DTW.h"
 
-
+//some functions were kepts, although they are not useful (as the two functions below) so the mapping between the C++ and the C versions would be clear (they could be removed later, but the performance impact should be minimal)
 inline struct time_warp_info_t * DTW_getWarpInfoBetween(struct access_pattern_t *tsI, struct access_pattern_t *tsJ)
 {
 	return DTW_DynamicTimeWarp(tsI, tsJ);
@@ -66,40 +68,78 @@ inline struct time_warp_info_t *DTW_getWarpInfoBetween_withWindow(struct access_
 	return DTW_constrainedTimeWarp(tsI, tsJ, window);
 }
 
-//allocates and initializes a new memory_resident_matrix_t structure, used by constrained DTW. Returns NULL on error
+//=========================================================================================================================================
+//functions to manage - allocate, access, free - a memory_resident_matrix_t structure, used by constrained DTW. Returns NULL on error
+//the name does not seem to mean anything, it was kept so the mapping between the different versions of the code would make sense
+//originally a new matrix was allocated every time the constrainedTimeWarp function was called, but we'll try to avoid that since we call this function too often (maybe keeping the burden in memory is the best choice)
+//the problem is that we don't know how large we'll need the window to be. So we'll reallocate it a few times until we get a large enough one
+int max_window_size=-1;
+struct memory_resident_matrix_t *MRmatrix=NULL;
+
+inline void allocate_memory_resident_matrix_t(int size);
+
 inline struct memory_resident_matrix_t *get_new_memory_resident_matrix_t(struct search_window_t *window)
 {
 	int i;
 	int currentOffset=0;
 
-	struct memory_resident_matrix_t *ret = malloc(sizeof(struct memory_resident_matrix_t));
-	if(ret == NULL)
+	if(max_window_size == -1) //we did not allocate the matrix yet
 	{
-		agios_print("PANIC! Could not allocate memory for DTW\n");
-		return NULL;
+		max_window_size = window->size*1.1; //we allocate a little more than what we need right now so maybe we won't have to reallocate it so many times
+		allocate_memory_resident_matrix_t(max_window_size); 
+		if((!MRmatrix) | (!MRmatrix->cellValues) | (!MRmatrix->colOffsets)) //could not allocate, already printed error message
+		{
+			max_window_size = -1;
+			return NULL;
+		}
 	}
-	ret->cellValues = malloc(sizeof(unsigned long long int)*(window->size));
-	if(ret->cellValues == NULL)
+	else if(max_window_size < window->size) //our matrix is too small, we need to free it and then allocate it again
 	{
-		agios_print("PANIC! Could not allocate memory for DTW\n");
-		return NULL;
+		free(MRmatrix->cellValues);
+		free(MRmatrix->colOffsets);
+		max_window_size = window->size*1.1; //we allocate a little more than what we need right now so maybe we won't have to reallocate it so many times
+		allocate_memory_resident_matrix_t(max_window_size);
+		if((!MRmatrix) | (!MRmatrix->cellValues) | (!MRmatrix->colOffsets)) //could not allocate, already printed error message
+		{
+			max_window_size = -1;
+			return NULL;
+		}
 	}
-	ret->cellValues_size=0;
-	ret->colOffsets = (int *)malloc(sizeof(int)*(window->size));
-	if(ret->colOffsets == NULL)
-	{
-		agios_print("PANIC! Could not allocate memory for DTW\n");
-		return NULL;
-	}
-	ret->colOffsets_size=0;
+	//now we know we have a matrix large enough to use, just have to reset it
+	MRmatrix->cellValues_size=0;
+	MRmatrix->colOffsets_size=0;
 
 	for(i = 0; i < window->size; i++)
 	{
-		ret->colOffsets[i] = currentOffset;
-		ret->colOffsets_size++;
+		MRmatrix->colOffsets[i] = currentOffset;
+		MRmatrix->colOffsets_size++;
 		currentOffset += window->maxValues[i] - window->minValues[i] + 1;
 	}
-	return ret;	
+	return MRmatrix;	
+}
+inline void allocate_memory_resident_matrix_t(int size)
+{
+	if(MRmatrix == NULL) //no need to reallocate the struct everytime, only the vectors
+	{
+		MRmatrix = malloc(sizeof(struct memory_resident_matrix_t));
+		if(MRmatrix == NULL)
+		{
+			agios_print("PANIC! Could not allocate memory for DTW\n");
+			return;
+		}
+	}
+	MRmatrix->cellValues = malloc(sizeof(unsigned long long int)*(size)); 
+	if(MRmatrix->cellValues == NULL)
+	{
+		agios_print("PANIC! Could not allocate memory for DTW\n");
+		return;
+	}
+	MRmatrix->colOffsets = (int *)malloc(sizeof(int)*(size));
+	if(MRmatrix->colOffsets == NULL)
+	{
+		agios_print("PANIC! Could not allocate memory for DTW\n");
+		return NULL;
+	}
 }
 inline void add_to_memory_resident_matrix_t(struct memory_resident_matrix_t *matrix, struct search_window_t *window, int col, int row, unsigned long long int value)
 {
@@ -118,23 +158,16 @@ inline unsigned long long int get_from_memory_resident_matrix_t(struct memory_re
 	else
 		return matrix->cellValues[matrix->colOffsets[col]+row - window->minValues[col]];
 }
-//frees previously allocated memory_resident_matrix_t structure, including its internal lists
-inline void free_memory_resident_matrix_t(struct memory_resident_matrix_t **matrix)
-{
-	if(*matrix)	
-	{
-		if((*matrix)->cellValues)
-			free((*matrix)->cellValues);
-		if((*matrix)->colOffsets)
-			free((*matrix)->colOffsets);
-		free(*matrix);
-	}
-}
+
+//=========================================================================================================================================
+//The fast DTW function will be recursively applied to shrunk versions of the original access patterns. The result of each version generates a window, which is used in this function below to get the result for the immediately larger ones.
 struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, struct search_window_t *window)
 {
 	unsigned int colu, i, j;
 	unsigned long long int diagCost, leftCost, downCost;
-	struct time_warp_info_t *ret = malloc(sizeof(struct time_warp_info_t)); 
+//	struct time_warp_info_t *ret = malloc(sizeof(struct time_warp_info_t)); 
+	struct time_warp_info_t *ret = Check_TimeWarpInfo_allocation(tsI->reqnb, tsJ->reqnb);
+ 
 	if(ret == NULL)
 	{
 		agios_print("PANIC! Could not allocate memory for DTW\n");
@@ -152,10 +185,9 @@ struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, s
 	//            i
 	//   access is M(i,j)... column-row
 	struct memory_resident_matrix_t *costMatrix = get_new_memory_resident_matrix_t(window);
-	if(costMatrix == NULL)
+	if(costMatrix == NULL) 
 	{
 		agios_print("PANIC! Could not apply DTW\n");
-		free_time_warp_info_t(&ret);
 		return NULL;
 	}
 	int maxI = tsI->reqnb-1;
@@ -184,7 +216,7 @@ struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, s
 	ret->distance = get_from_memory_resident_matrix_t(costMatrix, window, maxI, maxJ);
 
 	//find the warp path by searching the matrix from the solution at (max i, max j) to the beginning at (0,0). at each step move through the matrix 1 step left, down, or diagonal, whichever has the smallest cost. Favor diagonal moves and moves towards the i==j axis to break ties
-	Initialize_TimeWarp_Path(&ret->path, (maxI + maxJ - 1));
+//	Initialize_TimeWarp_Path(&ret->path, (maxI + maxJ - 1));
 	i = maxI;
 	j = maxJ;
 	Add_to_TimeWarp_Path(&ret->path, i, j);
@@ -224,12 +256,51 @@ struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, s
 
 
 	//cleanup
-	free_memory_resident_matrix_t(&costMatrix);
+//	free_memory_resident_matrix_t(&costMatrix); //we no longer free the matrix because we keep it through calculations 
 
 	return ret;
 }
 
-//starts a new empty path and allocates memory for the provided maximum size
+//=========================================================================================================================================
+//functions to manage a time_warp_info_t, used to return results from DTW. The only moment it will be really allocated is in the DTW_DynamicTimeWarp function, which is called by fast DTW for the smallest possible access pattern size (the end of the recursion). 
+//to avoid allocating and freeing a lot of these structures, we'll just allocate one, before calculating anything, that is large enough and keep it. 
+//since we don't know how large is enough, we may have to redo it sometimes
+int max_timewarppath_len = -1;
+struct time_warp_info_t *TWinfo = NULL;
+
+inline void Initialize_TimeWarp_Path(struct warp_path_t *new, unsigned long int size);
+
+inline struct time_warp_info_t * Check_TimeWarpInfo_allocation(unsigned int tsI_reqnb, unsigned int tsJ_reqnb)
+{
+	if(max_timewarppath_len < (tsI_reqnb + tsJ_reqnb -1)) //we don't have a structure large enough
+	{
+		max_timewarppath_len = (tsI_reqnb + tsJ_reqnb -1)*1.1;
+		//clear previous one
+		if(TWinfo)
+		{
+			if(TWinfo->path.tsIindexes)
+				free(TWinfo->path.tsIindexes);
+			if(TWinfo->path.tsJindexes)
+				free(TWinfo->path.tsJindexes);
+		}
+		//allocate a new one
+		if(!TWinfo)
+		{
+			TWinfo = malloc(sizeof(struct time_warp_info_t));
+			if(!TWinfo)
+			{
+				agios_print("PANIC! Cannot allocate memory for DTW.\n");
+				max_timewarppath_len = -1;
+				return NULL;
+			}
+		}
+		Initialize_TimeWarp_Path(&(TWinfo->path), max_timewarppath_len);
+	}
+	//reset it
+	TWinfo->path.index = 0; //reset it
+	TWinfo->path.max = tsI_reqnb + tsJreqnb - 1;
+	return TWinfo;
+}
 inline void Initialize_TimeWarp_Path(struct warp_path_t *new, unsigned long int size)
 {
 	new->tsIindexes = malloc(sizeof(int)*size);
@@ -239,8 +310,6 @@ inline void Initialize_TimeWarp_Path(struct warp_path_t *new, unsigned long int 
 		agios_print("PANIC! Cannot allocate memory for DTW.\n");
 		//now what?
 	}
-	new->index = 0;
-	new->max = size;
 }
 //adds a point (a,b) to the beginning of the path
 inline void Add_to_TimeWarp_Path(struct warp_path_t *path, int a, int b)
@@ -268,11 +337,12 @@ inline void Add_to_TimeWarp_Path(struct warp_path_t *path, int a, int b)
 		//now what?
 	}
 }
-
+//=========================================================================================================================================
+//function to perform full DTW between two access patterns, called by the fast DTW in the smallest case (end of recursion)
 struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ)
 {
 	int i,j;
-	struct time_warp_info_t *ret = malloc(sizeof(struct time_warp_info_t));
+	struct time_warp_info_t *ret = Check_TimeWarpInfo_allocation(tsI->reqnb, tsJ->reqnb);
 	if(ret == NULL)
 	{
 		agios_print("PANIC! Could not allocate memory for DTW");
@@ -285,7 +355,6 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	if(costMatrix == NULL)
 	{
 		agios_print("PANIC! Could not allocate memory for DTW");
-		free_time_warp_info_t(&ret);
 		return NULL;
 	}
 	for(i = 0; i < tsI->reqnb; i++)
@@ -295,7 +364,6 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 		{
 			int index;
 			agios_print("PANIC! Could not allocate memory for DTW");
-			free_time_warp_info_t(&ret);
 			for(index = 0; index < i; index++)
 				free(costMatrix[index]);
 			free(costMatrix);
@@ -322,7 +390,7 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	ret->distance = costMatrix[tsI->reqnb-1][tsJ->reqnb-1];
 
 	//find the warp path by searching the matrix form the solution to at (maxI, maxJ) to the beginning at (0,0). At each step move through the matrix 1 step left, down, or diagonal, whichever has the smallest cost. Favor diagonal moves and moves towards the i==j axis to break ties.
-	Initialize_TimeWarp_Path(&ret->path, (tsI->reqnb+tsJ->reqnb-1));
+//	Initialize_TimeWarp_Path(&ret->path, (tsI->reqnb+tsJ->reqnb-1));
 	i = tsI->reqnb-1;
 	j = tsJ->reqnb-1;
 	Add_to_TimeWarp_Path(&ret->path, i, j);
@@ -728,19 +796,6 @@ struct search_window_t *SearchWindow_ExpandedResWindow(struct access_pattern_t *
 	return ret;
 }
 
-//frees a time_warp_info_t structure previously allocated, including the path
-inline void free_time_warp_info_t(struct time_warp_info_t **info)
-{
-	if(*info)
-	{
-		if((*info)->path.tsIindexes)
-			free((*info)->path.tsIindexes);
-		if((*info)->path.tsJindexes)
-			free((*info)->path.tsJindexes);
-		free(*info);
-	}
-}
-
 struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, int searchRadius)
 {
 	int minTSsize;
@@ -765,35 +820,32 @@ struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct ac
 		}
 
 		//determine the search window that constrains the area of the cost matrix that will be evaluated based on the warp path found at the previous resolution (smaller time series)
-		struct time_warp_info_t *tmp = FastDTW_fastDTW(shrunkI, shrunkJ, searchRadius);
+		struct time_warp_info_t *ret = FastDTW_fastDTW(shrunkI, shrunkJ, searchRadius);
 		if(tmp == NULL)
 		{
 			free_access_pattern_t(&shrunkI);
 			free_access_pattern_t(&shrunkJ);
 			return NULL;
 		}
-		struct search_window_t *window = SearchWindow_ExpandedResWindow(tsI, tsJ, shrunkI, shrunkJ, &tmp->path, searchRadius);
+		struct search_window_t *window = SearchWindow_ExpandedResWindow(tsI, tsJ, shrunkI, shrunkJ, &ret->path, searchRadius);
 		if(window == NULL)
 		{
 			free_access_pattern_t(&shrunkI);
 			free_access_pattern_t(&shrunkJ);
-			free_time_warp_info_t(&tmp);
 			return NULL;
 		}
 		//find the optimal path through this search window constraint
-		struct time_warp_info_t *ret = DTW_getWarpInfoBetween_withWindow(tsI, tsJ, window);
+		ret = DTW_getWarpInfoBetween_withWindow(tsI, tsJ, window);
 		if(ret == NULL)
 		{
 			free_access_pattern_t(&shrunkI);
 			free_access_pattern_t(&shrunkJ);
 			free_search_window_t(&window);
-			free_time_warp_info_t(&tmp);
 			return NULL;
 		}
 		
 		//cleanup
 		free_search_window_t(&window);
-		free_time_warp_info_t(&tmp);
 		free_access_pattern_t(&shrunkI);
 		free_access_pattern_t(&shrunkJ);
 		return ret;
@@ -802,9 +854,46 @@ struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct ac
 
 struct time_warp_info_t *FastDTW_getWarpInfoBetween(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, int searchRadius)
 {
+	//before calling the fast dtw function, well allocate some structures using the largest size possible for this calculation, so we won't have to reallocate logN times during it
+	if((tsI->reqnb >= tsJ->reqnb) & (tsI->reqnb > max_window_size))
+	{
+		max_window_size = tsI->reqnb;
+		allocate_memory_resident_matrix_t(tsI->reqnb);
+	}
+	else
+	{
+		max_window_size = tsJ->reqnb;
+		allocate_memory_resident_matrix_t(tsJ->reqnb);
+	}
+	Check_TimeWarpInfo_allocation(tsI->reqnb, tsJ->reqnb);
+		
 	return FastDTW_fastDTW(tsI, tsJ, searchRadius);
 }
 
+// function called from outside of this module before finishing the execution, to clean up all allocated data structures
+inline void DTW_cleanup()
+{
+	//clean the memory_resident_matrix_t
+	if(MRmatrix)
+	{
+		if(MRmatrix->cellValues)
+			free(MRmatrix->cellValues);
+		if(MRmatrix->colOffsets)
+			free(MRmatrix->colOffsets);
+		free(MRmatrix);
+	}
+	//clean the time_warp_info_t
+	if(TWinfo)
+	{
+		if(TWinfo->path.tsIindexes)
+			free(TWinfo->path.tsIindexes);
+		if(TWinfo->path.tsJindexes)
+			free(TWinfo->path.tsJindexes);
+		free(TWinfo);
+	}
+}
+
+// This is the function called from outside to compare two access patterns A and B. It will return an unsigned long long int that is a score. It will have to be later adapted to a %
 unsigned long long int FastDTW(struct access_pattern_t *A, struct access_pattern_t *B)
 {
 	unsigned long long int ret;
@@ -812,7 +901,6 @@ unsigned long long int FastDTW(struct access_pattern_t *A, struct access_pattern
 	if(info)
 	{
 		ret = info->distance;
-		free_time_warp_info_t(&info);
 	}
 	else
 	{

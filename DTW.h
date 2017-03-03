@@ -98,4 +98,5 @@ inline unsigned long long int DTW_euclideanDist(long long int value1, long long 
 inline void free_search_window_t(struct search_window_t **window);
 inline void Initialize_TimeWarp_Path(struct warp_path_t *new, unsigned long int size);
 inline void Add_to_TimeWarp_Path(struct warp_path_t *path, int a, int b);
+inline void DTW_cleanup();
 #endif

@@ -722,6 +722,8 @@ void PATTERN_MATCHING_exit(void)
 
 	//write file with what we have learned in this execution
 	write_pattern_matching_file();
+	//cleanup data structures pre-allocated for DTW
+	DTW_cleanup();
 	//cleanup
 	agios_list_for_each_entry(tmp, &all_observed_patterns, list)
 	{
