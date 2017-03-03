@@ -138,7 +138,7 @@ inline void allocate_memory_resident_matrix_t(int size)
 	if(MRmatrix->colOffsets == NULL)
 	{
 		agios_print("PANIC! Could not allocate memory for DTW\n");
-		return NULL;
+		return;
 	}
 }
 inline void add_to_memory_resident_matrix_t(struct memory_resident_matrix_t *matrix, struct search_window_t *window, int col, int row, unsigned long long int value)
@@ -161,6 +161,7 @@ inline unsigned long long int get_from_memory_resident_matrix_t(struct memory_re
 
 //=========================================================================================================================================
 //The fast DTW function will be recursively applied to shrunk versions of the original access patterns. The result of each version generates a window, which is used in this function below to get the result for the immediately larger ones.
+inline struct time_warp_info_t * Check_TimeWarpInfo_allocation(unsigned int tsI_reqnb, unsigned int tsJ_reqnb);
 struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, struct search_window_t *window)
 {
 	unsigned int colu, i, j;
@@ -211,7 +212,6 @@ struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, s
 		else //not first column or first row		
 			add_to_memory_resident_matrix_t(costMatrix, window, i, j, fmin(get_from_memory_resident_matrix_t(costMatrix, window, i-1, j), fmin(get_from_memory_resident_matrix_t(costMatrix, window, i-1,j-1), get_from_memory_resident_matrix_t(costMatrix, window, i,j-1))) + DTW_euclideanDist(tsI->time_series[i].offset, tsJ->time_series[j].offset));
 	} // end for
-	free_search_window_t(&matrixIterator);
 	//minimum cost is at (max i, max j)
 	ret->distance = get_from_memory_resident_matrix_t(costMatrix, window, maxI, maxJ);
 
@@ -255,9 +255,6 @@ struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, s
 	} //end while
 
 
-	//cleanup
-//	free_memory_resident_matrix_t(&costMatrix); //we no longer free the matrix because we keep it through calculations 
-
 	return ret;
 }
 
@@ -298,7 +295,7 @@ inline struct time_warp_info_t * Check_TimeWarpInfo_allocation(unsigned int tsI_
 	}
 	//reset it
 	TWinfo->path.index = 0; //reset it
-	TWinfo->path.max = tsI_reqnb + tsJreqnb - 1;
+	TWinfo->path.max = tsI_reqnb + tsJ_reqnb - 1;
 	return TWinfo;
 }
 inline void Initialize_TimeWarp_Path(struct warp_path_t *new, unsigned long int size)
@@ -338,6 +335,50 @@ inline void Add_to_TimeWarp_Path(struct warp_path_t *path, int a, int b)
 	}
 }
 //=========================================================================================================================================
+//functions to handle the cost matrix, used by the DTW_DynamicTipeWarp function. We'll allocate it once and keep during calculations
+int costMatrix_sizeI = -1;
+int costMatrix_sizeJ = -1;
+unsigned long long int **cMatrix = NULL;
+
+inline unsigned long long int ** Check_cMatrix_size(unsigned int tsI_reqnb, unsigned int tsJ_reqnb)
+{
+	int i;
+
+	if((costMatrix_sizeI <= tsI_reqnb) | (costMatrix_sizeJ <= tsJ_reqnb))
+	{
+		//too small, need to redo
+		//first free the previous one
+		if(cMatrix)
+		{
+			for(i=0; i < costMatrix_sizeI; i++)
+			{
+				if(cMatrix[i])
+					free(cMatrix[i]);
+			}
+			free(cMatrix);
+		}
+		//now allocate a new one
+		cMatrix = malloc(sizeof(unsigned long long int *)*(tsI_reqnb+1));
+		if(cMatrix == NULL)
+		{
+			agios_print("PANIC! Could not allocate memory for DTW");
+			return NULL;
+		}
+		for(i = 0; i < tsI_reqnb; i++)
+		{
+			cMatrix[i] = malloc(sizeof(unsigned long long int)*(tsJ_reqnb+1));
+			if(cMatrix[i] == NULL)
+			{
+				agios_print("PANIC! Could not allocate memory for DTW");
+				return NULL;
+			}
+		}
+		costMatrix_sizeI = tsI_reqnb+1;
+		costMatrix_sizeJ = tsJ_reqnb+1;
+	}
+	return cMatrix;
+}
+//=========================================================================================================================================
 //function to perform full DTW between two access patterns, called by the fast DTW in the smallest case (end of recursion)
 struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, struct access_pattern_t *tsJ)
 {
@@ -350,25 +391,11 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	}
 
 	//allocate a cost matrix
-	unsigned long long int **costMatrix;
-	costMatrix = malloc(sizeof(unsigned long long int *)*(tsI->reqnb+1));
-	if(costMatrix == NULL)
-	{
-		agios_print("PANIC! Could not allocate memory for DTW");
+	unsigned long long int **costMatrix = Check_cMatrix_size(tsI->reqnb, tsJ->reqnb);
+	if(!costMatrix)
 		return NULL;
-	}
 	for(i = 0; i < tsI->reqnb; i++)
 	{
-		costMatrix[i] = malloc(sizeof(unsigned long long int)*(tsJ->reqnb+1));
-		if(costMatrix[i] == NULL)
-		{
-			int index;
-			agios_print("PANIC! Could not allocate memory for DTW");
-			for(index = 0; index < i; index++)
-				free(costMatrix[index]);
-			free(costMatrix);
-			return NULL;
-		}
 		for(j=0; j < tsJ->reqnb; j++)
 			costMatrix[i][j] = 0;
 	}
@@ -390,7 +417,6 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	ret->distance = costMatrix[tsI->reqnb-1][tsJ->reqnb-1];
 
 	//find the warp path by searching the matrix form the solution to at (maxI, maxJ) to the beginning at (0,0). At each step move through the matrix 1 step left, down, or diagonal, whichever has the smallest cost. Favor diagonal moves and moves towards the i==j axis to break ties.
-//	Initialize_TimeWarp_Path(&ret->path, (tsI->reqnb+tsJ->reqnb-1));
 	i = tsI->reqnb-1;
 	j = tsJ->reqnb-1;
 	Add_to_TimeWarp_Path(&ret->path, i, j);
@@ -429,10 +455,6 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 		Add_to_TimeWarp_Path(&ret->path, i, j);
 	}
 
-	//free memory allocated for cost matrix	
-	for(i=0; i< tsI->reqnb; i++)
-		free(costMatrix[i]);
-	free(costMatrix);
 
 	return ret;
 }
@@ -440,10 +462,11 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 inline unsigned long long int DTW_euclideanDist(long long int value1, long long int value2)
 {
 //	return pow(sqrt(pow(tsI->time_series[indexI].offset - tsJ->time_series[indexJ].offset, 2.0)), 2.0);
-//actually this was to compare vectors, since we are using 1d dtw, we will only compare pairs of doubles, so:
+//actually this was to compare vectors, since we are using 1d dtw, we will only compare pairs of values, so:
 	return abs(value1-value2);
 }
 
+//the function that created a shrunk version of an access pattern (to call fast DTW recursivelly to it)
 struct access_pattern_t * shrink_time_series(struct access_pattern_t *ts, int shrunkSize)
 {
 	int ptToReadFrom, ptToReadTo, pt;
@@ -508,29 +531,73 @@ struct access_pattern_t * shrink_time_series(struct access_pattern_t *ts, int sh
 	return ret;
 }
 
+//=========================================================================================================================================
+//functions to manage the search window, that is used to extrapolate results obtained for shrunk versions of the access patterns to the full access patterns. 
+//originally a search window is created to each recursive call, but we'll keep a single one (trying to make it large enough) to avoid that
+//moreover, we'll also keep a static iterator, which is used to iterate over the window while modifying it 
+int SearchWindow_sizeI = -1;
+//int SearchWindow_sizeJ = -1;
+struct search_window_t *SearchWindow=NULL;
+struct search_window_t *SearchWindowIterator=NULL;
+
 inline struct search_window_t * new_search_window(int tsIsize, int tsJsize)
 {
 	int i;
-	struct search_window_t *ret = malloc(sizeof(struct search_window_t));
-	if(ret == NULL)
+
+	if(tsIsize >= SearchWindow_sizeI) //our current search window is not large enough
 	{
-		agios_print("PANIC! Could not allocate memory for DTW\n");
-		return NULL;
+		//free the current search window (and the iterator)
+		if(SearchWindow)
+		{
+			if(SearchWindow->minValues)
+				free(SearchWindow->minValues);
+			if(SearchWindow->maxValues)
+				free(SearchWindow->maxValues);
+		}
+		if(SearchWindowIterator)
+		{
+			if(SearchWindowIterator->minValues)
+				free(SearchWindowIterator->minValues);
+			if(SearchWindowIterator->maxValues)
+				free(SearchWindowIterator->maxValues);
+		}
+		//allocate a new one
+		if(!SearchWindow)
+		{
+			SearchWindow =malloc(sizeof(struct search_window_t)); 
+			if(!SearchWindow)
+			{
+				agios_print("PANIC! Could not allocate memory for DTW\n");
+				return NULL;
+			}
+		}
+		if(!SearchWindowIterator)
+		{
+			SearchWindowIterator =malloc(sizeof(struct search_window_t)); 
+			if(!SearchWindowIterator)
+			{
+				agios_print("PANIC! Could not allocate memory for DTW\n");
+				return NULL;
+			}
+		}
+		SearchWindow->minValues = malloc(sizeof(int)*(tsIsize+1));
+		SearchWindow->maxValues = malloc(sizeof(int)*(tsIsize+1)); 
+		SearchWindowIterator->minValues = malloc(sizeof(int)*(tsIsize+1));
+		SearchWindowIterator->maxValues = malloc(sizeof(int)*(tsIsize+1)); 
+		if((!SearchWindow->minValues) | (!SearchWindow->maxValues) | (!SearchWindowIterator->minValues) | (!SearchWindowIterator->maxValues))
+		{
+			agios_print("PANIC! Could not allocate memory for DTW\n");
+			return NULL;
+		}
+		SearchWindow_sizeI = tsIsize + 1;
 	}
-	ret->minValues = malloc(sizeof(int)*(tsIsize+1));
-	ret->maxValues = malloc(sizeof(int)*(tsIsize+1));
-	if((ret->minValues == NULL) || (ret->maxValues == NULL))
-	{
-		agios_print("PANIC! Could not allocate memory for DTW\n");
-		free_search_window_t(&ret);
-		return NULL;
-	}
+	//reset the search window
 	for(i=0; i< tsIsize; i++)
-		ret->minValues[i]=-1;
-	ret->maxJ_ = tsJsize-1;
-	ret->size = 0;
-	ret->modCount=0;
-	return ret;
+		SearchWindow->minValues[i]=-1;
+	SearchWindow->maxJ_ = tsJsize-1;
+	SearchWindow->size = 0;
+	SearchWindow->modCount=0;
+	return SearchWindow;
 }
 
 inline void SearchWindow_markVisited(struct search_window_t *window, int col, int row)
@@ -556,39 +623,14 @@ inline void SearchWindow_markVisited(struct search_window_t *window, int col, in
 	}
 }
 
-//free an existing search_window_t structure (freeing first its two lists of integers)
-inline void free_search_window_t(struct search_window_t **window)
-{
-	if(*window)
-	{
-		if((*window)->minValues)
-			free((*window)->minValues);
-		if((*window)->maxValues)
-			free((*window)->maxValues);
-		free(*window);
-	}
-}
-//obtain a new search window structure from an existing one (it will allocate a new structure, needs to free it later)
+//obtain a new search window structure from an existing one (to iterate over it, we'll use the static structure we've created for that) 
 inline struct search_window_t *SearchWindow_obtain(struct search_window_t *window)
 {
+	//we'll assume we already have it correctly allocated, as we did it when allocating the original search window we're copying
 	int currentI, currentJ;
 	short int hasMoreElements;
-	struct search_window_t *new = malloc(sizeof(struct search_window_t));
-	if(new == NULL)
-	{
-		agios_print("PANIC! Could not allocate memory for DTW\n");
-		return NULL;
-	}
-	new->minValues = malloc(sizeof(int)*(window->size+1));
-	new->maxValues = malloc(sizeof(int)*(window->size+1));
-	if((new->minValues == NULL) || (new->maxValues == NULL))
-	{
-		agios_print("PANIC! Could not allocate memory for DTW\n");
-		free_search_window_t(&new);
-		return NULL;
-	}
-	new->size=0;
-
+	
+	SearchWindowIterator->size=0; //reset it
 	if(window->size > 0)
 		hasMoreElements = 1;
 	else
@@ -598,9 +640,9 @@ inline struct search_window_t *SearchWindow_obtain(struct search_window_t *windo
 
 	while(hasMoreElements == 1)
 	{
-		new->minValues[new->size] = currentI;
-		new->maxValues[new->size] = currentJ;
-		new->size++;
+		SearchWindowIterator->minValues[SearchWindowIterator->size] = currentI;
+		SearchWindowIterator->maxValues[SearchWindowIterator->size] = currentJ;
+		SearchWindowIterator->size++;
 		if(++currentJ > window->maxValues[currentI])
 		{	
 			if(++currentI <= (window->size - 1))
@@ -609,8 +651,9 @@ inline struct search_window_t *SearchWindow_obtain(struct search_window_t *windo
 				hasMoreElements=0;
 		}
 	}
-	return new;
+	return SearchWindowIterator;
 }
+//=========================================================================================================================================
 
 void SearchWindow_expandSearchWindow(struct search_window_t *window, int radius)
 {
@@ -731,7 +774,6 @@ void SearchWindow_expandSearchWindow(struct search_window_t *window, int radius)
 				}
 			}
 		}//end for
-		free_search_window_t(&windowCells);
 	} //end if
 }
 
@@ -799,6 +841,9 @@ struct search_window_t *SearchWindow_ExpandedResWindow(struct access_pattern_t *
 struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, int searchRadius)
 {
 	int minTSsize;
+	struct search_window_t *window;
+	struct access_pattern_t *shrunkI, *shrunkJ;
+	struct time_warp_info_t *ret;
 
 	if(searchRadius < 0)
 		searchRadius = 0;
@@ -811,8 +856,8 @@ struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct ac
 	}		
 	else
 	{
-		struct access_pattern_t *shrunkI = shrink_time_series(tsI, (tsI->reqnb / 2));
-		struct access_pattern_t *shrunkJ = shrink_time_series(tsJ, (tsJ->reqnb / 2));
+		shrunkI = shrink_time_series(tsI, (tsI->reqnb / 2));
+		shrunkJ = shrink_time_series(tsJ, (tsJ->reqnb / 2));
 		if((shrunkI == NULL) || (shrunkJ == NULL))
 		{
 			agios_print("PANIC! Could not shrink time series from access patterns\n");
@@ -820,34 +865,36 @@ struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct ac
 		}
 
 		//determine the search window that constrains the area of the cost matrix that will be evaluated based on the warp path found at the previous resolution (smaller time series)
-		struct time_warp_info_t *ret = FastDTW_fastDTW(shrunkI, shrunkJ, searchRadius);
-		if(tmp == NULL)
+		ret = FastDTW_fastDTW(shrunkI, shrunkJ, searchRadius);
+		if(ret)
 		{
-			free_access_pattern_t(&shrunkI);
-			free_access_pattern_t(&shrunkJ);
-			return NULL;
+			window = SearchWindow_ExpandedResWindow(tsI, tsJ, shrunkI, shrunkJ, &ret->path, searchRadius);
+			if(window)
+			{
+				//find the optimal path through this search window constraint
+				ret = DTW_getWarpInfoBetween_withWindow(tsI, tsJ, window);
+			}
+			else
+				ret = NULL;	
 		}
-		struct search_window_t *window = SearchWindow_ExpandedResWindow(tsI, tsJ, shrunkI, shrunkJ, &ret->path, searchRadius);
-		if(window == NULL)
+		//clean the access patterns we've created here
+		if(shrunkI)
 		{
-			free_access_pattern_t(&shrunkI);
-			free_access_pattern_t(&shrunkJ);
-			return NULL;
+			if(shrunkI->time_series)
+				free(shrunkI->time_series);
+			if(shrunkI->aggPtSize)
+				free(shrunkI->aggPtSize);
+			free(shrunkI);
 		}
-		//find the optimal path through this search window constraint
-		ret = DTW_getWarpInfoBetween_withWindow(tsI, tsJ, window);
-		if(ret == NULL)
+		if(shrunkJ)
 		{
-			free_access_pattern_t(&shrunkI);
-			free_access_pattern_t(&shrunkJ);
-			free_search_window_t(&window);
-			return NULL;
-		}
-		
-		//cleanup
-		free_search_window_t(&window);
-		free_access_pattern_t(&shrunkI);
-		free_access_pattern_t(&shrunkJ);
+			if(shrunkJ->time_series)
+				free(shrunkJ->time_series);
+			if(shrunkJ->aggPtSize)
+				free(shrunkJ->aggPtSize);
+			free(shrunkJ);
+		}		
+
 		return ret;
 	}
 }
@@ -866,6 +913,7 @@ struct time_warp_info_t *FastDTW_getWarpInfoBetween(struct access_pattern_t *tsI
 		allocate_memory_resident_matrix_t(tsJ->reqnb);
 	}
 	Check_TimeWarpInfo_allocation(tsI->reqnb, tsJ->reqnb);
+	new_search_window(tsI->reqnb, tsJ->reqnb);
 		
 	return FastDTW_fastDTW(tsI, tsJ, searchRadius);
 }
@@ -891,6 +939,36 @@ inline void DTW_cleanup()
 			free(TWinfo->path.tsJindexes);
 		free(TWinfo);
 	}
+	//free the cost matrix
+	if(cMatrix)
+	{
+		int i;
+		for(i=0; i < costMatrix_sizeI; i++)
+		{
+			if(cMatrix[i])
+				free(cMatrix[i]);
+		}
+		free(cMatrix);
+	}
+	//free search windows
+	if(SearchWindow)
+	{
+		if(SearchWindow->minValues)
+			free(SearchWindow->minValues);
+		if(SearchWindow->maxValues)
+			free(SearchWindow->maxValues);
+		free(SearchWindow);
+	}
+	if(SearchWindowIterator)
+	{
+		if(SearchWindowIterator->minValues)
+			free(SearchWindowIterator->minValues);
+		if(SearchWindowIterator->maxValues)
+			free(SearchWindowIterator->maxValues);
+		free(SearchWindowIterator);
+	}
+
+	
 }
 
 // This is the function called from outside to compare two access patterns A and B. It will return an unsigned long long int that is a score. It will have to be later adapted to a %
