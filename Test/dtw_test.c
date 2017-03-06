@@ -2,11 +2,11 @@
 #include  <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
-#include <agios.h>
 #include <string.h>
 #include <math.h>
+#include "pattern_tracker.h"
+#include "PATTERN_MATCHING.h"
 
-struct client clnt;
 
 int day_carry = 0;
 int last_hour = 0;
@@ -14,6 +14,8 @@ long reqnb=0;
 long processed_reqnb=0;
 pthread_mutex_t processed_reqnb_mutex=PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t processed_reqnb_cond=PTHREAD_COND_INITIALIZER;
+
+double select_algorithm_period=1;
 
 double calculate_timestamp(int hour, int minute, double seconds)
 {
@@ -56,7 +58,7 @@ int main(int argc, char *argv[])
 	int type;
 	long offset, len;
 	int hour, minute;
-	double seconds, timestamp, last_timestamp;
+	double seconds, timestamp, last_timestamp, window_timestamp;
 
 	//get arguments: input_file
 	// and open file
@@ -73,15 +75,17 @@ int main(int argc, char *argv[])
 		}
 	}	
 
-	//start AGIOS
+/*	//start AGIOS
 	clnt.process_requests = NULL;
 	clnt.process_request = test_process;
 	if(agios_init(&clnt, "/tmp/agios.conf", 3) != 0)
 	{
 		printf("PANIC! Could not initialize AGIOS!\n");
 		exit(-1);
-	}
+	}*/
+	PATTERN_MATCHING_init();
 
+	window_timestamp =0;
 	//reads requests from the file and make them to AGIOS
 	while(fgets(line, 1000, fd_in))
 	{
@@ -113,23 +117,31 @@ int main(int argc, char *argv[])
 		minute = atoi(strtok(NULL, ":"));
 		seconds = atof(strtok(NULL, ":"));
 		timestamp = calculate_timestamp(hour, minute, seconds);
-		wait_for_some_time(timestamp - last_timestamp);
-		last_timestamp = timestamp;
+		if(window_timestamp == 0)
+			window_timestamp = timestamp;
+		if(timestamp - window_timestamp >= select_algorithm_period)
+		{
+			PATTERN_MATCHING_select_next_algorithm();
+			window_timestamp = timestamp;
+		}
+	//	wait_for_some_time(timestamp - last_timestamp);
+	//	last_timestamp = timestamp;
 
 		reqnb++;
-		agios_add_request(handle, type, offset, len, &handle, &clnt, 1);
+//		agios_add_request(handle, type, offset, len, &handle, &clnt, 1);
+		add_request_to_pattern(timestamp, offset, len, type, handle);
 	//	printf("%d:%d:%f %f %s %d %ld %ld\n", hour, minute, seconds, timestamp, handle, type, offset, len);	     
 	}
 	fclose(fd_in);
-	printf("FINISHED ISSUING ALL REQUESTS, WILL WAIT NOW\n");
+/*	printf("FINISHED ISSUING ALL REQUESTS, WILL WAIT NOW\n");
 
 	//wait until we've processed all issued requests
 	pthread_mutex_lock(&processed_reqnb_mutex);
 	while(processed_reqnb < reqnb)
 		pthread_cond_wait(&processed_reqnb_cond, &processed_reqnb_mutex);
-	pthread_mutex_unlock(&processed_reqnb_mutex);
+	pthread_mutex_unlock(&processed_reqnb_mutex);*/
 
 	//stop agios and finish
-	agios_exit();
+	PATTERN_MATCHING_exit();
 }
 

@@ -15,7 +15,8 @@ throughput:
 	gcc -lm -lpthread -lagios -o throughput_test throughput_test.c 
 
 dtw:
-	gcc -o dtw_test dtw_test.c -lagios -lrt -lpthread -lm
+	gcc -c pattern_tracker.c mylist.c DTW.c PATTERN_MATCHING.c -DPATTERN_MATCHING_DEBUG=1 
+	gcc -o dtw_test dtw_test.c pattern_tracker.o mylist.o DTW.o PATTERN_MATCHING.o -lagios -lrt -lpthread -lm
 
 clean:
 	rm -rf throughput_test addrequest_test timewindow_test dtw_test
