@@ -23,7 +23,7 @@ struct PM_pattern_t {
 	unsigned long all_counters; //the sum of all next patterns counts so we can calculate probability
 };
 
-int PATTERN_MATCHING_init(void);
+int PATTERN_MATCHING_init(int minimum_size, int threshold, int maximum_difference);
 int PATTERN_MATCHING_select_next_algorithm(void);
 void PATTERN_MATCHING_exit(void);
 #endif

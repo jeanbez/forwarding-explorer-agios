@@ -40,6 +40,9 @@ unsigned int access_pattern_count=0;
 int current_selection;
 unsigned long long int max_dtw_result=1;
 unsigned int call_count=0;
+unsigned int fastdtw_call_count=0;
+unsigned long long int fastdtw_size=0;
+unsigned long long int call_size=0;
 
 int config_minimum_pattern_size=5;
 int config_pattern_matching_threshold=80;
@@ -327,9 +330,15 @@ void read_pattern_matching_file()
 	debug("Read %u patterns from the pattern matching file, the maximum DTW score so far is %llu\n", access_pattern_count, max_dtw_result);
 }
 
-int PATTERN_MATCHING_init(void)
+int PATTERN_MATCHING_init(int minimum_size, int threshold, int maximum_difference)
 {
 	struct timespec start_time;
+
+
+	config_minimum_pattern_size=minimum_size;
+	config_pattern_matching_threshold=threshold;
+	config_maximum_pattern_difference=maximum_difference;
+	debug("Running PATTERN MATCHING with minimum pattern size %d, threshold %d, and maximum difference %d\n", config_minimum_pattern_size, config_pattern_matching_threshold, config_maximum_pattern_difference);
 
 	first_performance_measurement = 1;
 	//start the pattern tracker
@@ -340,7 +349,6 @@ int PATTERN_MATCHING_init(void)
 
 	current_selection = 1;
 
-	PRINT_FUNCTION_EXIT;
 	return 1;
 }
 
@@ -394,10 +402,15 @@ inline short int compatible_pattern(struct access_pattern_t *A, struct access_pa
 int apply_DTW(struct access_pattern_t *A, struct access_pattern_t *B)
 {
 	unsigned long long int dtw_result = FastDTW(A, B);
+	fastdtw_call_count++;
+	if(A->reqnb >= B->reqnb)
+		fastdtw_size += A->reqnb;
+	else
+		fastdtw_size += B->reqnb;
 	debug("Compared with DTW to a pattern of %u requests, total amount of accessed data %lu, %u reads (%lu) and %u writes (%lu) with %u files. Got score %llu, which is tranlated to %llu (max is %llu)\n", A->reqnb, A->total_size, A->read_nb, A->read_size, A->write_nb, A->write_size, A->filenb, dtw_result, ((max_dtw_result - dtw_result)*100)/max_dtw_result, max_dtw_result);
 	if(dtw_result > max_dtw_result)
 		max_dtw_result = dtw_result;
-	return ((max_dtw_result - dtw_result)*100)/max_dtw_result;
+	return ((max_dtw_result - dtw_result)*100)/max_dtw_result; //dtw_result is a score that is higher when patterns are more different, but with this formula we get a score that is higher when patterns are more similar
 }
 
 //look for an access pattern in the list of patterns we know
@@ -517,10 +530,12 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 
 	PRINT_FUNCTION_NAME;
 	
-	call_count++;
 	
 	//get the most recently tracked access pattern from the pattern tracker module
 	seen_pattern = get_current_pattern(); 
+
+	call_count++;
+	call_size += seen_pattern->reqnb;
 
 	debug("Adding a pattern of %u requests, total amount of accessed data %lu, %u reads (%lu) and %u writes (%lu) with %u files\n", seen_pattern->reqnb, seen_pattern->total_size, seen_pattern->read_nb, seen_pattern->read_size, seen_pattern->write_nb, seen_pattern->write_size, seen_pattern->filenb);
 
@@ -530,18 +545,18 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 		matched_pattern = match_seen_pattern(seen_pattern);
 		if(matched_pattern) //we don't need the seen_pattern structure anymore, we can free it
 		{
-			debug("Found a match\n");
+			debug("Found a match with id %d\n", matched_pattern->id);
 			free_access_pattern_t(&seen_pattern);
 			//see if our prediction was right
 			if(predicted_next_pattern)
 			{
-				debug("Let's compare this pattern to the one we've predicted. Are they the same? %d. Are they compatible? %d. DTW score: %llu  (because max is %llu)\n", predicted_next_pattern->id == matched_pattern->id, compatible_pattern(predicted_next_pattern->description, matched_pattern->description), FastDTW(predicted_next_pattern->description, matched_pattern->description), max_dtw_result);
+				debug("Let's compare this pattern to the one we've predicted (%d). Are they the same? %d. Are they compatible? %d. DTW score: %llu  (because max is %llu)\n", predicted_next_pattern->id, predicted_next_pattern->id == matched_pattern->id, compatible_pattern(predicted_next_pattern->description, matched_pattern->description), FastDTW(predicted_next_pattern->description, matched_pattern->description), max_dtw_result);
 			}
 		}
 		else	//if we did not find the pattern, we'll include it as a new one
 		{
-			debug("We did not find a match, storing new pattern\n");
 			matched_pattern = store_new_access_pattern(seen_pattern);
+			debug("We did not find a match, stored a new pattern with id %d\n", matched_pattern->id);
 		}
 	}
 	else //the pattern is too short, we'll drop it
@@ -642,7 +657,7 @@ void write_pattern_matching_file(void)
 
 	PRINT_FUNCTION_NAME;
 
-	debug("We'll write the pattern_matching file. We have %u patterns (from %u calls in this execution), max DTW score is %llu\n", access_pattern_count, call_count, max_dtw_result);
+	debug("We'll write the pattern_matching file. We have %u patterns (from %u calls in this execution, average size %llu), max DTW score is %llu. We've called FastDTW %u times to patterns of average size %llu\n", access_pattern_count, call_count, call_size/call_count, max_dtw_result, fastdtw_call_count, fastdtw_size/fastdtw_call_count);
 
 	fd = fopen(config_pattern_filename, "w");
 	if(!fd)

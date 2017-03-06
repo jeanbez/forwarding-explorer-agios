@@ -975,7 +975,7 @@ inline void DTW_cleanup()
 	
 }
 
-// This is the function called from outside to compare two access patterns A and B. It will return an unsigned long long int that is a score. It will have to be later adapted to a %
+// This is the function called from outside to compare two access patterns A and B. It will return an unsigned long long int that is a score. The higher the score, the higher the distance between the patterns (the more different they are). It will have to be later adapted to a %
 unsigned long long int FastDTW(struct access_pattern_t *A, struct access_pattern_t *B)
 {
 	unsigned long long int ret;

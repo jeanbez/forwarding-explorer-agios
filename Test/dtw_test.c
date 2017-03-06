@@ -59,11 +59,15 @@ int main(int argc, char *argv[])
 	long offset, len;
 	int hour, minute;
 	double seconds, timestamp, last_timestamp, window_timestamp;
+	int threshold, maximum_difference;
 
-	//get arguments: input_file
+	//get arguments: input_file threshold, maximum difference
 	// and open file
-	if(argc < 2)
+	if(argc < 4)
+	{
+		printf("Usage: ./%s\tinput_file\tpattern_matching_threshold\tmaximum_pattern_difference\n", argv[0]);
 		exit(-1);
+	}
 	else
 	{
 		fd_in = fopen(argv[1], "r");
@@ -73,6 +77,9 @@ int main(int argc, char *argv[])
 			perror("fopen");
 			exit(-1);
 		}
+		threshold = atoi(argv[2]);
+		maximum_difference = atoi(argv[3]);
+		
 	}	
 
 /*	//start AGIOS
@@ -83,7 +90,7 @@ int main(int argc, char *argv[])
 		printf("PANIC! Could not initialize AGIOS!\n");
 		exit(-1);
 	}*/
-	PATTERN_MATCHING_init();
+	PATTERN_MATCHING_init(5, threshold, maximum_difference);
 
 	window_timestamp =0;
 	//reads requests from the file and make them to AGIOS
