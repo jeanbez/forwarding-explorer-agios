@@ -77,7 +77,7 @@ inline struct time_warp_info_t *DTW_getWarpInfoBetween_withWindow(struct access_
 //the name does not seem to mean anything, it was kept so the mapping between the different versions of the code would make sense
 //originally a new matrix was allocated every time the constrainedTimeWarp function was called, but we'll try to avoid that since we call this function too often (maybe keeping the burden in memory is the best choice)
 //the problem is that we don't know how large we'll need the window to be. So we'll reallocate it a few times until we get a large enough one
-int max_window_size=-1;
+int max_window_size=0;
 struct memory_resident_matrix_t *MRmatrix=NULL;
 
 inline void allocate_memory_resident_matrix_t(int size);
@@ -87,13 +87,13 @@ inline struct memory_resident_matrix_t *get_new_memory_resident_matrix_t(struct 
 	int i;
 	int currentOffset=0;
 
-	if(max_window_size == -1) //we did not allocate the matrix yet
+	if(max_window_size == 0) //we did not allocate the matrix yet
 	{
 		max_window_size = window->size*1.1; //we allocate a little more than what we need right now so maybe we won't have to reallocate it so many times
 		allocate_memory_resident_matrix_t(max_window_size); 
 		if((!MRmatrix) | (!MRmatrix->cellValues) | (!MRmatrix->colOffsets)) //could not allocate, already printed error message
 		{
-			max_window_size = -1;
+			max_window_size = 0;
 			return NULL;
 		}
 	}
@@ -105,7 +105,7 @@ inline struct memory_resident_matrix_t *get_new_memory_resident_matrix_t(struct 
 		allocate_memory_resident_matrix_t(max_window_size);
 		if((!MRmatrix) | (!MRmatrix->cellValues) | (!MRmatrix->colOffsets)) //could not allocate, already printed error message
 		{
-			max_window_size = -1;
+			max_window_size = 0;
 			return NULL;
 		}
 	}
@@ -273,7 +273,7 @@ inline void Initialize_TimeWarp_Path(struct warp_path_t *new, unsigned long int 
 
 inline struct time_warp_info_t * Check_TimeWarpInfo_allocation(unsigned int tsI_reqnb, unsigned int tsJ_reqnb)
 {
-	if(max_timewarppath_len < (tsI_reqnb + tsJ_reqnb -1)) //we don't have a structure large enough
+	if((max_timewarppath_len == -1) || (max_timewarppath_len < (tsI_reqnb + tsJ_reqnb -1))) //we don't have a structure large enough
 	{
 		max_timewarppath_len = (tsI_reqnb + tsJ_reqnb -1)*1.1;
 		//clear previous one

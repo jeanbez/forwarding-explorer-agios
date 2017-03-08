@@ -407,10 +407,14 @@ int apply_DTW(struct access_pattern_t *A, struct access_pattern_t *B)
 		fastdtw_size += A->reqnb;
 	else
 		fastdtw_size += B->reqnb;
-	debug("Compared with DTW to a pattern of %u requests, total amount of accessed data %lu, %u reads (%lu) and %u writes (%lu) with %u files. Got score %llu, which is tranlated to %llu (max is %llu)\n", A->reqnb, A->total_size, A->read_nb, A->read_size, A->write_nb, A->write_size, A->filenb, dtw_result, ((max_dtw_result - dtw_result)*100)/max_dtw_result, max_dtw_result);
+	debug("Compared with DTW to a pattern of %u requests, total amount of accessed data %lu, %u reads (%lu) and %u writes (%lu) with %u files. Got score %llu, which is tranlated to %llu (max is %llu)\n", A->reqnb, A->total_size, A->read_nb, A->read_size, A->write_nb, A->write_size, A->filenb, dtw_result, (dtw_result > max_dtw_result) ? 0 : ((max_dtw_result - dtw_result)*100)/max_dtw_result, max_dtw_result);
 	if(dtw_result > max_dtw_result)
+	{
 		max_dtw_result = dtw_result;
-	return ((max_dtw_result - dtw_result)*100)/max_dtw_result; //dtw_result is a score that is higher when patterns are more different, but with this formula we get a score that is higher when patterns are more similar
+		return 0;
+	}
+	else
+		return ((max_dtw_result - dtw_result)*100)/max_dtw_result; //dtw_result is a score that is higher when patterns are more different, but with this formula we get a score that is higher when patterns are more similar
 }
 
 //look for an access pattern in the list of patterns we know
@@ -654,10 +658,19 @@ void write_pattern_matching_file(void)
 	int ret, pat_count, error, this_error;
 	struct PM_pattern_t *tmp;
 	struct next_patterns_element_t *next;
+	unsigned long long int call_avg, fastdtw_call_avg;
 
 	PRINT_FUNCTION_NAME;
 
-	debug("We'll write the pattern_matching file. We have %u patterns (from %u calls in this execution, average size %llu), max DTW score is %llu. We've called FastDTW %u times to patterns of average size %llu\n", access_pattern_count, call_count, call_size/call_count, max_dtw_result, fastdtw_call_count, fastdtw_size/fastdtw_call_count);
+	if(call_count > 0)
+		call_avg = call_size/call_count;
+	else
+		call_avg = 0;
+	if(fastdtw_call_count > 0)
+		fastdtw_call_avg = fastdtw_size/fastdtw_call_count;
+	else
+		fastdtw_call_avg = 0;
+	debug("We'll write the pattern_matching file. We have %u patterns (from %u calls in this execution, average size %llu), max DTW score is %llu. We've called FastDTW %u times to patterns of average size %llu\n", access_pattern_count, call_count, call_avg, max_dtw_result, fastdtw_call_count, fastdtw_call_avg);
 
 	fd = fopen(config_pattern_filename, "w");
 	if(!fd)
