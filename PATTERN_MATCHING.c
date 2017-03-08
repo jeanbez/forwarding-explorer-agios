@@ -370,8 +370,12 @@ int apply_DTW(struct access_pattern_t *A, struct access_pattern_t *B)
 {
 	unsigned long long int dtw_result = FastDTW(A, B);
 	if(dtw_result > max_dtw_result)
+	{
 		max_dtw_result = dtw_result;
-	return ((max_dtw_result - dtw_result)*100)/max_dtw_result;
+		return 0;
+	}
+	else
+		return ((max_dtw_result - dtw_result)*100)/max_dtw_result; //dtw_result is a score that is higher when patterns are more different, but with this formula we get a score that is higher when patterns are more similar
 }
 
 //look for an access pattern in the list of patterns we know
