@@ -76,7 +76,7 @@ struct search_window_t {
 	int *minValues;
 	int *maxValues;
 	int maxJ_;
-	int size;
+	unsigned int size;
 	int modCount;
 };
 

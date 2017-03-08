@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 
 		reqnb++;
 //		agios_add_request(handle, type, offset, len, &handle, &clnt, 1);
-		add_request_to_pattern(timestamp, offset, len, type, handle);
+		add_request_to_pattern((unsigned long long int)((double)timestamp*(double)1000000000L), offset, len, type, handle);
 	//	printf("%d:%d:%f %f %s %d %ld %ld\n", hour, minute, seconds, timestamp, handle, type, offset, len);	     
 	}
 	fclose(fd_in);
@@ -150,5 +150,6 @@ int main(int argc, char *argv[])
 
 	//stop agios and finish
 	PATTERN_MATCHING_exit();
+	return 0;
 }
 

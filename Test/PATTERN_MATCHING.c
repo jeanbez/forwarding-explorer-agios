@@ -54,7 +54,7 @@ inline void agios_gettime(struct timespec * timev)
 }
 inline unsigned long int get_timespec2llu(struct timespec t)
 {
-	return (t.tv_sec*1000000000L + t.tv_nsec);
+	return (unsigned long int)(t.tv_sec*1000000000L + t.tv_nsec);
 }
 
 
@@ -111,7 +111,8 @@ inline void free_PM_pattern_t(struct PM_pattern_t **pattern)
 //read information about an access pattern from the file, and its performance measurements (but not the probability network yet)
 struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 {
-	int error, i, sched_count, sched_id, measurements, j, this_error;
+	size_t error;
+	int i, sched_count, sched_id, measurements, j, this_error;
 	//allocate memory
 	struct scheduler_info_t *sched_info;
 	struct PM_pattern_t *ret = malloc(sizeof(struct PM_pattern_t));
@@ -126,13 +127,13 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 	
 	//description of the access pattern first	
 	error = 0;
-	error += fread(&(ret->description->reqnb), sizeof(unsigned int), 1, fd);
-	error += fread(&(ret->description->total_size), sizeof(unsigned long), 1, fd);
-	error += fread(&(ret->description->read_nb), sizeof(unsigned int), 1, fd);
-	error += fread(&(ret->description->read_size), sizeof(unsigned long), 1, fd);
-	error += fread(&(ret->description->write_nb), sizeof(unsigned int), 1, fd);
-	error += fread(&(ret->description->write_size), sizeof(unsigned long), 1, fd);
-	error += fread(&(ret->description->filenb), sizeof(unsigned int), 1, fd);
+	error += fread(&(ret->description->reqnb), sizeof(unsigned int), (size_t)1, fd);
+	error += fread(&(ret->description->total_size), sizeof(unsigned long), (size_t) 1, fd);
+	error += fread(&(ret->description->read_nb), sizeof(unsigned int),  (size_t)1, fd);
+	error += fread(&(ret->description->read_size), sizeof(unsigned long),  (size_t)1, fd);
+	error += fread(&(ret->description->write_nb), sizeof(unsigned int), (size_t) 1, fd);
+	error += fread(&(ret->description->write_size), sizeof(unsigned long), (size_t) 1, fd);
+	error += fread(&(ret->description->filenb), sizeof(unsigned int), (size_t) 1, fd);
 	if(error != 7)
 	{
 		free_PM_pattern_t(&ret);
@@ -223,7 +224,8 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 void read_pattern_matching_file()
 {
 	FILE *fd;
-	int ret, pat_nb, next_pat, this_ret;
+	size_t ret, this_ret;
+	int pat_nb, next_pat;
 	struct PM_pattern_t **patterns;
 	struct PM_pattern_t *new;
 	struct next_patterns_element_t *tmp;
@@ -243,7 +245,7 @@ void read_pattern_matching_file()
 	}
 
 	//read the number of access patterns
-	ret = fread(&access_pattern_count, sizeof(unsigned int), 1, fd);
+	ret = fread(&access_pattern_count, sizeof(unsigned int), (size_t)1, fd);
 	if(ret != 1)
 	{
 		agios_print("PANIC! Could not read from access pattern file %s\n", config_pattern_filename);
@@ -276,7 +278,7 @@ void read_pattern_matching_file()
 	agios_list_for_each_entry(new, &all_observed_patterns, list)
 	{
 		//we store a counter of future patterns
-		ret += fread(&pat_nb, sizeof(int), 1, fd);
+		ret += fread(&pat_nb, sizeof(int), (size_t)1, fd);
 		this_ret = 0;
 		for(i = 0; i< pat_nb; i++)
 		{
@@ -290,12 +292,12 @@ void read_pattern_matching_file()
 				return;
 			}
 			//get the identifier of the next pattern and store it
-			this_ret += fread(&next_pat, sizeof(int), 1, fd);
+			this_ret += fread(&next_pat, sizeof(int), (size_t)1, fd);
 			tmp->pattern = patterns[next_pat];
 			//get other relevant information
-			this_ret += fread(&tmp->counter, sizeof(unsigned int), 1, fd);
+			this_ret += fread(&tmp->counter, sizeof(unsigned int), (size_t)1, fd);
 			new->all_counters += tmp->counter;
-			this_ret += fread(&tmp->probability, sizeof(int), 1, fd);
+			this_ret += fread(&tmp->probability, sizeof(int),  (size_t)1, fd);
 			//store this information for this access pattern
 			agios_list_add_tail(&tmp->list, &new->next_patterns);
 		}
@@ -316,7 +318,7 @@ void read_pattern_matching_file()
 	}
 
 	//last information: maximum DTW result observed so far (we use it to calculate % difference between patterns)
-	ret = fread(&max_dtw_result, sizeof(unsigned long long int), 1, fd);
+	ret = fread(&max_dtw_result, sizeof(unsigned long long int),  (size_t)1, fd);
 	if(ret != 1)
 	{
 		agios_print("Error! Could not read maximum dtw result from pattern matching file\n");
@@ -414,7 +416,7 @@ int apply_DTW(struct access_pattern_t *A, struct access_pattern_t *B)
 		return 0;
 	}
 	else
-		return ((max_dtw_result - dtw_result)*100)/max_dtw_result; //dtw_result is a score that is higher when patterns are more different, but with this formula we get a score that is higher when patterns are more similar
+		return ((max_dtw_result - dtw_result)*(unsigned long long int)100)/max_dtw_result; //dtw_result is a score that is higher when patterns are more different, but with this formula we get a score that is higher when patterns are more similar
 }
 
 //look for an access pattern in the list of patterns we know
@@ -461,7 +463,7 @@ struct PM_pattern_t *store_new_access_pattern(struct access_pattern_t *pattern)
 	ret->all_counters = 0;
 	//store it
 	agios_list_add_tail(&ret->list, &all_observed_patterns);
-	ret->id = access_pattern_count;
+	ret->id = (int)access_pattern_count;
 	access_pattern_count++;
 	return ret;
 }
@@ -511,7 +513,7 @@ struct PM_pattern_t *predict_next_pattern(void)
 	{
 		agios_list_for_each_entry(tmp, &previous_pattern->next_patterns, list)
 		{
-			tmp->probability = (tmp->counter*100)/previous_pattern->all_counters;
+			tmp->probability = (tmp->counter*(unsigned long)100)/previous_pattern->all_counters;
 			if(tmp->probability == 0)
 				tmp->probability = 1;
 			if(tmp->probability > best_prob)
@@ -585,7 +587,7 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 //returns 1 on success, 0 otherwise
 int write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
 {
-	int error=0;
+	size_t error=0;
 	int this_error;
 	int i, sched_count, measurements, start;
 	struct scheduler_info_t *tmp;
@@ -655,7 +657,8 @@ int get_next_pattern_number(struct agios_list_head *chain)
 void write_pattern_matching_file(void)
 {
 	FILE *fd;
-	int ret, pat_count, error, this_error;
+	size_t ret, error, this_error;
+	int pat_count;
 	struct PM_pattern_t *tmp;
 	struct next_patterns_element_t *next;
 	unsigned long long int call_avg, fastdtw_call_avg;

@@ -8,7 +8,7 @@ struct PM_pattern_t;
 struct next_patterns_element_t {
 	struct agios_list_head list;
 	unsigned int counter;
-	int probability;
+	unsigned int probability;
 	struct PM_pattern_t *pattern;
 };
 

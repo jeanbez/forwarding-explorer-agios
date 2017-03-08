@@ -16,7 +16,7 @@ pthread_mutex_t pattern_tracker_lock = PTHREAD_MUTEX_INITIALIZER;
 
 //current access pattern
 struct access_pattern_t *current_pattern;
-long long int last_offset=0;
+unsigned long long int last_offset=0;
 
 //files being accessed right now
 char * file_ids[MAXIMUM_FILE_NUMBER];
@@ -69,8 +69,8 @@ inline void add_request_to_pattern(unsigned long int timestamp, unsigned long in
 		struct pattern_tracker_req_info_t *new = malloc(sizeof(struct pattern_tracker_req_info_t));
 		init_agios_list_head(&new->list);
 		new->timestamp = timestamp;
-		calculated_offset = i*MAXIMUM_FILE_SIZE + (offset/1024); //we keep offsets in KB
-		new->offset = calculated_offset - last_offset; //the offset difference, actually
+		calculated_offset = (unsigned long long int)(i*MAXIMUM_FILE_SIZE) + (offset/1024); //we keep offsets in KB
+		new->offset = (long long int)calculated_offset - (long long int)last_offset; //the offset difference, actually
 		last_offset = calculated_offset;
 		
 
