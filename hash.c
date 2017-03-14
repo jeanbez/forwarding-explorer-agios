@@ -31,7 +31,7 @@
 #define GOLDEN_RATIO_PRIME_32 0x9e370001UL
 #define GOLDEN_RATIO_PRIME_64 0x9e37fffffffc0001UL
 
-static inline int hash_32(int val, unsigned int bits)
+static int hash_32(int val, unsigned int bits)
 {
         /* On some cpus multiply is faster, on others gcc will do shifts */
         int hash = val * GOLDEN_RATIO_PRIME_32;
@@ -40,7 +40,7 @@ static inline int hash_32(int val, unsigned int bits)
         return hash >> (32 - bits);
 }
 
-static inline long long int hash_64(long long int val, unsigned int bits)
+static long long int hash_64(long long int val, unsigned int bits)
 {
         long long int hash = val;
 
@@ -63,7 +63,7 @@ static inline long long int hash_64(long long int val, unsigned int bits)
         return hash >> (64 - bits);
 }
 
-static inline long long int hash_long(long long int val, unsigned int bits)
+static long long int hash_long(long long int val, unsigned int bits)
 {
 	int bits_per_long = sizeof(long)*8;
 	if(bits_per_long == 32)
@@ -72,9 +72,9 @@ static inline long long int hash_long(long long int val, unsigned int bits)
 		return hash_64(val, bits);
 }
 
-inline unsigned long agios_hash_str(const char *ptr, unsigned int bits)
+long agios_hash_str(const char *ptr, unsigned int bits)
 {
-	unsigned long rep=0;
+	long rep=0;
 	int i;
 	/*makes a number using the sum of all the characters of the name of the file*/
 	for(i=0; i< strlen(ptr); i++)

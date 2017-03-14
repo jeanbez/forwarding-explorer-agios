@@ -3,20 +3,16 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the no operation scheduling algorithm
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
  *		INRIA France
  *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -87,7 +83,7 @@ void NOOP(void *clnt)
 	struct request_t *req;
 	short int update_time=0;
 	short int stop_processing=0;
-	unsigned long hash;
+	long hash;
 
 //	PRINT_FUNCTION_NAME;
 	while(!stop_processing) //we give a change to new requests by locking and unlocking to every rquest

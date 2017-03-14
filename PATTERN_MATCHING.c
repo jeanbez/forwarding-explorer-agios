@@ -1,3 +1,24 @@
+/* File:	PATTERN_MATCHING.c
+ * Created: 	2016 
+ * License:	GPL version 3
+ * Author:
+ *		Francieli Zanon Boito <francielizanon (at) gmail.com>
+ *
+ * Description:
+ *		This file is part of the AGIOS I/O Scheduling tool.
+ *		It provides the pattern matching approach implementation
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
+ *
+ * Contributors:
+ *		Federal University of Rio Grande do Sul (UFRGS)
+ *		INRIA France
+ *
+ *		This program is distributed in the hope that it will be useful,
+ * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
+
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -18,12 +39,12 @@
 struct PM_pattern_t *previous_pattern = NULL;
 AGIOS_LIST_HEAD(all_observed_patterns);
 short int first_performance_measurement;
-unsigned int access_pattern_count=0;
+int access_pattern_count=0;
 int current_selection;
-unsigned long long int max_dtw_result=1;
+long long int max_dtw_result=1;
 
 //cleanup a PM_pattern_t structure
-inline void free_PM_pattern_t(struct PM_pattern_t **pattern)
+void free_PM_pattern_t(struct PM_pattern_t **pattern)
 {
 	if((*pattern))
 	{
@@ -90,13 +111,13 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 	
 	//description of the access pattern first	
 	error = 0;
-	error += fread(&(ret->description->reqnb), sizeof(unsigned int), 1, fd);
-	error += fread(&(ret->description->total_size), sizeof(unsigned long), 1, fd);
-	error += fread(&(ret->description->read_nb), sizeof(unsigned int), 1, fd);
-	error += fread(&(ret->description->read_size), sizeof(unsigned long), 1, fd);
-	error += fread(&(ret->description->write_nb), sizeof(unsigned int), 1, fd);
-	error += fread(&(ret->description->write_size), sizeof(unsigned long), 1, fd);
-	error += fread(&(ret->description->filenb), sizeof(unsigned int), 1, fd);
+	error += fread(&(ret->description->reqnb), sizeof(int), 1, fd);
+	error += fread(&(ret->description->total_size), sizeof(long), 1, fd);
+	error += fread(&(ret->description->read_nb), sizeof(int), 1, fd);
+	error += fread(&(ret->description->read_size), sizeof(long), 1, fd);
+	error += fread(&(ret->description->write_nb), sizeof(int), 1, fd);
+	error += fread(&(ret->description->write_size), sizeof(long), 1, fd);
+	error += fread(&(ret->description->filenb), sizeof(int), 1, fd);
 	if(error != 7)
 	{
 		free_PM_pattern_t(&ret);
@@ -113,7 +134,7 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 	error = 0;
 	for(i =0; i<ret->description->reqnb; i++)
 	{
-		error += fread(&(ret->description->time_series[i].timestamp), sizeof(unsigned long int), 1, fd); 
+		error += fread(&(ret->description->time_series[i].timestamp), sizeof(long int), 1, fd); 
 		error += fread(&(ret->description->time_series[i].offset), sizeof(long long int), 1, fd); 
 		init_agios_list_head(&(ret->description->time_series[i].list));
 	}
@@ -155,7 +176,7 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 		this_error = 0;
 		for(j = 0; j < measurements; j++)
 		{
-			this_error += fread(&(sched_info->bandwidth_measurements[j].timestamp), sizeof(unsigned long int), 1, fd);
+			this_error += fread(&(sched_info->bandwidth_measurements[j].timestamp), sizeof(long int), 1, fd);
 			this_error += fread(&(sched_info->bandwidth_measurements[j].bandwidth), sizeof(double), 1, fd);
 		}
 		if(this_error != measurements*2)
@@ -207,7 +228,7 @@ void read_pattern_matching_file()
 	}
 
 	//read the number of access patterns
-	ret = fread(&access_pattern_count, sizeof(unsigned int), 1, fd);
+	ret = fread(&access_pattern_count, sizeof(int), 1, fd);
 	if(ret != 1)
 	{
 		agios_print("PANIC! Could not read from access pattern file %s\n", config_pattern_filename);
@@ -257,7 +278,7 @@ void read_pattern_matching_file()
 			this_ret += fread(&next_pat, sizeof(int), 1, fd);
 			tmp->pattern = patterns[next_pat];
 			//get other relevant information
-			this_ret += fread(&tmp->counter, sizeof(unsigned int), 1, fd);
+			this_ret += fread(&tmp->counter, sizeof(int), 1, fd);
 			new->all_counters += tmp->counter;
 			this_ret += fread(&tmp->probability, sizeof(int), 1, fd);
 			//store this information for this access pattern
@@ -280,7 +301,7 @@ void read_pattern_matching_file()
 	}
 
 	//last information: maximum DTW result observed so far (we use it to calculate % difference between patterns)
-	ret = fread(&max_dtw_result, sizeof(unsigned long long int), 1, fd);
+	ret = fread(&max_dtw_result, sizeof(long long int), 1, fd);
 	if(ret != 1)
 	{
 		agios_print("Error! Could not read maximum dtw result from pattern matching file\n");
@@ -320,9 +341,9 @@ int PATTERN_MATCHING_init(void)
 }
 
 //apply some heuristics to decide if two access patterns are close enough to compare their time series
-inline short int compatible_pattern(struct access_pattern_t *A, struct access_pattern_t *B)
+short int compatible_pattern(struct access_pattern_t *A, struct access_pattern_t *B)
 {
-	unsigned long diff;
+	long diff;
 
 	//let's see the difference in the total number of requests
 	if(A->reqnb > 0)
@@ -368,7 +389,7 @@ inline short int compatible_pattern(struct access_pattern_t *A, struct access_pa
 //apply FastDTW to get the distance between the two time series (from the two access patterns), and then use the maximum distance ever observed (possibly updating it) to give it a similarity degree between 0 and 100%.
 int apply_DTW(struct access_pattern_t *A, struct access_pattern_t *B)
 {
-	unsigned long long int dtw_result = FastDTW(A, B);
+	long long int dtw_result = FastDTW(A, B);
 	if(dtw_result > max_dtw_result)
 	{
 		max_dtw_result = dtw_result;
@@ -510,7 +531,7 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	struct io_scheduler_instance_t *new_sched=NULL;
 	double *recent_measurements=NULL;
 	struct timespec this_time;
-	unsigned long long timestamp;
+	long long timestamp;
 
 	PRINT_FUNCTION_NAME;
 
@@ -599,20 +620,20 @@ int write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
 	struct scheduler_info_t *tmp;
 
 	//description of the access pattern
-	error+= fwrite(&(pattern->description->reqnb), sizeof(unsigned int), 1, fd);
-	error+= fwrite(&(pattern->description->total_size), sizeof(unsigned long int), 1, fd);
-	error+= fwrite(&(pattern->description->read_nb), sizeof(unsigned int), 1, fd);
-	error+= fwrite(&(pattern->description->read_size), sizeof(unsigned long int), 1, fd);
-	error+= fwrite(&(pattern->description->write_nb), sizeof(unsigned int), 1, fd);
-	error+= fwrite(&(pattern->description->write_size), sizeof(unsigned long int), 1, fd);
-	error+= fwrite(&(pattern->description->filenb), sizeof(unsigned int), 1, fd);
+	error+= fwrite(&(pattern->description->reqnb), sizeof(int), 1, fd);
+	error+= fwrite(&(pattern->description->total_size), sizeof(long int), 1, fd);
+	error+= fwrite(&(pattern->description->read_nb), sizeof(int), 1, fd);
+	error+= fwrite(&(pattern->description->read_size), sizeof(long int), 1, fd);
+	error+= fwrite(&(pattern->description->write_nb), sizeof(int), 1, fd);
+	error+= fwrite(&(pattern->description->write_size), sizeof(long int), 1, fd);
+	error+= fwrite(&(pattern->description->filenb), sizeof(int), 1, fd);
 	if(error != 7)
 		return 0;
 	//the time series
 	error = 0;
 	for(i = 0; i < pattern->description->reqnb; i++)
 	{
-		error += fwrite(&(pattern->description->time_series[i].timestamp), sizeof(unsigned long int), 1, fd);
+		error += fwrite(&(pattern->description->time_series[i].timestamp), sizeof(long int), 1, fd);
 		error += fwrite(&(pattern->description->time_series[i].offset), sizeof(long long int), 1, fd);
 	}
 	if(error != pattern->description->reqnb*2)
@@ -633,7 +654,7 @@ int write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
 		this_error = 0;
 		while(start != tmp->measurements_end)
 		{
-			this_error += fwrite(&(tmp->bandwidth_measurements[start].timestamp), sizeof(unsigned long int), 1, fd);
+			this_error += fwrite(&(tmp->bandwidth_measurements[start].timestamp), sizeof(long int), 1, fd);
 			this_error += fwrite(&(tmp->bandwidth_measurements[start].bandwidth), sizeof(double), 1, fd);
 		}	
 		if(this_error != measurements*2)
@@ -676,7 +697,7 @@ void write_pattern_matching_file(void)
 	else
 	{
 		//write the number of access patterns
-		ret = fwrite(&access_pattern_count, sizeof(unsigned int), 1, fd);		
+		ret = fwrite(&access_pattern_count, sizeof(int), 1, fd);		
 		if(!ret)
 		{
 			agios_print("PANIC! Could not write to pattern matching file\n");
@@ -708,7 +729,7 @@ void write_pattern_matching_file(void)
 			agios_list_for_each_entry(next, &tmp->next_patterns, list)
 			{
 				this_error += fwrite(&next->pattern->id, sizeof(int), 1, fd);
-				this_error += fwrite(&next->counter, sizeof(unsigned int), 1, fd);
+				this_error += fwrite(&next->counter, sizeof(int), 1, fd);
 				this_error += fwrite(&next->probability, sizeof(int), 1, fd);
 			}	
 			if(this_error != pat_count*3)
@@ -726,7 +747,7 @@ void write_pattern_matching_file(void)
 		}
 
 		//last information for the pattern matching file: the maximum dtw difference observed so far
-		error = fwrite(&max_dtw_result, sizeof(unsigned long long int), 1, fd);
+		error = fwrite(&max_dtw_result, sizeof(long long int), 1, fd);
 		if(error != 1)
 			agios_print("PANIC! Could not write maximum dtw result to pattern matching file\n");
 		fclose(fd);

@@ -10,7 +10,7 @@
  *		time for different request sizes. It also provides the sequential
  *		to random throughput ratio. These values are provided to AGIOS 
  *		through an input file generated with SeRRa.
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
@@ -28,7 +28,7 @@
 #include "agios_request.h"
 
 static int intervals=0;
-static unsigned long int **interval_sizes;
+static long int **interval_sizes;
 static double ***funcs;
 
 #define SEQUENTIAL_WRITE 0
@@ -64,11 +64,11 @@ void read_access_times_functions(char *filename)
 		error_access_times_file(filename,fd);
 
 	//allocate enough space for the data structures
-	interval_sizes = (unsigned long int **)malloc(sizeof(unsigned long int *)*intervals);
+	interval_sizes = (long int **)malloc(sizeof(long int *)*intervals);
 	funcs = (double ***)malloc(sizeof(double **)*intervals);
 	for(i=0; i<intervals; i++)
 	{
-		interval_sizes[i] = (unsigned long int *)malloc(sizeof(unsigned long int)*2);
+		interval_sizes[i] = (long int *)malloc(sizeof(long int)*2);
 		funcs[i] = (double **)malloc(sizeof(double *)*4);
 		for(j=0; j<4; j++)
 			funcs[i][j] = (double *)malloc(sizeof(double)*2);
@@ -93,7 +93,7 @@ void read_access_times_functions(char *filename)
 	fclose(fd);
 }
 
-unsigned long long int get_access_time(unsigned long int size, int operation)
+long long int get_access_time(long int size, int operation)
 {
 	int inter=intervals-1;
 	int i, index;
@@ -116,13 +116,13 @@ unsigned long long int get_access_time(unsigned long int size, int operation)
 	else
 		index = SEQUENTIAL_WRITE;
 
-//	debug("looking for access time to a request of %lu bytes (%f Kbytes), type %d. It belongs to the interval %d, function is %lfx + %lf, results in %llu ns\n", size, this_size, operation, inter, funcs[inter][index][0], funcs[inter][index][1], (unsigned long long int) ( (funcs[inter][index][0]*this_size) + funcs[inter][index][1]));
+//	debug("looking for access time to a request of %lu bytes (%f Kbytes), type %d. It belongs to the interval %d, function is %lfx + %lf, results in %llu ns\n", size, this_size, operation, inter, funcs[inter][index][0], funcs[inter][index][1], (long long int) ( (funcs[inter][index][0]*this_size) + funcs[inter][index][1]));
 
 	//time = ax + b 
-	return (unsigned long long int)(funcs[inter][index][0]*this_size) + funcs[inter][index][1];
+	return (long long int)(funcs[inter][index][0]*this_size) + funcs[inter][index][1];
 }
 
-float get_access_ratio(unsigned long int size, int operation)
+float get_access_ratio(long int size, int operation)
 {
 	int inter=intervals-1;
 	int i, index, index_random;

@@ -72,17 +72,17 @@ void agios_exit(void);
 
 
 #ifdef ORANGEFS_AGIOS
-int agios_add_request(char *file_id, short int type, unsigned long int offset,
-		       unsigned long int len, int64_t data, struct client *clnt, unsigned int app_id);
+int agios_add_request(char *file_id, short int type, long int offset,
+		       long int len, int64_t data, struct client *clnt, int app_id);
 #else
-int agios_add_request(char *file_id, short int type, unsigned long int offset,
-		       unsigned long int len, void * data, struct client *clnt, unsigned int app_id);
+int agios_add_request(char *file_id, short int type, long int offset,
+		       long int len, void * data, struct client *clnt, int app_id);
 #endif
-int agios_release_request(char *file_id, short int type, unsigned long int len, unsigned long int offset);
+int agios_release_request(char *file_id, short int type, long int len, long int offset);
 
-int agios_set_stripe_size(char *file_id, unsigned int stripe_size);
+int agios_set_stripe_size(char *file_id, int stripe_size);
 
-int agios_cancel_request(char *file_id, short int type, unsigned long int len, unsigned long int offset);
+int agios_cancel_request(char *file_id, short int type, long int len, long int offset);
 
 void agios_print_stats_file(char *filename);
 void agios_reset_stats(void);

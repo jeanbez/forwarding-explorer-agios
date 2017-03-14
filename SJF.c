@@ -1,22 +1,18 @@
 /* File:	SJF.c
- * Created: 	2015 
+ * Created: 	2014 
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the shortest job first scheduling algorithm
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
  *		INRIA France
  *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -49,7 +45,7 @@
 #include "agios_config.h"
 #include "hash.h"
 
-inline int SJF_check_queue(struct related_list_t *related_list, unsigned long int min_size)
+int SJF_check_queue(struct related_list_t *related_list, long int min_size)
 {
 	if(related_list->current_size <= 0) //we dont have requests, cannot select this queue
 		return 0; 
@@ -66,7 +62,7 @@ struct related_list_t *SJF_get_shortest_job(int *current_hash)
 {
 	int i;
 	struct agios_list_head *reqfile_l;
-	unsigned long int min_size = ULONG_MAX;
+	long int min_size = LONG_MAX;
 	struct related_list_t *chosen_queue=NULL;
 	int chosen_hash=0;
 	struct request_file_t *req_file;

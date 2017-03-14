@@ -51,15 +51,15 @@
  ***********************************************************************************************************/
 struct global_statistics_t 
 { 
-	unsigned long int total_reqnb; //we have a similar counter in consumer.c, but this one can be reset, that one is fixed (never set to 0, counts through the whole execution)
+	long int total_reqnb; //we have a similar counter in consumer.c, but this one can be reset, that one is fixed (never set to 0, counts through the whole execution)
 //to measure time between requests
-	unsigned long long int global_req_time; 
-	unsigned long int global_min_req_time;
-	unsigned long int global_max_req_time;
+	long long int global_req_time; 
+	long int global_min_req_time;
+	long int global_max_req_time;
 	//to measure request size
-	unsigned long long int global_req_size;
-	unsigned long int global_min_req_size; 
-	unsigned long int global_max_req_size;
+	long long int global_req_size;
+	long int global_min_req_size; 
+	long int global_max_req_size;
 };
 static struct timespec last_req; 
 static struct global_statistics_t stats_for_file;
@@ -72,10 +72,10 @@ static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER;
  * LOCAL COPIES OF PARAMETERS *
  ***********************************************************************************************************/
 static int *proc_algs; //the list of the last PROC_ALGS_SIZE selected scheduling algorithms
-static unsigned long int *proc_algs_timestamps; //the timestamps of the last PROC_ALGS_SIZE algorithms selections
+static long int *proc_algs_timestamps; //the timestamps of the last PROC_ALGS_SIZE algorithms selections
 static int proc_algs_start, proc_algs_end=0; //indexes to access the proc_algs list 
 
-inline void proc_set_new_algorithm(int alg)
+void proc_set_new_algorithm(int alg)
 {
 	struct timespec now;
 
@@ -92,7 +92,7 @@ inline void proc_set_new_algorithm(int alg)
 			proc_algs_start = 0;
 	}
 }
-inline unsigned long int *proc_get_alg_timestamps(int *start, int *end)
+long int *proc_get_alg_timestamps(int *start, int *end)
 {
 	*start = proc_algs_start;
 	*end = proc_algs_end;
@@ -124,7 +124,7 @@ static int hash_position;
  ***********************************************************************************************************/
 void update_local_stats(struct related_list_statistics_t *stats, struct request_t *req)
 {
-	unsigned long int elapsedtime=0;
+	long int elapsedtime=0;
 	long int this_distance;
 
 	//update local statistics on time between requests
@@ -166,7 +166,7 @@ void update_local_stats(struct related_list_statistics_t *stats, struct request_
 	if(req->io_data.len < stats->min_req_size)
 		stats->min_req_size = req->io_data.len;
 }
-void update_global_stats_newreq(struct global_statistics_t *stats, struct request_t *req, unsigned long int elapsedtime)
+void update_global_stats_newreq(struct global_statistics_t *stats, struct request_t *req, long int elapsedtime)
 {
 
 	stats->total_reqnb++;
@@ -191,7 +191,7 @@ void update_global_stats_newreq(struct global_statistics_t *stats, struct reques
  */
 void proc_stats_newreq(struct request_t *req)
 {
-	unsigned long int elapsedtime=0;
+	long int elapsedtime=0;
 
 	req->globalinfo->stats_file.receivedreq_nb++; 
 	req->globalinfo->stats_window.receivedreq_nb++; 
@@ -230,10 +230,10 @@ void _reset_global_reqstats(struct global_statistics_t *stats)
 {
 	stats->total_reqnb=0;
 	stats->global_req_time = 0;
-	stats->global_min_req_time = ~0;
+	stats->global_min_req_time = LONG_MAX;
 	stats->global_max_req_time = 0;
 	stats->global_req_size = 0;
-	stats->global_min_req_size = ~0;
+	stats->global_min_req_size = LONG_MAX;
 	stats->global_max_req_size=0;
 }
 void reset_global_reqstats(void)
@@ -265,12 +265,12 @@ void reset_stats_window_related_list(struct related_list_t *related_list)
 	related_list->stats_window.processed_req_time = 0;
 
 	related_list->stats_window.total_req_size=0;
-	related_list->stats_window.min_req_size=~0;
+	related_list->stats_window.min_req_size=LONG_MAX;
 	related_list->stats_window.max_req_size=0;
 
 	related_list->stats_window.max_request_time = 0;
 	related_list->stats_window.total_request_time = 0;
-	related_list->stats_window.min_request_time = ~0;
+	related_list->stats_window.min_request_time = LONG_MAX;
 
 	related_list->stats_window.avg_distance=0;
 	related_list->stats_window.avg_distance_count=1;
@@ -440,10 +440,10 @@ void print_predicted_stats_start(void)
 
 void predicted_stats_show_related_list(struct related_list_t *related, const char *list_name)
 {
-	unsigned long int min_req_size, avg_req_size;
+	long int min_req_size, avg_req_size;
 	double avg_agg_size;
 
-	if(related->stats_file.min_req_size == ~0)
+	if(related->stats_file.min_req_size == LONG_MAX)
 		min_req_size = 0;
 	else
 		min_req_size = related->stats_file.min_req_size;
@@ -539,18 +539,18 @@ void stats_show_predicted(void)
 
 void stats_show_related_list(struct related_list_t *related, const char *list_name)
 {
-	unsigned long int min_request_time, avg_request_time;
-	unsigned long int min_req_size, avg_req_size;
+	long int min_request_time, avg_request_time;
+	long int min_req_size, avg_req_size;
 	double avg_agg_size;
 	double bandwidth=0.0;
 	long double tmp_time;
 
-	if(related->stats_file.min_request_time == ~0)
+	if(related->stats_file.min_request_time == LONG_MAX)
 		min_request_time = 0;
 	else
 		min_request_time = related->stats_file.min_request_time;
 
-	if(related->stats_file.min_req_size == ~0)
+	if(related->stats_file.min_req_size == LONG_MAX)
 		min_req_size = 0;
 	else
 		min_req_size = related->stats_file.min_req_size;
@@ -641,8 +641,8 @@ static void stats_show_ending(struct seq_file *s, void *v)
 void stats_show_ending(void)
 #endif
 {
-	unsigned long int global_avg_time;
-	unsigned long int global_avg_size;
+	long int global_avg_time;
+	long int global_avg_size;
 	double *bandwidth;
 	int i, len;
 	char *band_str = malloc(sizeof(char)*50*config_agios_performance_values);
@@ -755,12 +755,12 @@ void reset_stats_related_list(struct related_list_t *related_list)
 	related_list->stats_file.processed_req_time = 0;
 
 	related_list->stats_file.total_req_size=0;
-	related_list->stats_file.min_req_size=~0;
+	related_list->stats_file.min_req_size=LONG_MAX;
 	related_list->stats_file.max_req_size=0;
 
 	related_list->stats_file.max_request_time = 0;
 	related_list->stats_file.total_request_time = 0;
-	related_list->stats_file.min_request_time = ~0;
+	related_list->stats_file.min_request_time = LONG_MAX;
 
 	related_list->stats_file.avg_distance=0;
 	related_list->stats_file.avg_distance_count=1;
@@ -849,7 +849,7 @@ void agios_print_stats_file(char *filename)
 void proc_stats_init(void)
 {
 	proc_algs = agios_alloc(sizeof(int)*(config_agios_proc_algs+1));
-	proc_algs_timestamps = agios_alloc(sizeof(unsigned long int)*(config_agios_proc_algs+1));
+	proc_algs_timestamps = agios_alloc(sizeof(long int)*(config_agios_proc_algs+1));
 	proc_algs_start = proc_algs_end = 0;
 	
 #ifdef AGIOS_KERNEL_MODULE

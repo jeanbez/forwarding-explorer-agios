@@ -3,20 +3,16 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the shortest remaining time first scheduling algorithm
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
  *		INRIA France
  *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -48,7 +44,7 @@
 #include "hash.h"
 #include "agios_request.h"
 
-int SRTF_check_queue(struct related_list_t *related_list, struct related_list_t *predicted_list, unsigned long int *min_size)
+int SRTF_check_queue(struct related_list_t *related_list, struct related_list_t *predicted_list, long int *min_size)
 {
 	if(related_list->current_size <= 0) //we dont have requests in this queue, it cannot be selected
 		return 0;
@@ -66,7 +62,7 @@ struct related_list_t *SRTF_select_a_queue(int *current_hash)
 {
 	int i;
 	struct agios_list_head *reqfile_l;
-	unsigned long int min_size = ULONG_MAX;
+	long int min_size = LONG_MAX;
 	struct related_list_t *chosen_queue=NULL;
 	struct request_file_t *req_file;
 	int evaluated_reqfiles=0;

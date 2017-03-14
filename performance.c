@@ -3,21 +3,17 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the release function, called by the user after processing requests.
  *		It keeps performance measurements and handles the synchronous approach.
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
  *		INRIA France
  *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -36,14 +32,14 @@
 #include "agios_config.h"
 #include "agios_request.h"
 
-unsigned long int agios_processed_reqnb; //processed requests counter. I've decided not to protect it with a mutex although it is used by two threads. The library's user calls the release function, where this variable is modified. The scheduling thread reads it in the process_requests function. Since it is not critical to have the most recent value there, no mutex.
+long int agios_processed_reqnb; //processed requests counter. I've decided not to protect it with a mutex although it is used by two threads. The library's user calls the release function, where this variable is modified. The scheduling thread reads it in the process_requests function. Since it is not critical to have the most recent value there, no mutex.
 
 /************************************************************************************************************
  * GLOBAL PERFORMANCE METRICS
  ************************************************************************************************************/
-static unsigned long long int *performance_time; 
-static unsigned long long int *performance_size;
-static unsigned long int *performance_timestamps;
+static long long int *performance_time; 
+static long long int *performance_size;
+static long int *performance_timestamps;
 int *performance_algs;
 int performance_start, performance_end;
 static pthread_mutex_t performance_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -54,9 +50,9 @@ static pthread_mutex_t performance_mutex = PTHREAD_MUTEX_INITIALIZER;
  * used by the proc module to write the stats file
  * must NOT hold performance_mutex
  */
-unsigned long long int agios_get_performance_size(void)
+long long int agios_get_performance_size(void)
 {
-	unsigned long long int ret=0;
+	long long int ret=0;
 	int i;
 	agios_mutex_lock(&performance_mutex);
 	i = performance_start;
@@ -77,9 +73,9 @@ unsigned long long int agios_get_performance_size(void)
  * used by the proc module to write the stats file
  * must NOT hold performance_mutex
  */
-unsigned long long int agios_get_performance_time(void)
+long long int agios_get_performance_time(void)
 {
-	unsigned long long int ret=0;
+	long long int ret=0;
 	int i;
 	agios_mutex_lock(&performance_mutex);
 	i = performance_start;
@@ -126,7 +122,7 @@ double * agios_get_performance_bandwidth()
 /*
  * returns the index of the most recent scheduling algorithm (the current one)
  */
-inline int agios_performance_get_latest_index()
+int agios_performance_get_latest_index()
 {
 	int i;
 	i = performance_end-1;
@@ -183,14 +179,14 @@ int agios_performance_init(void)
 		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
 		return -ENOMEM;
 	}
-	performance_time = (unsigned long long int *)malloc(sizeof(unsigned long long int)*config_agios_performance_values);
+	performance_time = (long long int *)malloc(sizeof(long long int)*config_agios_performance_values);
 	if(!performance_time)
 	{
 		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
 		agios_free(performance_algs);
 		return -ENOMEM;
 	}
-	performance_size = (unsigned long long int *)malloc(sizeof(unsigned long long int)*config_agios_performance_values);
+	performance_size = (long long int *)malloc(sizeof(long long int)*config_agios_performance_values);
 	if(!performance_size)
 	{
 		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
@@ -198,7 +194,7 @@ int agios_performance_init(void)
 		agios_free(performance_time);
 		return -ENOMEM;
 	}
-	performance_timestamps = (unsigned long int *)malloc(sizeof(unsigned long int)*config_agios_performance_values);
+	performance_timestamps = (long int *)malloc(sizeof(long int)*config_agios_performance_values);
 	if(!performance_timestamps)
 	{
 		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
@@ -306,15 +302,15 @@ void print_all_performance_data()
 /************************************************************************************************************
  * RELEASE FUNCTION, CALLED BY THE USER AFTER PROCESSING A REQUEST
  ************************************************************************************************************/
-int agios_release_request(char *file_id, short int type, unsigned long int len, unsigned long int offset)
+int agios_release_request(char *file_id, short int type, long int len, long int offset)
 {
 	struct request_file_t *req_file;
-	unsigned long hash_val;
+	long hash_val;
 	struct agios_list_head *list;
 	struct related_list_t *related;
 	struct request_t *req;
 	short int found=0;
-	unsigned long int elapsed_time;
+	long int elapsed_time;
 	int index;
 	short int previous_needs_hashtable;
 

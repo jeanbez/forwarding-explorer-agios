@@ -3,20 +3,16 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the MLF scheduling algorithm
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
  *		INRIA France
  *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -103,7 +99,7 @@ struct request_t *applyMLFonlist(struct related_list_t *reqlist)
 }
 
 /*selects a request from the queues associated with the file req_file*/
-inline struct request_t *MLF_select_request(struct request_file_t *req_file)
+struct request_t *MLF_select_request(struct request_file_t *req_file)
 {
 	struct request_t *req=NULL;
 
@@ -127,7 +123,7 @@ void MLF(void *clnt)
 	struct request_t *req;
 	struct agios_list_head *reqfile_l;
 	struct request_file_t *req_file;
-	unsigned int smaller_waiting_time=~0;	
+	int smaller_waiting_time=INT_MAX;	
 	struct request_file_t *swt_file=NULL;
 	int starting_hash = MLF_current_hash;
 	int processed_requests = 0;
@@ -196,7 +192,7 @@ void MLF(void *clnt)
 					agios_wait(smaller_waiting_time, swt_file->file_id);	
 					swt_file->waiting_time = 0;
 					swt_file = NULL;
-					smaller_waiting_time = ~0;
+					smaller_waiting_time = INT_MAX;
 				}	
 				processed_requests=0; /*restart the counting*/
 			} 

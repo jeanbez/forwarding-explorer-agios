@@ -1,3 +1,25 @@
+/* File:	ARMED_BANDIT.c
+ * Created: 	2016 
+ * License:	GPL version 3
+ * Author:
+ *		Francieli Zanon Boito <francielizanon (at) gmail.com>
+ *
+ * Description:
+ *		This file is part of the AGIOS I/O Scheduling tool.
+ *		It provides the armed bandit implementation. It is a scheduling algorithm
+ *		that keeps track of performance with different algorithms and dynamically
+ *		decides the next scheduling algorithm.
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
+ *
+ * Contributors:
+ *		Federal University of Rio Grande do Sul (UFRGS)
+ *		INRIA France
+ *
+ *		This program is distributed in the hope that it will be useful,
+ * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
 #include "agios_config.h"
 #include "iosched.h"
 #include "common_functions.h"
@@ -18,7 +40,7 @@ static int current_sched=0; //current scheduling algorithm in use
 static short int first_performance_measurement;
 
 //This function is called by the PATTERN_MATCHING algorithm because usually the ARMED_BANDIT one keeps its current scheduler updated. However, ARMED_BANDIT is not making the decisions about the current_scheduler if the PATTERN_MATCHING is running, but it needs to know which one is the current one so it will keep update performance measurements.
-inline void ARMED_BANDIT_set_current_sched(int new_sched)
+void ARMED_BANDIT_set_current_sched(int new_sched)
 {
 	current_sched = new_sched;
 	AB_table[current_sched].selection_counter++;
@@ -250,12 +272,12 @@ void recalculate_AB_probabilities(void)
 //update the observed bandwidth for a scheduling algorithm after using it for a period of time
 //we keep a best bandwidth cache (best bandwidth gives the index of the scheduling algorithm for which we have observed the highest bandwidth) to make it easier to recalculate the probabilities
 //the cleanup flag says if the function needs to free recent_measurements before returning
-unsigned long long int ARMED_BANDIT_update_bandwidth(double *recent_measurements, short int cleanup)
+long long int ARMED_BANDIT_update_bandwidth(double *recent_measurements, short int cleanup)
 {
 	int i;
 	//int j;
 	struct timespec this_time;
-	unsigned long long timestamp;
+	long long timestamp;
 
 	PRINT_FUNCTION_NAME;
 
@@ -306,7 +328,7 @@ unsigned long long int ARMED_BANDIT_update_bandwidth(double *recent_measurements
 }
 
 //this function does the selection of next algorithm, but without the part where we update performance information. This is useful because the PATTERN_MATCHING algorithm may use ARMED_BANDIT to  make decisions when it does not have enough information to do so itself
-int ARMED_BANDIT_aux_select_next_algorithm(unsigned long int timestamp)
+int ARMED_BANDIT_aux_select_next_algorithm(long int timestamp)
 {
 	int next_alg=-1;
 	print_all_armed_bandit_information();
@@ -354,7 +376,7 @@ int ARMED_BANDIT_aux_select_next_algorithm(unsigned long int timestamp)
 //this function is called periodically to select a new scheduling algorithm
 int ARMED_BANDIT_select_next_algorithm(void)
 {
-	unsigned long int timestamp;
+	long int timestamp;
 
 	PRINT_FUNCTION_NAME;
 
@@ -376,7 +398,7 @@ int ARMED_BANDIT_select_next_algorithm(void)
 	return ARMED_BANDIT_aux_select_next_algorithm(timestamp);
 
 }
-void write_migration_end(unsigned long long int timestamp)
+void write_migration_end(long long int timestamp)
 {
 	fprintf(ab_trace, "Finished migrating data structures at %llu\n-----------------------------------------------------\n", timestamp);
 	fflush(ab_trace);

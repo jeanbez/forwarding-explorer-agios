@@ -9,14 +9,12 @@
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It implements the timeline data structure used by some schedulers to keep requests
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
  *		INRIA France
  *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -52,7 +50,7 @@ static pthread_mutex_t timeline_mutex = PTHREAD_MUTEX_INITIALIZER;
  *	Must NOT be holding timeline_mutex.
  *	Must call timeline_unlock later.
  */ 
-inline struct agios_list_head *timeline_lock(void)
+struct agios_list_head *timeline_lock(void)
 {
 	agios_mutex_lock(&timeline_mutex);
 	return &timeline;
@@ -64,7 +62,7 @@ inline struct agios_list_head *timeline_lock(void)
  * Locking:
  *	Must be holding timeline_mutex.
  */ 
-inline void timeline_unlock(void)
+void timeline_unlock(void)
 {
 	agios_mutex_unlock(&timeline_mutex);
 }
@@ -75,12 +73,12 @@ inline void timeline_unlock(void)
  * Must have timeline_mutex
  */
 
-void timeline_add_req(struct request_t *req, unsigned long hash, struct request_file_t *given_req_file)
+void timeline_add_req(struct request_t *req, long hash, struct request_file_t *given_req_file)
 {
 	__timeline_add_req(req, hash, given_req_file, &timeline);
 }
 
-void __timeline_add_req(struct request_t *req, unsigned long hash_val, struct request_file_t *given_req_file, struct agios_list_head *this_timeline)
+void __timeline_add_req(struct request_t *req, long hash_val, struct request_file_t *given_req_file, struct agios_list_head *this_timeline)
 {
 	struct request_file_t *req_file = given_req_file;
 	struct request_t *tmp;
@@ -190,7 +188,7 @@ void reorder_timeline()
 {
 	struct agios_list_head *new_timeline;
 	struct request_t *req, *aux_req=NULL;
-	unsigned long hash;
+	long hash;
 
 	//initialize new timeline structure
 	new_timeline = (struct agios_list_head *)agios_alloc(sizeof(struct agios_list_head));
@@ -232,7 +230,7 @@ void reorder_timeline()
  * Locking: 
  *	Must have timeline_mutex
  */
-struct request_t *timeline_oldest_req(unsigned long *hash)
+struct request_t *timeline_oldest_req(long *hash)
 {
 	struct request_t *tmp;
 
@@ -251,7 +249,7 @@ struct request_t *timeline_oldest_req(unsigned long *hash)
 
 //initializes data structures
 //max_app_id is only relevant for EXCLUSIVE_TIME_WINDOW. Pass 0 otherwise to prevent unnecessary memory allocation
-inline void timeline_init(int max_app_id)
+void timeline_init(int max_app_id)
 {
 	int i;
 	init_agios_list_head(&timeline);
@@ -270,7 +268,7 @@ inline void timeline_init(int max_app_id)
 		}
 	}
 }
-inline void timeline_cleanup()
+void timeline_cleanup()
 {
 	list_of_requests_cleanup(&timeline);
 }

@@ -7,7 +7,7 @@
 //struct to hold information of a single performance measurement
 struct performance_info_t
 {
-	unsigned long int timestamp; //the moment this performance information was obtained
+	long int timestamp; //the moment this performance information was obtained
 	double bandwidth; 
 };
 //struct to hold multiple performance measurements from a scheduling algorithm
@@ -23,12 +23,12 @@ struct scheduler_info_t
 	struct agios_list_head list; //to be inserted in the performance list to each access pattern, used by PATTERN_MATCHING
 };
 
-inline void reset_scheduler_info(struct scheduler_info_t *info);
-inline void add_performance_measurement_to_sched_info(struct scheduler_info_t *info, unsigned long long timestamp, double bandwidth);
-short int check_validity_window(struct scheduler_info_t *info, unsigned long int now);
+void reset_scheduler_info(struct scheduler_info_t *info);
+void add_performance_measurement_to_sched_info(struct scheduler_info_t *info, long long timestamp, double bandwidth);
+short int check_validity_window(struct scheduler_info_t *info, long int now);
 void update_average_bandwidth(struct scheduler_info_t *info);
-inline void free_scheduler_info_t(struct scheduler_info_t **info);
-inline int get_performance_measurements_number(struct scheduler_info_t *info);
-inline int get_sched_info_number(struct agios_list_head *table);
-inline void add_measurement_to_performance_table(struct agios_list_head *table, int current_sched, unsigned long long timestamp, double bandwidth);
+void free_scheduler_info_t(struct scheduler_info_t **info);
+int get_performance_measurements_number(struct scheduler_info_t *info);
+int get_sched_info_number(struct agios_list_head *table);
+void add_measurement_to_performance_table(struct agios_list_head *table, int current_sched, long long timestamp, double bandwidth);
 #endif

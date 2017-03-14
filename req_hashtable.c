@@ -3,20 +3,16 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- * 		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It implements the hashtable data structure used by some schedulers to keep requests.
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
  *		INRIA France
  *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -77,7 +73,7 @@ int hashtable_init(void)
 
 	return 0;
 }
-inline void related_list_cleanup(struct related_list_t *related_list)
+void related_list_cleanup(struct related_list_t *related_list)
 {
 	list_of_requests_cleanup(&related_list->list);
 	list_of_requests_cleanup(&related_list->dispatch);
@@ -127,7 +123,7 @@ void hashtable_cleanup(void)
  * Locking:
  * 	Must be holding hashlist_locks[hash_val]
  */
-void hashtable_add_req(struct request_t *req, unsigned long hash_val, struct request_file_t *given_req_file)
+void hashtable_add_req(struct request_t *req, long hash_val, struct request_file_t *given_req_file)
 {
 	struct agios_list_head *hash_list = &hashlist[hash_val];
 	struct request_file_t *req_file = given_req_file;
@@ -215,7 +211,7 @@ void hashtable_add_req(struct request_t *req, unsigned long hash_val, struct req
  * Locking:
  *	Must be holding hashlist_locks[hash_val]
  */
-inline void __hashtable_del_req(struct request_t *req)
+void __hashtable_del_req(struct request_t *req)
 {
 	agios_list_del(&req->related);
 }
@@ -228,7 +224,7 @@ inline void __hashtable_del_req(struct request_t *req)
  */ 
 void hashtable_del_req(struct request_t *req)
 {
-	unsigned long hash_val = AGIOS_HASH_FN(req->file_id) % AGIOS_HASH_ENTRIES;
+	long hash_val = AGIOS_HASH_FN(req->file_id) % AGIOS_HASH_ENTRIES;
 
 	VERIFY_REQUEST(req);
 

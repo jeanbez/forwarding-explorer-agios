@@ -7,15 +7,12 @@
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the release function, called by the user after processing requests.
  *		It keeps performance measurements and handles the synchronous approach.
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
  *		INRIA France
- * 		Federal University of Santa Catarina (UFSC)
  *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -35,10 +32,10 @@
 
 //removes a request from the scheduling queues
 //returns 1 if success
-int agios_cancel_request(char *file_id, short int type, unsigned long int len, unsigned long int offset)
+int agios_cancel_request(char *file_id, short int type, long int len, long int offset)
 {
 	struct request_file_t *req_file;
-	unsigned long hash_val;
+	long hash_val;
 	struct agios_list_head *list;
 	struct request_t *req, *aux_req;
 	short int found=0;

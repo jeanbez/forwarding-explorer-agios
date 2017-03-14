@@ -9,14 +9,11 @@
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the exclusive time window scheduling algorithm
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
- *		Federal University of Santa Catarina (UFSC)
  *		INRIA France
- *
- *		inspired in Adrien Lebre's aIOLi framework implementation
  *	
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -67,7 +64,7 @@ void EXCLUSIVE_TW(void *clnt)
 {
 	short int update_time=0;
 	struct request_t *req;
-	unsigned long hash;
+	long hash;
 	
 	
 	PRINT_FUNCTION_NAME;

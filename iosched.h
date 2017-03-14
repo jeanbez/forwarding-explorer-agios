@@ -1,26 +1,3 @@
-/* File:	iosched.h
- * Created: 	2012 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It provides the implementation for the five scheduling algorithms. 
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- */
-
-
 #ifndef IOSCHED_H
 #define IOSCHED_H
 
@@ -96,8 +73,8 @@ void iosched_signal_synchronous(void);
 void iosched_wait_synchronous(void);
 
 //so other parts can get statistics
-extern unsigned long int time_spent_waiting;
-extern unsigned long int waiting_time_overlapped;
+extern long int time_spent_waiting;
+extern long int waiting_time_overlapped;
 
 
 //functions to I/O scheduling algorithm management (setting schedulers, initializing, etc)
@@ -114,10 +91,10 @@ void generic_post_process(struct request_t *req);
 void generic_cleanup(struct request_t *req);
 void generic_init();
 void waiting_algorithms_postprocess(struct request_t *req);
-inline void increment_sched_factor(struct request_t *req);
-inline struct request_t *checkSelection(struct request_t *req, struct request_file_t *req_file);
-void agios_wait(unsigned int  timeout, char *file);
-void update_waiting_time_counters(struct request_file_t *req_file, unsigned int *smaller_waiting_time, struct request_file_t **swt_file );
+void increment_sched_factor(struct request_t *req);
+struct request_t *checkSelection(struct request_t *req, struct request_file_t *req_file);
+void agios_wait(int  timeout, char *file);
+void update_waiting_time_counters(struct request_file_t *req_file, int *smaller_waiting_time, struct request_file_t **swt_file );
 
 
 /*TODO maybe we could tolerate some useless space between the two aggregated requests, since it is possible that, because of block sizes, this useless portion will be requested anyway*/

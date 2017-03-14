@@ -1,3 +1,25 @@
+/* File:	request_cache.c
+ * Created: 	2012 
+ * License:	GPL version 3
+ * Author:
+ *		Francieli Zanon Boito <francielizanon (at) gmail.com>
+ *
+ * Description:
+ *		This file is part of the AGIOS I/O Scheduling tool.
+ *		It handles the data structures that keep requests
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
+ *
+ * Contributors:
+ *		Federal University of Rio Grande do Sul (UFRGS)
+ *		INRIA France
+ *
+ *		inspired in Adrien Lebre's aIOLi framework implementation
+ *	
+ *		This program is distributed in the hope that it will be useful,
+ * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
 
 #ifndef AGIOS_KERNEL_MODULE
 #include <pthread.h> 
@@ -47,9 +69,9 @@ int current_reqfilenb; //files being accessed counter
 pthread_mutex_t current_reqnb_lock = PTHREAD_MUTEX_INITIALIZER; //lock to protect these counters
 
 //we increase this number at every new request, just so each one of them has an unique identifier
-static unsigned int last_timestamp=0; 
+static int last_timestamp=0; 
 
-inline int get_current_reqnb()
+int get_current_reqnb()
 {
 	int ret;
 	pthread_mutex_lock(&current_reqnb_lock);
@@ -57,14 +79,14 @@ inline int get_current_reqnb()
 	pthread_mutex_unlock(&current_reqnb_lock);
 	return ret;
 }
-inline void inc_current_reqnb()
+void inc_current_reqnb()
 {
 	pthread_mutex_lock(&current_reqnb_lock);
 	current_reqnb++;
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
 /*must hold mutex to the hashtable line*/
-inline void dec_current_reqnb(int hash)
+void dec_current_reqnb(int hash)
 {
 	pthread_mutex_lock(&current_reqnb_lock);
 	current_reqnb--;
@@ -72,20 +94,20 @@ inline void dec_current_reqnb(int hash)
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
 /*must hold mutex to the hashtable line*/
-inline void dec_many_current_reqnb(int hash, int value)
+void dec_many_current_reqnb(int hash, int value)
 {
 	pthread_mutex_lock(&current_reqnb_lock);
 	current_reqnb-= value;
 	hashlist_reqcounter[hash]-= value;
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
-inline void inc_current_reqfilenb()
+void inc_current_reqfilenb()
 {
 	pthread_mutex_lock(&current_reqnb_lock);
 	current_reqfilenb++;
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
-inline void dec_current_reqfilenb()
+void dec_current_reqfilenb()
 {
 	pthread_mutex_lock(&current_reqnb_lock);
 	current_reqfilenb--;
@@ -93,7 +115,7 @@ inline void dec_current_reqfilenb()
 }
 
 
-inline void print_request(struct request_t *req)
+void print_request(struct request_t *req)
 {
 	struct request_t *aux_req;
 
@@ -109,7 +131,7 @@ inline void print_request(struct request_t *req)
 		debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
 }
 
-inline void print_hashtable_line(int i)
+void print_hashtable_line(int i)
 {
 	struct agios_list_head *hash_list;
 	struct request_file_t *req_file;
@@ -170,8 +192,8 @@ void print_timeline(void)
 /**********************************************************************************************************************/
 /*	FUNCTIONS TO CHANGE THE CURRENT DATA STRUCTURE BETWEEN HASHTABLE AND TIMELINE	*/
 /**********************************************************************************************************************/
-void put_all_requests_in_timeline(struct agios_list_head *related_list, struct request_file_t *req_file, unsigned long hash);
-inline void put_this_request_in_timeline(struct request_t *req, unsigned long hash, struct request_file_t *req_file)
+void put_all_requests_in_timeline(struct agios_list_head *related_list, struct request_file_t *req_file, long hash);
+void put_this_request_in_timeline(struct request_t *req, long hash, struct request_file_t *req_file)
 {
 	//remove from queue
 	agios_list_del(&req->related);
@@ -188,7 +210,7 @@ inline void put_this_request_in_timeline(struct request_t *req, unsigned long ha
 
 }
 //take all requests from a list and place them in the timeline
-void put_all_requests_in_timeline(struct agios_list_head *related_list, struct request_file_t *req_file, unsigned long hash)
+void put_all_requests_in_timeline(struct agios_list_head *related_list, struct request_file_t *req_file, long hash)
 {
 	struct request_t *req, *aux_req=NULL;
 	
@@ -202,9 +224,9 @@ void put_all_requests_in_timeline(struct agios_list_head *related_list, struct r
 		put_this_request_in_timeline(aux_req, hash, req_file);
 }
 void put_all_requests_in_hashtable(struct agios_list_head *list);
-inline void put_req_in_hashtable(struct request_t *req)
+void put_req_in_hashtable(struct request_t *req)
 {
-	unsigned long hash;
+	long hash;
 
 	hash = AGIOS_HASH_STR(req->file_id) % AGIOS_HASH_ENTRIES;
 	agios_list_del(&req->related);
@@ -274,9 +296,9 @@ void request_cache_free(struct request_t *req)
  * to values passed as arguments.
  */
 #ifdef ORANGEFS_AGIOS
-struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, unsigned long int arrival_time, short int state, unsigned int app_id)
+struct request_t * request_constructor(char *file_id, short int type, long int offset, long int len, int64_t data,  long int arrival_time, short int state, int app_id)
 #else
-struct request_t * request_constructor(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, unsigned long int arrival_time, short int state, unsigned int app_id) 
+struct request_t * request_constructor(char *file_id, short int type, long int offset, long int len, void * data, long int arrival_time, short int state, int app_id) 
 #endif
 
 {
@@ -330,12 +352,12 @@ void request_file_init_related_statistics(struct related_list_statistics_t *stat
 	stats->processed_req_time=0;
 
 	stats->total_req_size = 0;
-	stats->min_req_size = ~0;
+	stats->min_req_size = LONG_MAX;
 	stats->max_req_size=0;
 
 	stats->max_request_time = 0;
 	stats->total_request_time = 0;
-	stats->min_request_time = ~0;
+	stats->min_request_time = LONG_MAX;
 
 	stats->avg_distance = -1;
 	stats->avg_distance_count = 1;
@@ -493,7 +515,7 @@ int request_cache_init(int max_app_id)
 
 //free the space used by a struct request_t, which describes a request
 //if the request is aggregated (with multiple requests inside), it will recursively free these requests as well
-inline void request_cleanup(struct request_t *aux_req)
+void request_cleanup(struct request_t *aux_req)
 {
 	//remove the request from its queue
 	agios_list_del(&aux_req->related);
@@ -727,16 +749,16 @@ struct request_file_t *find_req_file(struct agios_list_head *hash_list, char *fi
 }
 
 #ifdef ORANGEFS_AGIOS
-int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, int64_t data, struct client *clnt, unsigned int app_id)
+int agios_add_request(char *file_id, short int type, long int offset, long int len, int64_t data, struct client *clnt, int app_id)
 #else
-int agios_add_request(char *file_id, short int type, unsigned long int offset, unsigned long int len, void * data, struct client *clnt, unsigned int app_id) 
+int agios_add_request(char *file_id, short int type, long int offset, long int len, void * data, struct client *clnt, int app_id) 
 #endif
 {
 	struct request_t *req;
 	struct timespec arrival_time;
-	unsigned long hash;
+	long hash;
 	short int previous_needs_hashtable; 
-	unsigned long int timestamp;
+	long int timestamp;
 	
 	PRINT_FUNCTION_NAME;
 
@@ -821,10 +843,10 @@ int agios_add_request(char *file_id, short int type, unsigned long int offset, u
 }
 
 //when agios is used to schedule requests to a parallel file system server, the stripe size is relevant to some calculations (specially for algorithm selection). A default value is provided through the configuration file, but many file systems (like PVFS) allow for each file to have different configurations. In this situation, the user could call this function to update a specific file's stripe size
-int agios_set_stripe_size(char *file_id, unsigned int stripe_size)
+int agios_set_stripe_size(char *file_id, int stripe_size)
 {
 	struct request_file_t *req_file;
-	unsigned long hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;
+	long hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;
 	short int previous_needs_hashtable;
 
 	//find the structure for this file (and acquire lock)

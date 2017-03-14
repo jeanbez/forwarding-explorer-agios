@@ -3,8 +3,6 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
@@ -143,7 +141,7 @@ static struct timespec last_algorithm_update; //the time at the last time we've 
 //unlocks the mutex protecting the data structure where the request is being held.
 //if it is the hashtable, then hash gives the line of the table (because we have one mutex per line)
 //if hash= -1, we are using the timeline (a simple list with only one mutex)
-inline void unlock_structure_mutex(int hash)
+void unlock_structure_mutex(int hash)
 {
 	if(current_scheduler->needs_hashtable)
 		hashtable_unlock(hash);
@@ -153,7 +151,7 @@ inline void unlock_structure_mutex(int hash)
 //locks the mutex protecting the data structure where the request is being held.
 //if it is the hashtable, then hash gives the line of the table (because we have one mutex per line)
 //if hash= -1, we are using the timeline (a simple list with only one mutex)
-inline void lock_structure_mutex(int hash)
+ void lock_structure_mutex(int hash)
 {
 	if(current_scheduler->needs_hashtable)
 		hashtable_lock(hash);
@@ -161,7 +159,7 @@ inline void lock_structure_mutex(int hash)
 		timeline_lock();
 }
 
-inline void put_this_request_in_dispatch(struct request_t *req, unsigned long int this_time, struct agios_list_head *dispatch)
+void put_this_request_in_dispatch(struct request_t *req, long int this_time, struct agios_list_head *dispatch)
 {
 	agios_list_add_tail(&req->related, dispatch);
 	req->dispatch_timestamp = this_time;
@@ -179,7 +177,7 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 	struct request_t *req, *aux_req=NULL;
 	short int update_time=0;	
 	struct timespec now;
-	unsigned long int this_time;
+	long int this_time;
 	
 	if(!head_req)
 		return 0; /*whaaaat?*/

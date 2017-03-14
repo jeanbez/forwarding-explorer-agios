@@ -21,6 +21,7 @@
 
 #include <libconfig.h>
 #include <string.h>
+#include <assert.h>
 
 #include "agios_config.h"
 #include "iosched.h"
@@ -62,8 +63,8 @@ int config_agios_proc_algs = 1000;
 int config_waiting_time = 900000;
 int config_aioli_quantum = 8192;
 int config_mlf_quantum = 8192;
-unsigned long int config_tw_size = 1000000000L;
-unsigned long int config_exclusive_tw_window_duration=250000000L; //250ms
+long int config_tw_size = 1000000000L;
+long int config_exclusive_tw_window_duration=250000000L; //250ms
 
 int config_minimum_pattern_size = 5;
 int config_maximum_pattern_difference = 10;
@@ -72,19 +73,19 @@ char *config_pattern_filename=NULL;
 int config_static_pattern_matching=0;
 
 
-inline void config_set_waiting_time(int value)
+void config_set_waiting_time(int value)
 {
 	config_waiting_time = value;
 }
-inline void config_set_aioli_quantum(int value)
+void config_set_aioli_quantum(int value)
 {
 	config_aioli_quantum = value;
 }
-inline void config_set_mlf_quantum(int value)
+void config_set_mlf_quantum(int value)
 {
 	config_mlf_quantum = value;
 }
-inline void config_set_starting_algorithm(int value)
+void config_set_starting_algorithm(int value)
 {
 	config_agios_starting_algorithm = value;
 	if((config_agios_starting_algorithm == DYN_TREE_SCHEDULER) || (config_agios_starting_algorithm == ARMED_BANDIT_SCHEDULER))
@@ -94,25 +95,25 @@ inline void config_set_starting_algorithm(int value)
 	}
 	
 }
-inline void config_set_trace_predict(short int value)
+void config_set_trace_predict(short int value)
 {
 	config_trace_agios_predict = value;
 	if((config_trace_agios_predict) && (!config_trace_agios))
 		config_trace_agios_predict=0;
 }
-inline void config_set_trace_full(short int value)
+void config_set_trace_full(short int value)
 {
 	config_trace_agios_full = value;
 	if((config_trace_agios_full) && (!config_trace_agios))
 		config_trace_agios_full = 0;
 }
-inline void config_set_predict_request_aggregation(short int value)
+void config_set_predict_request_aggregation(short int value)
 {
 	config_predict_agios_request_aggregation = value;
 	if((config_predict_agios_request_aggregation) && (!config_predict_agios_read_traces))
 		config_predict_agios_request_aggregation = 0;
 }
-inline void config_set_trace_file_name(short int index, const char *value)
+void config_set_trace_file_name(short int index, const char *value)
 {
 	if(index == 1)
 	{
@@ -125,17 +126,17 @@ inline void config_set_trace_file_name(short int index, const char *value)
 		strcpy(config_trace_agios_file_sufix, value);
 	}
 }
-inline void config_set_simple_trace_file_prefix(const char *value)
+void config_set_simple_trace_file_prefix(const char *value)
 {
 	config_simple_trace_agios_file_prefix = malloc(sizeof(char)*(strlen(value)+1));
 	strcpy(config_simple_trace_agios_file_prefix, value);
 }
-inline void config_set_access_times_file(const char *value)
+void config_set_access_times_file(const char *value)
 {
 	config_agios_access_times_file = (char *)malloc(sizeof(char)*(strlen(value)+1));
 	strcpy(config_agios_access_times_file, value);
 }
-inline void config_set_pattern_filename(const char *value)
+void config_set_pattern_filename(const char *value)
 {
 	config_pattern_filename = (char *)malloc(sizeof(char)*(strlen(value)+1));
 	if(!config_pattern_filename)
@@ -143,7 +144,7 @@ inline void config_set_pattern_filename(const char *value)
 	else
 		strcpy(config_pattern_filename, value);	
 }
-inline void config_agios_cleanup(void)
+void config_agios_cleanup(void)
 {
 	if(config_trace_agios_file_prefix)
 		free(config_trace_agios_file_prefix);
@@ -161,13 +162,13 @@ inline void config_agios_cleanup(void)
 //USER INFO
 //-------------------------------------------------------------------------------------------------------
 int config_agios_stripe_size = 32*1024;
-unsigned long int config_agios_max_trace_buffer_size = 1*1024*1024;
+int config_agios_max_trace_buffer_size = 1*1024*1024;
 
 //-------------------------------------------------------------------------------------------------------
 //SPREAD CONFIGURATION PARAMETERS TO OTHER MODULES
 //----------------------------------------------------------------------------------------------------------
 /*returns 0 in case of success*/
-inline short int read_configuration_file(char *config_file)
+short int read_configuration_file(char *config_file)
 {
 #ifndef AGIOS_KERNEL_MODULE 
 	int ret;
@@ -234,6 +235,7 @@ inline short int read_configuration_file(char *config_file)
 		enable_TW();
 	config_lookup_int(&agios_config, "library_options.time_window_size", &ret);
 	config_tw_size = ret*1000000L; //convert to ns
+	assert(config_tw_size >= 0);
 	config_lookup_int(&agios_config, "library_options.exclusive_tw_window_duration", &ret);
 	config_exclusive_tw_window_duration = ret*1000L; //convert us to ns
 
@@ -286,7 +288,7 @@ void config_print(void)
 		agios_just_print("\tSimplified trace files are named %s.*.%s\n", config_simple_trace_agios_file_prefix, config_trace_agios_file_sufix);
 		config_print_flag(config_trace_agios_predict, "\tTracing the Prediction Module's activities (for debug purposes)? ");
 		config_print_flag(config_trace_agios_full, "\tComplete tracing (for debug purposes)? ");
-		agios_just_print("\tTrace file buffer has size %lu bytes\n", config_agios_max_trace_buffer_size);
+		agios_just_print("\tTrace file buffer has size %d bytes\n", config_agios_max_trace_buffer_size);
 	}
 	agios_just_print("Default scheduling algorithm: %s\n", get_algorithm_name_from_index(config_agios_default_algorithm)); 
 	if(config_agios_default_algorithm == DYN_TREE_SCHEDULER)

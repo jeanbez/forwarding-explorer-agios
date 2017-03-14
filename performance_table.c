@@ -1,10 +1,31 @@
+/* File:	performance_table.c
+ * Created: 	2016 
+ * License:	GPL version 3
+ * Author:
+ *		Francieli Zanon Boito <francielizanon (at) gmail.com>
+ *
+ * Description:
+ *		This file is part of the AGIOS I/O Scheduling tool.
+ *		It provides a structure so the pattern matching appraoch and the armed bandit
+ *		algorithm may keep performance information.
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
+ *
+ * Contributors:
+ *		Federal University of Rio Grande do Sul (UFRGS)
+ *		INRIA France
+ *
+ *		This program is distributed in the hope that it will be useful,
+ * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
 #include <stdlib.h>
 #include "performance_table.h"
 #include "agios_config.h"
 #include "common_functions.h"
 
 //cleanup a scheduler_info_t structure
-inline void free_scheduler_info_t(struct scheduler_info_t **info)
+void free_scheduler_info_t(struct scheduler_info_t **info)
 {
 	if(*info)
 	{
@@ -16,7 +37,7 @@ inline void free_scheduler_info_t(struct scheduler_info_t **info)
 }
 
 //resets all information from a scheduler_info_t struct, except the "sched" field
-inline void reset_scheduler_info(struct scheduler_info_t *info)
+void reset_scheduler_info(struct scheduler_info_t *info)
 {
 	info->bandwidth = 0.0;
 	info->selection_counter=0;
@@ -31,7 +52,7 @@ inline void reset_scheduler_info(struct scheduler_info_t *info)
 }
 
 //gets the number of schedulers to which we have performance measurements in a performance table (the size of the list)
-inline int get_sched_info_number(struct agios_list_head *table)
+int get_sched_info_number(struct agios_list_head *table)
 {
 	int ret =0;
 	struct scheduler_info_t *tmp;
@@ -46,7 +67,7 @@ inline int get_sched_info_number(struct agios_list_head *table)
 	return ret;
 }
 //gets the number of measurements in a scheduler_info-t structure (they are stored in a circular list)
-inline int get_performance_measurements_number(struct scheduler_info_t *info)
+int get_performance_measurements_number(struct scheduler_info_t *info)
 {
 	int start = info->measurements_start;
 	int ret=0;
@@ -61,7 +82,7 @@ inline int get_performance_measurements_number(struct scheduler_info_t *info)
 }
 
 //updates information about a scheduler with a new performance measurement
-inline void add_performance_measurement_to_sched_info(struct scheduler_info_t *info, unsigned long long timestamp, double bandwidth)
+void add_performance_measurement_to_sched_info(struct scheduler_info_t *info, long long timestamp, double bandwidth)
 {
 	info->bandwidth_measurements[info->measurements_end].timestamp = timestamp;
 	info->bandwidth_measurements[info->measurements_end].bandwidth = bandwidth;
@@ -77,7 +98,7 @@ inline void add_performance_measurement_to_sched_info(struct scheduler_info_t *i
 			info->measurements_start=0;
 	}
 }
-inline void add_measurement_to_performance_table(struct agios_list_head *table, int current_sched, unsigned long long timestamp, double bandwidth)
+void add_measurement_to_performance_table(struct agios_list_head *table, int current_sched, long long timestamp, double bandwidth)
 {
 	struct scheduler_info_t *tmp;
 	short int found=0;
@@ -112,7 +133,7 @@ inline void add_measurement_to_performance_table(struct agios_list_head *table, 
 //checks the performance measurement list for a scheduling algorithm, discarding everything older than the validity window 
 //receives as parameters the scheduler info struct to be checked and the most recent timestamp;
 //returns 1 if something was discarded, 0 if the list if unchanged
-short int check_validity_window(struct scheduler_info_t *info, unsigned long int now)
+short int check_validity_window(struct scheduler_info_t *info, long int now)
 {
 	short int changed=0;
 

@@ -3,13 +3,11 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the timeorder and timeorder with aggregation scheduling algorithms 
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
@@ -50,7 +48,7 @@ void timeorder(void *clnt)
 {
 	struct request_t *req;	
 	short int update_time = 0;
-	unsigned long hash;
+	long hash;
 
 	PRINT_FUNCTION_NAME;
 	

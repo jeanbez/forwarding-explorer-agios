@@ -1,3 +1,23 @@
+/* File:	pattern_tracker.c
+ * Created: 	2016 
+ * License:	GPL version 3
+ * Author:
+ *		Francieli Zanon Boito <francielizanon (at) gmail.com>
+ *
+ * Description:
+ *		This file is part of the AGIOS I/O Scheduling tool.
+ *		It tracks accesses for the pattern matching approach implementation 
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
+ *
+ * Contributors:
+ *		Federal University of Rio Grande do Sul (UFRGS)
+ *		INRIA France
+ *
+ *		This program is distributed in the hope that it will be useful,
+ * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ */
+
 #include <string.h>
 
 #include "agios.h"
@@ -20,12 +40,12 @@ char * file_ids[MAXIMUM_FILE_NUMBER];
 short int agios_is_pattern_tracking = 0;
 
 //adds information about a new request to the tracked pattern
-inline void add_request_to_pattern(unsigned long int timestamp, unsigned long int offset, unsigned long int len, short int type, char *file_id)
+void add_request_to_pattern(long int timestamp, long int offset, long int len, short int type, char *file_id)
 {
 	if(agios_is_pattern_tracking) //so if the flag is not set (only the pattern matching algorithm sets it), this function will do nothing
 	{
 		int i;
-		unsigned long long int calculated_offset;
+		long long int calculated_offset;
 
 		agios_mutex_lock(&pattern_tracker_lock);
 
@@ -77,7 +97,7 @@ inline void add_request_to_pattern(unsigned long int timestamp, unsigned long in
 }
 
 //modify the current_pattern structure so the linked list of requests we were keeping while execution becomes an array
-inline void translate_list_to_time_series()
+void translate_list_to_time_series()
 {
 	struct pattern_tracker_req_info_t *tmp, *aux=NULL;
 	int i=0;
@@ -124,7 +144,7 @@ struct access_pattern_t *get_current_pattern()
 }
 
 
-inline void reset_current_pattern(short int first_execution)
+void reset_current_pattern(short int first_execution)
 {
 	int i;
 
@@ -166,7 +186,7 @@ void pattern_tracker_init()
 }
 
 //frees an access_pattern_t structure previously allocated
-inline void free_access_pattern_t(struct access_pattern_t **ap)
+void free_access_pattern_t(struct access_pattern_t **ap)
 {
 	if(*ap)
 	{

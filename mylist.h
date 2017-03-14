@@ -1,25 +1,3 @@
-/* File:	mylist.h
- * Created: 	2012 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		Copy of the list implementation from the Linux kernel
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- */
-
 #ifndef MYLIST_H
 #define MYLIST_H
 
@@ -50,22 +28,22 @@ struct agios_list_head
 
 void init_agios_list_head(struct agios_list_head *list);
 
-inline void __agios_list_add(struct agios_list_head *new, struct agios_list_head *prev, struct agios_list_head *next);
-inline void __agios_list_del(struct agios_list_head * prev, struct agios_list_head * next);
+void __agios_list_add(struct agios_list_head *new, struct agios_list_head *prev, struct agios_list_head *next);
+void __agios_list_del(struct agios_list_head * prev, struct agios_list_head * next);
 //insert new after head
-inline void agios_list_add(struct agios_list_head *new, struct agios_list_head *head);
+void agios_list_add(struct agios_list_head *new, struct agios_list_head *head);
 
 //insert new before head
-inline void agios_list_add_tail(struct agios_list_head *new, struct agios_list_head *head);
+void agios_list_add_tail(struct agios_list_head *new, struct agios_list_head *head);
 
 
 
 
-inline void agios_list_del(struct agios_list_head *entry);
+void agios_list_del(struct agios_list_head *entry);
 
 
-inline void agios_list_del_init(struct agios_list_head *entry);
+void agios_list_del_init(struct agios_list_head *entry);
 
-inline int agios_list_empty(const struct agios_list_head *head);
+int agios_list_empty(const struct agios_list_head *head);
 
 #endif

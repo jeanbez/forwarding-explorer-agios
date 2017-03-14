@@ -1,33 +1,11 @@
-/* File:	common_functions.h
- * Created: 	2012 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It defines some functions widely used by all other files, especially the ones
- *		that are different between kernel module and user-level library implementations, 
- *		besides timing functions and debug interface
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- */
-
 
 #ifndef _AGIOS_COMMON_FUNCTIONS_H_
 #define  _AGIOS_COMMON_FUNCTIONS_H_
 
 #include "agios.h"
 
-unsigned long long int agios_min(unsigned long long int t1, unsigned long long int t2);
-unsigned long long int agios_max(unsigned long long int t1, unsigned long long int t2);
+long long int agios_min(long long int t1, long long int t2);
+long long int agios_max(long long int t1, long long int t2);
 
 
 /*functions that are different for the kernel module and the user-level library versions*/
@@ -38,7 +16,7 @@ unsigned long long int agios_max(unsigned long long int t1, unsigned long long i
 
 typedef int (thread_function) (void *arg); 
 
-inline int agios_start_thread_km(struct task_struct *thread, thread_function *func, char *name, void *arg);
+int agios_start_thread_km(struct task_struct *thread, thread_function *func, char *name, void *arg);
 
 #define agios_alloc(size) 					kmalloc(size, GFP_KERNEL)
 #define agios_free(ptr) 					kfree(ptr)
@@ -89,14 +67,14 @@ inline int agios_start_thread_km(struct task_struct *thread, thread_function *fu
 /*call with (struct timespec t1, struct timespec t2) */
 #define get_nanoelapsed_diff(t1, t2)  ((t2.tv_nsec - t1.tv_nsec) + ((t2.tv_sec - t1.tv_sec)*1000000000L))
 /*takes a struct timespec and tells you how many nanoseconds passed since the timespec was obtained*/
-inline unsigned long int get_nanoelapsed(struct timespec t1);
-/*translates a struct timespec to a unsigned long long int (in nanoseconds)*/
-inline unsigned long int get_timespec2llu(struct timespec t);
-/*traslates a unsigned long long int (in nanoseconds) to struct timespec*/
-inline void get_llu2timespec(unsigned long int t, struct timespec *ret);
-/*does the same as get_nanoelapsed, but takes as parameter a unsigned long long int instead of a struct timespec*/
-inline unsigned long int get_nanoelapsed_llu(unsigned long int t1);
-inline long double get_ns2s(unsigned long int t1);
+long int get_nanoelapsed(struct timespec t1);
+/*translates a struct timespec to a long int (in nanoseconds)*/
+long int get_timespec2llu(struct timespec t);
+/*traslates a long int (in nanoseconds) to struct timespec*/
+void get_llu2timespec(long int t, struct timespec *ret);
+/*does the same as get_nanoelapsed, but takes as parameter a long int instead of a struct timespec*/
+long int get_nanoelapsed_llu(long int t1);
+long double get_ns2s(long int t1);
 
 /****************************************************************************************************/
 /*debug functions*/

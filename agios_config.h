@@ -1,23 +1,3 @@
-/* File:	agios_config.c
- * Created: 	2012 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It obtains configuration parameters from the configuration files and 
- *		provides them to all other modules
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- */
 #ifndef _AGIOS_CONFIG_H_
 #define _AGIOS_CONFIG_H_
 
@@ -26,7 +6,7 @@
 //if not provided a filename, we'll try to read from this one
 #define DEFAULT_CONFIGFILE	"/etc/agios.conf"
 
-inline short int read_configuration_file(char *config_file);
+short int read_configuration_file(char *config_file);
 
 //library options
 // 1. trace
@@ -47,12 +27,12 @@ extern int config_agios_default_algorithm;
 extern long int config_agios_select_algorithm_period;
 extern int config_agios_select_algorithm_min_reqnumber;
 extern int config_agios_starting_algorithm;
-inline void config_set_starting_algorithm(int value);
+void config_set_starting_algorithm(int value);
 extern int config_waiting_time;
 extern int config_aioli_quantum;
 extern int config_mlf_quantum;
-extern unsigned long int config_tw_size;
-extern unsigned long int config_exclusive_tw_window_duration;
+extern long int config_tw_size;
+extern long int config_exclusive_tw_window_duration;
 // 4. access times estimation
 extern char *config_agios_access_times_file;
 // 5. ARMED BANDIT
@@ -72,7 +52,7 @@ extern int config_static_pattern_matching;
 
 //user info
 extern int config_agios_stripe_size;
-extern unsigned long int config_agios_max_trace_buffer_size;
+extern int config_agios_max_trace_buffer_size;
  
 
 //to spread configuration parameters to all modules
@@ -80,6 +60,6 @@ void config_gossip_algorithm_parameters(int alg, struct io_scheduler_instance_t 
 
 void config_print(void);
 
-inline void config_agios_cleanup(void);
+void config_agios_cleanup(void);
 
 #endif

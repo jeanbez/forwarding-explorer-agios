@@ -9,16 +9,12 @@ all:
 	gcc -o throughput_test throughput_test.c -lagios -lrt -lpthread -lm
 	gcc -o addrequest_test addrequest_test.c -lagios -lrt -lpthread -lm
 	gcc -o timewindow_test timewindow_test.c -lagios -lrt -lpthread -lm
-	gcc -o dtw_test dtw_test.c -lagios -lrt -lpthread -lm
 
 throughput:
 	gcc -lm -lpthread -lagios -o throughput_test throughput_test.c 
 
-dtw:
-	gcc -c pattern_tracker.c mylist.c DTW.c PATTERN_MATCHING.c -DPATTERN_MATCHING_DEBUG=1 
-	gcc -o dtw_test dtw_test.c pattern_tracker.o mylist.o DTW.o PATTERN_MATCHING.o -lrt -lpthread -lm
 clean:
-	rm -rf throughput_test addrequest_test timewindow_test dtw_test
+	rm -rf throughput_test addrequest_test timewindow_test 
 
 local:
 	gcc -o throughput_test throughput_test.c ../libagios.so.1.0.1 -lrt -lpthread -lm

@@ -1,5 +1,5 @@
 /* File:	access_pattern_detection_tree.c
- * Created: 	2012 
+ * Created: 	2014
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>

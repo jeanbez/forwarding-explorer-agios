@@ -3,8 +3,6 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
@@ -40,7 +38,7 @@ static struct timespec agios_trace_t0; //time measured at initialization (all tr
 
 //a buffer avoids generating many I/O operations to the trace file, which is stored in the local file system. This would affect the scheduler's results, since these operations are not schedule with the user's ones.
 static char *agios_tracefile_buffer=NULL;
-static unsigned long int agios_tracefile_buffer_size=0; //occupancy of the buffer. Used to control when to flush it.
+static int agios_tracefile_buffer_size=0; //occupancy of the buffer. Used to control when to flush it.
 static char *aux_buf = NULL; //this smaller buffer is used by the functions to write a line at a time to the main buffer. We keep it global to avoid having to allocate it multiple times (it is allocated during initialization)
 static int aux_buf_size = 300*sizeof(char); //hard coded
 
@@ -70,7 +68,7 @@ void agios_trace_write_to_buffer()
 	aux_buf[0]='\0';
 }
 //a shift phenomenon was detected and the scheduler decided to wait for a file (for aIOLi and MLF only)
-void agios_trace_shift(unsigned int wait_time, char *file)
+void agios_trace_shift(int wait_time, char *file)
 {
 	if(!config_trace_agios_full)
 		return;
@@ -84,7 +82,7 @@ void agios_trace_shift(unsigned int wait_time, char *file)
 
 }
 //schedulerr is going to wait for a file
-void agios_trace_wait(unsigned int wait_time, char *file)
+void agios_trace_wait(int wait_time, char *file)
 {
 	if(!config_trace_agios_full)
 		return;
@@ -110,7 +108,7 @@ void agios_trace_better(char *file)
 	agios_mutex_unlock(&agios_trace_mutex);
 }
 //a better aggregation was predicted, so the scheduler decided to wait
-void agios_trace_predicted_better_aggregation(unsigned int wait_time, char *file)
+void agios_trace_predicted_better_aggregation(int wait_time, char *file)
 {
 	if(!config_trace_agios_full)
 		return;

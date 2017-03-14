@@ -3,13 +3,11 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the interface to the scheduling algorithms. 
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
@@ -99,8 +97,8 @@ void iosched_wait_synchronous(void)
 /*	STATISTICS	*/
 /**********************************************************************************************************************/
 /*for calculating alpha during execution, which represents the ability to overlap waiting time with processing other requests*/
-unsigned long int time_spent_waiting=0;
-unsigned long int waiting_time_overlapped=0;
+long int time_spent_waiting=0;
+long int waiting_time_overlapped=0;
 
 /**********************************************************************************************************************/
 /*	GENERIC HELPING FUNCTIONS USED BY MULTIPLE I/O SCHEDULING ALGORITHMS	*/
@@ -145,7 +143,7 @@ void waiting_algorithms_postprocess(struct request_t *req)
 }
 
 //this function is used by MLF and by AIOLI. These two schedulers use a sched_factor that increases as request stays in the scheduler queues.
-inline void increment_sched_factor(struct request_t *req)
+void increment_sched_factor(struct request_t *req)
 {
 	if(req->sched_factor == 0)
 		req->sched_factor = 1;
@@ -154,7 +152,7 @@ inline void increment_sched_factor(struct request_t *req)
 }
 
 /*used by MLF and AIOLI. After selecting a virtual request for processing, checks if it should be processed right away or if it's better to wait for a while*/
-inline struct request_t *checkSelection(struct request_t *req, struct request_file_t *req_file)
+struct request_t *checkSelection(struct request_t *req, struct request_file_t *req_file)
 {
 	struct request_t *retrn = req;
 
@@ -203,7 +201,7 @@ inline struct request_t *checkSelection(struct request_t *req, struct request_fi
 }
 
 /*sleeps for timeout ns*/
-void agios_wait(unsigned int timeout, char *file)
+void agios_wait(int timeout, char *file)
 {
 #ifndef AGIOS_KERNEL_MODULE
 	struct timespec timeout_tspec;
@@ -222,17 +220,17 @@ void agios_wait(unsigned int timeout, char *file)
 	set_current_state(TASK_RUNNING);		
 #else
 
-	timeout_tspec.tv_sec = (unsigned int) timeout / 1000000000L;
-	timeout_tspec.tv_nsec = (unsigned int) timeout % 1000000000L;
+	timeout_tspec.tv_sec = (int) timeout / 1000000000L;
+	timeout_tspec.tv_nsec = (int) timeout % 1000000000L;
 
 	nanosleep(&timeout_tspec, NULL);
 #endif
 }
 
 //used by AIOLI and MLF, the algorithms which employ waiting times. Since we try not to wait (when waiting on one file, we go on processing requests to other files), every time we try to get requests from a file we need to update its waiting time to see if it is still waiting or not
-void update_waiting_time_counters(struct request_file_t *req_file, unsigned int *smaller_waiting_time, struct request_file_t **swt_file )
+void update_waiting_time_counters(struct request_file_t *req_file, int *smaller_waiting_time, struct request_file_t **swt_file )
 {
-	unsigned long int elapsed;
+	long int elapsed;
 
 	elapsed = get_nanoelapsed(req_file->waiting_start);
 	if(req_file->waiting_time > elapsed)

@@ -3,13 +3,11 @@
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- *		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the aIOLi scheduling algorithm
- *		Further information is available at http://agios.bitbucket.org/
+ *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
@@ -49,7 +47,7 @@
 #include "agios_config.h"
 
 
-static unsigned int aioli_quantum; 
+static int aioli_quantum; 
 static struct timespec aioli_start;
 
 int AIOLI_init()
@@ -60,7 +58,7 @@ int AIOLI_init()
 	return 1;
 }
 
-int AIOLI_select_from_list(struct related_list_t *related_list, struct related_list_t **selected_queue, unsigned long int *selected_timestamp)
+int AIOLI_select_from_list(struct related_list_t *related_list, struct related_list_t **selected_queue, long int *selected_timestamp)
 {
 	int reqnb = 0;
 	struct request_t *req;
@@ -84,7 +82,7 @@ int AIOLI_select_from_list(struct related_list_t *related_list, struct related_l
 	return reqnb;
 }
 
-int AIOLI_select_from_file(struct request_file_t *req_file, struct related_list_t **selected_queue, unsigned long int *selected_timestamp)
+int AIOLI_select_from_file(struct request_file_t *req_file, struct related_list_t **selected_queue, long int *selected_timestamp)
 {
 	int reqnb=0;
 //	PRINT_FUNCTION_NAME;
@@ -105,13 +103,13 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 	int i;
 	struct agios_list_head *reqfile_l;
 	struct request_file_t *req_file;
-	unsigned int smaller_waiting_time=~0;	
+	int smaller_waiting_time=INT_MAX;	
 	struct request_file_t *swt_file=NULL;
 	int reqnb;
 	struct related_list_t *tmp_selected_queue=NULL;
 	struct related_list_t *selected_queue = NULL;
-	unsigned long int tmp_timestamp;
-	unsigned long int selected_timestamp=~0;
+	long int tmp_timestamp;
+	long int selected_timestamp=INT_MAX;
 	int waiting_options=0;
 	struct request_t *req=NULL;
 
@@ -169,11 +167,11 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 }
 
 /*return the next quantum considering how much of the last one was used*/
-unsigned long long int adjust_quantum(unsigned long int elapsed_time, unsigned int quantum, short int type)
+long long int adjust_quantum(long int elapsed_time, int quantum, short int type)
 {
-	unsigned long int requiredqt;
-	unsigned long int max_bound;
-	unsigned long int used_quantum_rate = (elapsed_time*100)/quantum;
+	long int requiredqt;
+	long int max_bound;
+	long int used_quantum_rate = (elapsed_time*100)/quantum;
 
 	/*adjust the next quantum considering how much of the last one was really used*/
 	

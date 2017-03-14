@@ -23,14 +23,14 @@
 
 
 
-unsigned long long int agios_min(unsigned long long int t1, unsigned long long int t2)
+long long int agios_min( long long int t1,  long long int t2)
 {
 	if(t1 < t2)
 		return t1;
 	else
 		return t2;
 }
-unsigned long long int agios_max(unsigned long long int t1, unsigned long long int t2)
+long long int agios_max( long long int t1, long long int t2)
 {
 	if(t1 > t2)
 		return t1;
@@ -54,7 +54,7 @@ unsigned long long int agios_max(unsigned long long int t1, unsigned long long i
 
 
 
-inline int agios_start_thread_km(struct task_struct *thread, thread_function *func, char *name, void *arg)
+int agios_start_thread_km(struct task_struct *thread, thread_function *func, char *name, void *arg)
 {
 	thread = kthread_run(func, arg, name);
 	/*TODO test to see if the function worked*/
@@ -67,34 +67,34 @@ inline int agios_start_thread_km(struct task_struct *thread, thread_function *fu
 /****************************************************************************************************/
 /*timing functions*/
 /*takes a struct timespec and tells you how many nanoseconds passed since the timespec was obtained*/
-inline unsigned long int get_nanoelapsed(struct timespec t1)
+long int get_nanoelapsed(struct timespec t1)
 {
 	struct timespec t2;
 	agios_gettime(&t2);
 	return ((t2.tv_nsec - t1.tv_nsec) + ((t2.tv_sec - t1.tv_sec)*1000000000L));
 }
 
-/*translates a struct timespec to a unsigned long long int (in nanoseconds)*/
-inline unsigned long int get_timespec2llu(struct timespec t)
+/*translates a struct timespec to a long int (in nanoseconds)*/
+long int get_timespec2llu(struct timespec t)
 {
 	return (t.tv_sec*1000000000L + t.tv_nsec);
 }
 
-/*traslates a unsigned long long int (in nanoseconds) to struct timespec*/
-inline void get_llu2timespec(unsigned long int t, struct timespec *ret)
+/*traslates a long int (in nanoseconds) to struct timespec*/
+void get_llu2timespec(long int t, struct timespec *ret)
 {
 	ret->tv_sec = t / 1000000000L;
 	ret->tv_nsec = t % 1000000000L;
 }
 
-/*does the same as get_nanoelapsed, but takes as parameter a unsigned long long int instead of a struct timespec*/
-inline unsigned long int get_nanoelapsed_llu(unsigned long int t1)
+/*does the same as get_nanoelapsed, but takes as parameter a long int instead of a struct timespec*/
+long int get_nanoelapsed_llu(long int t1)
 {
 	struct timespec t2;
 	agios_gettime(&t2);
 	return (get_timespec2llu(t2) - t1);
 }
-inline long double get_ns2s(unsigned long int t1)
+long double get_ns2s(long int t1)
 {
 	long double ret = t1 / 1000.0;
 	ret = ret / 1000.0;
