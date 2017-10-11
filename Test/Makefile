@@ -6,9 +6,9 @@
 # Copyright (C) 2014, Francieli Zanon Boito <fzboito@inf.ufrgs.br> 
 
 all:
-	gcc -o throughput_test throughput_test.c -lagios -lrt -lpthread -lm
-	gcc -o addrequest_test addrequest_test.c -lagios -lrt -lpthread -lm
-	gcc -o timewindow_test timewindow_test.c -lagios -lrt -lpthread -lm
+	gcc -o throughput_test throughput_test.c -lagios -lrt -lpthread -lm -lconfig
+	gcc -o addrequest_test addrequest_test.c -lagios -lrt -lpthread -lm -lconfig
+	gcc -o timewindow_test timewindow_test.c -lagios -lrt -lpthread -lm -lconfig
 
 throughput:
 	gcc -lm -lpthread -lagios -o throughput_test throughput_test.c 
