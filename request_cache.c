@@ -763,7 +763,6 @@ int agios_add_request(char *file_id, short int type, long int offset, long int l
 
 	PRINT_FUNCTION_NAME;
 
-			exit(1);
 	//build request_t structure and fill it for the new request
 	agios_gettime(&(arrival_time));
 	timestamp = get_timespec2llu(arrival_time);
