@@ -1,12 +1,12 @@
 /* File:	proc.c
- * Created: 	2012 
+ * Created: 	2012
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
- *		It handles scheduling statistics and print them whenever the agios_print_stats_file 
+ *		It handles scheduling statistics and print them whenever the agios_print_stats_file
  *		function is called. Stats can be reseted by agios_reset_stats.
  *		The kernel module implementation uses the proc interface, while the user-level
  *		library creates a file in the local file system. Its name is provided as a parameter.
@@ -17,7 +17,7 @@
  *		INRIA France
  *
  *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
+ *
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -44,24 +44,25 @@
 #include <linux/seq_file.h>
 #else
 #include <string.h>
+#include <limits.h>
 #endif
 
 /***********************************************************************************************************
  * GLOBAL ACCESS PATTERN STATISTICS *
  ***********************************************************************************************************/
-struct global_statistics_t 
-{ 
+struct global_statistics_t
+{
 	long int total_reqnb; //we have a similar counter in consumer.c, but this one can be reset, that one is fixed (never set to 0, counts through the whole execution)
 //to measure time between requests
-	long long int global_req_time; 
+	long long int global_req_time;
 	long int global_min_req_time;
 	long int global_max_req_time;
 	//to measure request size
 	long long int global_req_size;
-	long int global_min_req_size; 
+	long int global_min_req_size;
 	long int global_max_req_size;
 };
-static struct timespec last_req; 
+static struct timespec last_req;
 static struct global_statistics_t stats_for_file;
 static struct global_statistics_t stats_for_window;
 static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -73,7 +74,7 @@ static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER;
  ***********************************************************************************************************/
 static int *proc_algs; //the list of the last PROC_ALGS_SIZE selected scheduling algorithms
 static long int *proc_algs_timestamps; //the timestamps of the last PROC_ALGS_SIZE algorithms selections
-static int proc_algs_start, proc_algs_end=0; //indexes to access the proc_algs list 
+static int proc_algs_start, proc_algs_end=0; //indexes to access the proc_algs list
 
 void proc_set_new_algorithm(int alg)
 {
@@ -106,7 +107,7 @@ long int *proc_get_alg_timestamps(int *start, int *end)
  ***********************************************************************************************************/
 /*the user-level library uses a file, while the kernel module implementation uses the proc file system interface*/
 #ifndef AGIOS_KERNEL_MODULE
-static FILE *stats_file;  
+static FILE *stats_file;
 #else
 static struct seq_file *stats_file; //to help while writing the file
 static struct proc_dir_entry *agios_proc_dir;
@@ -137,14 +138,14 @@ void update_local_stats(struct related_list_statistics_t *stats, struct request_
 			stats->total_request_time = 0;
 
 		stats->total_request_time += elapsedtime;
-		
+
 		if(elapsedtime > stats->max_request_time)
 			stats->max_request_time = elapsedtime;
 		if(elapsedtime < stats->min_request_time)
 			stats->min_request_time = elapsedtime;
 	}
 	get_llu2timespec(req->jiffies_64, &req->globalinfo->last_req_time);
-		
+
 	//update local statistics on average offset distance between consecutive requests
 	//TODO is it the same thing done by predict when including requests? should we join these codes?
 	if(req->globalinfo->last_received_finaloffset > 0)
@@ -185,21 +186,21 @@ void update_global_stats_newreq(struct global_statistics_t *stats, struct reques
 		stats->global_max_req_size = req->io_data.len;
 	if(req->io_data.len < stats->global_min_req_size)
 		stats->global_min_req_size = req->io_data.len;
-} 
+}
 /*update the stats after the arrival of a new request
- * must hold the hashtable mutex 
+ * must hold the hashtable mutex
  */
 void proc_stats_newreq(struct request_t *req)
 {
 	long int elapsedtime=0;
 
-	req->globalinfo->stats_file.receivedreq_nb++; 
-	req->globalinfo->stats_window.receivedreq_nb++; 
+	req->globalinfo->stats_file.receivedreq_nb++;
+	req->globalinfo->stats_window.receivedreq_nb++;
 
 	if(req->state == RS_PREDICTED)
 	{
-		req->globalinfo->stats_file.processedreq_nb++; 
-		req->globalinfo->stats_window.processedreq_nb++; 
+		req->globalinfo->stats_file.processedreq_nb++;
+		req->globalinfo->stats_window.processedreq_nb++;
 	}
 	else //if req->state is RS_HASHTABLE
 	{
@@ -210,8 +211,8 @@ void proc_stats_newreq(struct request_t *req)
 			elapsedtime=0;
 		else
 			elapsedtime = (req->jiffies_64 - get_timespec2llu(last_req)) / 1000; //nano to microseconds
-		update_global_stats_newreq(&stats_for_file, req, elapsedtime); 
-		update_global_stats_newreq(&stats_for_window, req, elapsedtime); 
+		update_global_stats_newreq(&stats_for_file, req, elapsedtime);
+		update_global_stats_newreq(&stats_for_window, req, elapsedtime);
 		get_llu2timespec(req->jiffies_64, &last_req);
 
 		agios_mutex_unlock(&global_statistics_mutex);
@@ -220,7 +221,7 @@ void proc_stats_newreq(struct request_t *req)
 		update_local_stats(&req->globalinfo->stats_file, req);
 		update_local_stats(&req->globalinfo->stats_window, req);
 
-		
+
 		req->globalinfo->last_received_finaloffset = req->io_data.offset + req->io_data.len;
 	}
 }
@@ -337,14 +338,14 @@ struct request_file_t *get_first(short int predicted_stats)
 	while(!req_file)
 	{
 		if((current_scheduler->needs_hashtable) || (predicted_stats))
-			hashtable_lock(hash_position);	
+			hashtable_lock(hash_position);
 		reqfile_l = &hashlist[hash_position];
 
 		if(!agios_list_empty(reqfile_l))
 		{ //take the first element of the list
 			agios_list_for_each_entry(req_file, reqfile_l, hashlist)
 				break;
-		}	
+		}
 		else
 		{//list is empty, nothing to show, unlock the mutex
 			if((current_scheduler->needs_hashtable) || (predicted_stats))
@@ -359,15 +360,15 @@ struct request_file_t *get_first(short int predicted_stats)
 			}
 		}
 	}
-	return req_file;	
+	return req_file;
 }
 
 void print_something(const char *something)
 {
 #ifdef AGIOS_KERNEL_MODULE
-	seq_printf(stats_file, 
+	seq_printf(stats_file,
 #else
-	fprintf(stats_file, 
+	fprintf(stats_file,
 #endif
 		"%s", something);
 }
@@ -381,9 +382,9 @@ void print_selected_algs(void)
 	while(i != proc_algs_end)
 	{
 #ifdef AGIOS_KERNEL_MODULE
-		seq_printf(stats_file, 
+		seq_printf(stats_file,
 #else
-		fprintf(stats_file, 
+		fprintf(stats_file,
 #endif
 			"%lu\t%s\n", proc_algs_timestamps[i], get_algorithm_name_from_index(proc_algs[i]));
 		i++;
@@ -404,7 +405,7 @@ void print_stats_start(void)
 	stats_file = s;
 #endif
 	print_selected_algs();
-	
+
 	print_something("\t\treqs\tsize\tsize_avg\tsize_min\tsize_max\tsum_/_aggs\tagg_bigg\tagg_last\tshift\tbetter\tpdt_better\ttbr_avg\ttbr_min\ttbr_max\tproc_req\tband\n");
 
 #ifdef AGIOS_KERNEL_MODULE
@@ -424,17 +425,17 @@ void print_predicted_stats_start(void)
 {
 
 #ifdef AGIOS_KERNEL_MODULE
-	seq_printf(s, 
+	seq_printf(s,
 #else
-	fprintf(stats_file, 
+	fprintf(stats_file,
 #endif
 	"\nPREDICTED_STATISTICS\n\ntracefile_counter: %d\nprediction_thread_init_time: %llu\nprediction_time_accepted_error: %d\ncurrent_predicted_reqfilenb: %d\n", get_predict_tracefile_counter(), get_predict_init_time(), config_predict_agios_time_error, get_current_predicted_reqfilenb());
-	
+
 	print_something("\t\treqs\tsize\tsize_avg\tsize_min\tsize_max\tsum_/_aggs\tagg_bigg\ttbr_avg\ttbr_min\ttbr_max\n");
 
 #ifdef AGIOS_KERNEL_MODULE
 	hash_position=0;
-	return get_first(1); 
+	return get_first(1);
 #endif
 }
 
@@ -451,7 +452,7 @@ void predicted_stats_show_related_list(struct related_list_t *related, const cha
 		avg_req_size = (related->stats_file.total_req_size / related->stats_file.processedreq_nb);
 	else
 		avg_req_size = 0;
-	if(related->stats_file.aggs_no > 0) 
+	if(related->stats_file.aggs_no > 0)
 		avg_agg_size = (((double)related->stats_file.sum_of_agg_reqs)/((double)related->stats_file.aggs_no));
 	else
 		avg_agg_size = 1;
@@ -459,17 +460,17 @@ void predicted_stats_show_related_list(struct related_list_t *related, const cha
 	if(strcmp(list_name, "read") == 0)
 	{
 #ifdef AGIOS_KERNEL_MODULE
-		seq_printf(stats_file, 
+		seq_printf(stats_file,
 #else
-		fprintf(stats_file, 
+		fprintf(stats_file,
 #endif
 		"file id: %s\n", related->req_file->file_id);
-	} 
+	}
 
 #ifdef AGIOS_KERNEL_MODULE
-	seq_printf(stats_file, 
+	seq_printf(stats_file,
 #else
-	fprintf(stats_file, 
+	fprintf(stats_file,
 #endif
 	"\t%s:\t%lu\t%llu\t%lu\t%lu\t%lu\t%lu/%lu=%.2f\t%u\t%Le\t%Le\n",
 	   list_name,
@@ -509,7 +510,7 @@ void predicted_stats_show_one(struct request_file_t *req_file)
 
 #ifdef AGIOS_KERNEL_MODULE
 	return 0;
-#endif	
+#endif
 }
 
 #ifndef AGIOS_KERNEL_MODULE
@@ -522,7 +523,7 @@ void stats_show_predicted(void)
 	for(i = 0; i < AGIOS_HASH_ENTRIES; i++)
 	{
 		reqfile_l = hashtable_lock(i);
-		
+
 		if(!agios_list_empty(reqfile_l))
 		{
 			agios_list_for_each_entry(req_file, reqfile_l, hashlist)
@@ -530,7 +531,7 @@ void stats_show_predicted(void)
 				if((req_file->predicted_writes.stats_file.processedreq_nb > 0) || (req_file->predicted_reads.stats_file.processedreq_nb > 0))
 					predicted_stats_show_one(req_file);
 			}
-		}		
+		}
 
 		hashtable_unlock(i);
 	}
@@ -558,7 +559,7 @@ void stats_show_related_list(struct related_list_t *related, const char *list_na
 		avg_req_size = (related->stats_file.total_req_size / related->stats_file.receivedreq_nb);
 	else
 		avg_req_size = 0;
-	if(related->stats_file.aggs_no > 0) 
+	if(related->stats_file.aggs_no > 0)
 		avg_agg_size = (((double)related->stats_file.sum_of_agg_reqs)/((double)related->stats_file.aggs_no));
 	else
 		avg_agg_size = 0;
@@ -569,22 +570,22 @@ void stats_show_related_list(struct related_list_t *related, const char *list_na
 	if(related->stats_file.processedreq_nb > 0)
 	{
 		tmp_time = get_ns2s(related->stats_file.processed_req_time);
-		if(tmp_time > 0)		
+		if(tmp_time > 0)
 			bandwidth = ((related->stats_file.processed_req_size) / tmp_time) / 1024.0;
 	}
 
 	if(strcmp(list_name, "read") == 0)
 	{
 #ifndef AGIOS_KERNEL_MODULE
-		fprintf(stats_file, 
-#else	
+		fprintf(stats_file,
+#else
 		seq_printf(stats_file,
 #endif
 	   	"file id: %s\n", related->req_file->file_id);
 	}
 
 #ifndef AGIOS_KERNEL_MODULE
-	fprintf(stats_file, 
+	fprintf(stats_file,
 #else
 	seq_printf(stats_file,
 #endif
@@ -657,16 +658,16 @@ void stats_show_ending(void)
 		global_avg_size = (stats_for_file.global_req_size / stats_for_file.total_reqnb);
 	else
 		global_avg_size = 0;
-	
+
 
 
 #ifndef AGIOS_KERNEL_MODULE
-	fprintf(stats_file,  
+	fprintf(stats_file,
 #else
 	seq_printf(stats_file,
 #endif
-	"total of %lu requests\n\tavg\tmin\tmax\nglobal time between requests:\t%lu\t%lu\t%lu\nrequest size:\t%lu\t%lu\t%lu\n", 
-	stats_for_file.total_reqnb, 
+	"total of %lu requests\n\tavg\tmin\tmax\nglobal time between requests:\t%lu\t%lu\t%lu\nrequest size:\t%lu\t%lu\t%lu\n",
+	stats_for_file.total_reqnb,
 	global_avg_time,
 	stats_for_file.global_min_req_time,
 	stats_for_file.global_max_req_time,
@@ -689,7 +690,7 @@ void stats_show_ending(void)
 			i = 0;
 	}
 #ifndef AGIOS_KERNEL_MODULE
-	fprintf(stats_file,  
+	fprintf(stats_file,
 #else
 	seq_printf(stats_file,
 #endif
@@ -717,15 +718,15 @@ void stats_show(void)
 			reqfile_l = hashtable_lock(i);
 		else
 			reqfile_l = &hashlist[i];
-			
+
 		if(!agios_list_empty(reqfile_l))
 		{
 			agios_list_for_each_entry(req_file, reqfile_l, hashlist)
 			{
 				stats_show_one(req_file);
 			}
-		}		
-		if(current_scheduler->needs_hashtable)	
+		}
+		if(current_scheduler->needs_hashtable)
 			hashtable_unlock(i);
 	}
 
@@ -779,7 +780,7 @@ void agios_reset_stats()
 	reset_global_reqstats_file();
 #ifndef AGIOS_KERNEL_MODULE
 	if(config_trace_agios)
-		agios_trace_reset();	
+		agios_trace_reset();
 #endif
 
 	if(!current_scheduler->needs_hashtable)
@@ -790,7 +791,7 @@ void agios_reset_stats()
 		if(current_scheduler->needs_hashtable)
 			hashtable_lock(i);
 		reqfile_l = &hashlist[i];
-		
+
 		if(!agios_list_empty(reqfile_l))
 		{
 			agios_list_for_each_entry(req_file, reqfile_l, hashlist)
@@ -819,7 +820,7 @@ void agios_print_stats_file(char *filename)
 		agios_print("AGIOS: No filename to stats file!\n");
 		return;
 	}
-	stats_file = fopen(filename, "w"); 
+	stats_file = fopen(filename, "w");
 	if(!stats_file)
 	{
 		agios_print("Cannot create %s stats file\n", filename);
@@ -829,14 +830,14 @@ void agios_print_stats_file(char *filename)
 	{
 		/*we can't show stats if the prediction thread did not finished reading from trace files*/
 		agios_wait_predict_init();
-		/*prints the start of the file*/	
+		/*prints the start of the file*/
 		print_stats_start();
-	
-		/*prints the stats*/	
+
+		/*prints the stats*/
 		stats_show();
 
 		print_predicted_stats_start();
-		stats_show_predicted();	
+		stats_show_predicted();
 
 		/*closes the file*/
 		fclose(stats_file);
@@ -851,7 +852,7 @@ void proc_stats_init(void)
 	proc_algs = agios_alloc(sizeof(int)*(config_agios_proc_algs+1));
 	proc_algs_timestamps = agios_alloc(sizeof(long int)*(config_agios_proc_algs+1));
 	proc_algs_start = proc_algs_end = 0;
-	
+
 #ifdef AGIOS_KERNEL_MODULE
 	struct proc_dir_entry *entry;
 
@@ -860,8 +861,8 @@ void proc_stats_init(void)
 	{
 		agios_print("Cannot create /proc/agios entry");
 		return;
-	}	
-	
+	}
+
 	entry = create_proc_entry("stats", 444, agios_proc_dir);
 	if(entry)
 		entry->proc_fops = &stats_proc_ops;
@@ -875,7 +876,7 @@ void proc_stats_init(void)
 	if(entry)
 		entry->proc_fops = &hashtable_proc_ops;
 #endif
-			
+
 #endif
 }
 /*unregister proc entries (useful only to the kernel module implementation) and free data structures*/
@@ -887,7 +888,7 @@ void proc_stats_exit(void)
 #ifdef AGIOS_DEBUG
 	remove_proc_entry("hashtable", agios_proc_dir);
 #endif
-	remove_proc_entry("agios", NULL);	
+	remove_proc_entry("agios", NULL);
 #endif
 	free(proc_algs);
 	free(proc_algs_timestamps);
@@ -897,14 +898,14 @@ void proc_stats_exit(void)
  * functions to handle the proc entry - for the kernel module implementation only  *
  ***********************************************************************************/
 #ifdef AGIOS_KERNEL_MODULE
-static void *stats_seq_next(struct seq_file *s, void *v, loff_t *pos) 
+static void *stats_seq_next(struct seq_file *s, void *v, loff_t *pos)
 {
 	struct request_file_t *req_file;
-	
+
 	(*pos)++;
-	if (*pos >= current_reqfilenb) 
+	if (*pos >= current_reqfilenb)
 		return NULL;
-	
+
 	req_file = (struct request_file_t *)v;
 
 	if(req_file->hashlist.next == &hashlist[hash_position]) //we finished printing this hash position
@@ -928,11 +929,11 @@ static void *stats_seq_next(struct seq_file *s, void *v, loff_t *pos)
 static void *predicted_stats_seq_next(struct seq_file *s, void *v, loff_t *pos)
 {
 	struct request_file_t *req_file;
-	
+
 	(*pos)++;
-	if (*pos >= get_current_predicted_reqfilenb()) 
+	if (*pos >= get_current_predicted_reqfilenb())
 		return NULL;
-	
+
 	req_file = (struct request_file_t *)v;
 
 	if(req_file->hashlist.next == &hashlist[hash_position]) //we finished printing this hash position
@@ -977,7 +978,7 @@ static struct file_operations stats_proc_ops = {
 };
 
 
-static void predicted_stats_stop(struct seq_file *s, void *v) 
+static void predicted_stats_stop(struct seq_file *s, void *v)
 {
 }
 
@@ -1010,7 +1011,7 @@ static struct file_operations predicted_stats_proc_ops = {
 
 #ifdef AGIOS_DEBUG
 static int hashtable_proc_index=0;
-void *hashtable_start(struct seq_file *s, loff_t *pos) 
+void *hashtable_start(struct seq_file *s, loff_t *pos)
 {
 	hashtable_proc_index=0;
 	if(current_scheduler->needs_hashtable)
@@ -1020,14 +1021,14 @@ void *hashtable_start(struct seq_file *s, loff_t *pos)
 	return &hashlist[hashtable_proc_index];
 }
 
-static int hashtable_show(struct seq_file *s, void *v) 
+static int hashtable_show(struct seq_file *s, void *v)
 {
 	struct request_file_t *req_file;
 	struct agios_list_head *hash_list = (struct agios_list_head *) v;
 	struct request_t *tmp;
 
 	seq_printf(s, "[%d]\n", hashtable_proc_index);
-	
+
 	if(agios_list_empty(hash_list))
 		return 0;
 
@@ -1049,13 +1050,13 @@ static int hashtable_show(struct seq_file *s, void *v)
 		seq_printf(s, "\n");
 	}
 	if(current_scheduler->needs_hashtable)
-		hashtable_unlock(hashtable_proc_index);	
+		hashtable_unlock(hashtable_proc_index);
 	else
 		timeline_unlock();
 	return 0;
 }
 
-static void *hashtable_seq_next(struct seq_file *s, void *v, loff_t *pos) 
+static void *hashtable_seq_next(struct seq_file *s, void *v, loff_t *pos)
 
 {
 	if(current_scheduler->needs_hashtable)

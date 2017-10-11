@@ -1,12 +1,12 @@
 /* File:	pattern_tracker.c
- * Created: 	2016 
+ * Created: 	2016
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
- *		It tracks accesses for the pattern matching approach implementation 
+ *		It tracks accesses for the pattern matching approach implementation
  *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
@@ -19,6 +19,7 @@
  */
 
 #include <string.h>
+#include <limits.h>
 
 #include "agios.h"
 #include "agios_request.h"
@@ -78,16 +79,15 @@ void add_request_to_pattern(long int timestamp, long int offset, long int len, s
 			strcpy(file_ids[i], file_id);
 		}
 		//i is the index of the file accessed by this request
-		
-		
+
+
 		//allocate structure and fill it
 		struct pattern_tracker_req_info_t *new = agios_alloc(sizeof(struct pattern_tracker_req_info_t));
 		init_agios_list_head(&new->list);
-		new->timestamp = timestamp;
 		calculated_offset = i*MAXIMUM_FILE_SIZE + (offset/1024); //we keep offsets in KB
 		new->offset = calculated_offset - last_offset; //the offset difference, actually
 		last_offset = calculated_offset;
-		
+
 
 		//put the new structure in the pattern
 		agios_list_add_tail(&new->list, &current_pattern->requests);
@@ -108,7 +108,7 @@ void translate_list_to_time_series()
 		agios_print("PANIC! Could not allocate memory for access pattern tracking\n");
 		return;
 	}
-	
+
 	agios_list_for_each_entry(tmp, &current_pattern->requests, list)
 	{
 		if(aux)
@@ -116,7 +116,6 @@ void translate_list_to_time_series()
 			agios_list_del(&aux->list);
 			free(aux);
 		}
-		current_pattern->time_series[i].timestamp = tmp->timestamp;
 		current_pattern->time_series[i].offset = tmp->offset;
 		i++;
 		aux = tmp;
@@ -132,13 +131,13 @@ void translate_list_to_time_series()
 struct access_pattern_t *get_current_pattern()
 {
 	struct access_pattern_t *ret;
-	
+
 	agios_mutex_lock(&pattern_tracker_lock);
-	
+
 	translate_list_to_time_series();
 	ret = current_pattern;
 	reset_current_pattern(0);
-	
+
 	agios_mutex_unlock(&pattern_tracker_lock);
 	return ret;
 }
@@ -214,5 +213,5 @@ void free_access_pattern_t(struct access_pattern_t **ap)
 			free((*ap)->aggPtSize);
 		free(*ap);
 	}
-	
+
 }

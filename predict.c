@@ -1,5 +1,5 @@
 /* File:	predict.c
- * Created: 	2012 
+ * Created: 	2012
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
@@ -15,20 +15,21 @@
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
  *		INRIA France
- *	
+ *
  *		This program is distributed in the hope that it will be useful,
  * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
  * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  */
-//TODO Trace format, write, and read functions are *very* unneficient. It would be WAY BETTER to use a different format for traces and read them in larger chunks (like the trace module do for writing them, using a buffer). The prediction thread may sometimes be reading traces during the execution, and this could lead to it harming I/O performance. For now, I *do not* recommend using trace and prediction modules while evaluating AGIOS performance. 
+//TODO Trace format, write, and read functions are *very* unneficient. It would be WAY BETTER to use a different format for traces and read them in larger chunks (like the trace module do for writing them, using a buffer). The prediction thread may sometimes be reading traces during the execution, and this could lead to it harming I/O performance. For now, I *do not* recommend using trace and prediction modules while evaluating AGIOS performance.
 #include "agios.h"
 #include "agios_request.h"
-#ifndef AGIOS_KERNEL_MODULE 
+#ifndef AGIOS_KERNEL_MODULE
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
 
 #include "predict.h"
 #include "mylist.h"
@@ -82,7 +83,7 @@ static long int predicted_ap_fileno = -1;
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //FUNCTIONS RELATED TO THE PREDICTION MODULE'S LIFE
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-/*wait until the prediction module finished reading trace files 
+/*wait until the prediction module finished reading trace files
  *called by other thread (not prediction thread*/
 void predict_init_wait()
 {
@@ -122,7 +123,7 @@ int prediction_thr_should_stop()
 	return kthread_should_stop();
 #else
 	int ret;
-	
+
 	agios_mutex_lock(&prediction_thr_stop_mutex);
 	ret = prediction_thr_stop;
 	agios_mutex_unlock(&prediction_thr_stop_mutex);
@@ -138,19 +139,19 @@ void unlock_prediction_thr_refresh_mutex()
 {
 	agios_mutex_unlock(&prediction_thr_refresh_mutex);
 }
-/* must NOT be called by the prediction_thr, but used by the scheduler thread in order to request the prediction thr to 
+/* must NOT be called by the prediction_thr, but used by the scheduler thread in order to request the prediction thr to
  * recalculate the prediction_alpha and re-predict all aggregations*/
 void refresh_predictions()
 {
-	agios_mutex_lock(&prediction_thr_refresh_mutex);	
+	agios_mutex_lock(&prediction_thr_refresh_mutex);
 	agios_cond_signal(&prediction_thr_refresh_cond);
 	agios_mutex_unlock(&prediction_thr_refresh_mutex);
 }
-/* must NOT be called by the prediction_thr, but used by the scheduler thread in order to announce a new trace file (that 
+/* must NOT be called by the prediction_thr, but used by the scheduler thread in order to announce a new trace file (that
  * must have been closed before). The prediction alpha will be recalculated and all the aggregations will be re-predicted*/
 void prediction_notify_new_trace_file()
 {
-	agios_mutex_lock(&prediction_thr_refresh_mutex);	
+	agios_mutex_lock(&prediction_thr_refresh_mutex);
 	new_trace_file=1;
 	agios_cond_signal(&prediction_thr_refresh_cond);
 	agios_mutex_unlock(&prediction_thr_refresh_mutex);
@@ -183,7 +184,7 @@ int get_current_predicted_reqfilenb()
 struct request_t *predicted_request_constructor(char *file_id, int type, long long offset, long len, long long int predicted_time)
 {
 	struct request_t *new = request_constructor(file_id, type, offset, len, 0, predicted_time, RS_PREDICTED, 0);
-	
+
 	new->predicted_aggregation_size = 1;
 	new->predicted_aggregation_start = NULL;
 	new->first_agg_time = new->last_agg_time = predicted_time;
@@ -206,7 +207,7 @@ struct request_t *predicted_request_constructor(char *file_id, int type, long lo
 }
 /*add a new predicted request to the prediction module's timeline*/
 //TODO should we have a mutex for predict_timeline?
-void predict_timeline_add_req(struct request_t *req) 
+void predict_timeline_add_req(struct request_t *req)
 {
 	agios_list_add_tail(&req->timeline, &predict_timeline);
 }
@@ -243,9 +244,9 @@ int check_existing_prediction(char *file_id, int type, long long offset, long le
 
 
 	hash_val = AGIOS_HASH_STR(file_id) % AGIOS_HASH_ENTRIES;
-	
+
 	hash_list = hashtable_lock(hash_val);
-	
+
 	if(!agios_list_empty(hash_list))
 	{
 
@@ -260,7 +261,7 @@ int check_existing_prediction(char *file_id, int type, long long offset, long le
 
 		if(((request_file_found) && strcmp(req_file->file_id, file_id) == 0))
 		{
-	
+
 			if(type == RT_READ)
 				related_list = &req_file->predicted_reads.list;
 			else
@@ -303,15 +304,15 @@ int add_prediction(char *file_id, int type, long long offset, long len, long lon
 	else
 		new_predicted_time = predicted_time -  req_file->first_request_predicted_time;
 	hashtable_unlock(hash);
-	
-	
+
+
 
 	/*see if we already have this prediction*/
 	if(check_existing_prediction(file_id, type, offset, len, new_predicted_time, &req, &hash))
 	{
 		/*adjust the predicted time*/
 		hashtable_lock(hash);
-		req->jiffies_64 += new_predicted_time; //we used to take the average at this point, but this would give more importance to the most recently read predictions. 
+		req->jiffies_64 += new_predicted_time; //we used to take the average at this point, but this would give more importance to the most recently read predictions.
 		req->reqnb++;
 		update_average_distance(req->globalinfo, offset, len);
 		hashtable_unlock(hash);
@@ -336,7 +337,7 @@ int add_prediction(char *file_id, int type, long long offset, long len, long lon
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //FUNCTIONS USED BY THE SCHEDULING THREAD TO LINK REQUESTS TO THEIR PREDICTED VERSIONS AND TO DECIDE ABOUT WAITING TIMES AND SCHEDULING ALGORITHMS
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-/*called by other thread (not by the prediction thread) when there is a new request in the scheduler (a real one) 
+/*called by other thread (not by the prediction thread) when there is a new request in the scheduler (a real one)
  *find the corresponding predicted one and links them*/
 void prediction_newreq(struct request_t *req)
 {
@@ -354,7 +355,7 @@ void prediction_newreq(struct request_t *req)
 	/*find the same request among the predicted ones*/
 	if(check_existing_prediction_onlist(predicted_list, req->io_data.offset, req->io_data.len, req->jiffies_64 - req->globalinfo->req_file->first_request_time, &tmp))
 	{
-		/*link the requests*/	
+		/*link the requests*/
 		req->mirror = tmp;
 	}
 }
@@ -367,20 +368,20 @@ long long int agios_predict_should_we_wait(struct request_t *req)
 	struct request_t *tmp;
 	long long int max, pmax;
 
-	
+
 	/*TODO maybe remove the already_waited condition. In order to avoid starvation, we could make it not wait if all the requests of the aggregation were supposed to be here by now (see the method to obtain the waiting_time below) */
 	if(req->already_waited)
 		return 0;
-	
+
 	/*first we need to fing the predicted_aggregation_start.*/
-	if((req->reqnb == 1) && /*it is not an aggregated request*/ 
+	if((req->reqnb == 1) && /*it is not an aggregated request*/
            (req->mirror))  /*but we have a predicted aggregation to it*/
 		predicted_head = req->mirror->predicted_aggregation_start;
 	else /*it is an aggregated request*/
 	{
 		agios_list_for_each_entry(tmp, &req->reqs_list, related) /*go through all subreqs*/
 		{
-			if((tmp->mirror) && (tmp->mirror->predicted_aggregation_start) && (tmp->mirror->predicted_aggregation_start != predicted_head)) //we have a predicted aggregation to this request, and it is not the one we've already found 
+			if((tmp->mirror) && (tmp->mirror->predicted_aggregation_start) && (tmp->mirror->predicted_aggregation_start != predicted_head)) //we have a predicted aggregation to this request, and it is not the one we've already found
 			{
 				if((!predicted_head) || ((predicted_head) && (predicted_head->predicted_aggregation_size < tmp->mirror->predicted_aggregation_start->predicted_aggregation_size))) /*this new aggregation is larger*/
 					predicted_head = tmp->mirror->predicted_aggregation_start;
@@ -389,7 +390,7 @@ long long int agios_predict_should_we_wait(struct request_t *req)
 	}
 	if(!predicted_head)
 		return 0;
-	
+
 	/*did we predict a better aggregation than what was done?*/
 	if(predicted_head->predicted_aggregation_size > req->reqnb)
 	{
@@ -402,7 +403,7 @@ long long int agios_predict_should_we_wait(struct request_t *req)
 		/*so how much should we wait?*/
 		if(pmax > max)
 		{
-			waiting_time = pmax - max;	
+			waiting_time = pmax - max;
 			if(waiting_time > config_waiting_time)
 			{
 #ifdef AGIOS_DEBUG
@@ -413,7 +414,7 @@ long long int agios_predict_should_we_wait(struct request_t *req)
 		}
 		else /*it does not make sense, all the requests should be here by now!*/
 			waiting_time = config_waiting_time;  /*TODO or maybe change it to a smaller waiting_time since we should not even be waiting*/
-		
+
 	}
 	if(waiting_time > 0)
 		req->already_waited=1; //so we won't make the same decision again
@@ -424,7 +425,7 @@ int predict_select_best_algorithm(void)
 {
 	if(predicted_ap_operation == -1) /*we should not choose if we weren't able to detect the access pattern*/
 		return -1;
-		
+
 	return get_algorithm_from_string(scheduling_algorithm_selection_tree(predicted_ap_operation, predicted_ap_fileno, get_access_ratio(predicted_ap_server_reqsize, predicted_ap_operation), predicted_ap_spatiality, predicted_ap_reqsize));
 }
 
@@ -435,7 +436,7 @@ int predict_select_best_algorithm(void)
 void update_average_distance(struct related_list_t *related_list, long long offset, long len)
 {
 	long int this_distance;
-	
+
 	if(related_list->lastfinaloff > 0)
 	{
 		if(related_list->stats_file.avg_distance == -1)
@@ -481,7 +482,7 @@ void calculate_prediction_alpha(long long int time_spent_waiting, long long int 
 						if(time_between >= config_waiting_time)
 						{
 							/*full overlapping*/
-							B+= config_waiting_time; 	
+							B+= config_waiting_time;
 						}
 						else
 						{
@@ -497,14 +498,14 @@ void calculate_prediction_alpha(long long int time_spent_waiting, long long int 
 					time_between += get_access_time(req_next->io_data.len, req_next->type);
 				}
 				req_l_next = req_l_next->next;
-			} 
+			}
 			req_l = req_l->next;
 		}
 		if(A == 0)
 			prediction_alpha = 0.0;
 		else
 			prediction_alpha = ((long double) B)/((long double) A);
-		
+
 	}
 	else
 	{
@@ -518,7 +519,7 @@ void calculate_prediction_alpha(long long int time_spent_waiting, long long int 
 }
 
 /*see if req can be added to the aggregation that starts at agg_head
- * start offset of req MUST be larger or equal than the start offset of the aggregation. 
+ * start offset of req MUST be larger or equal than the start offset of the aggregation.
  * since the lists are in offset order and we look from the first, this should not be a problem. */
 /* for more detail about this algorithm, please see our paper from ICPADS 2013 (AGIOS: Application-guided I/O Scheduling for Parallel File Systems)*/
 int aggregation_is_possible(long int current_size, struct request_t *agg_head, struct request_t *req)
@@ -537,9 +538,9 @@ int aggregation_is_possible(long int current_size, struct request_t *agg_head, s
 			delta = req->jiffies_64 - agg_head->last_agg_time;
 		else
 			delta = agg_head->last_agg_time - req->jiffies_64;
-		
-		
-		if( ( get_access_time(current_size,req->type) + get_access_time(req->io_data.len, req->type) ) > 
+
+
+		if( ( get_access_time(current_size,req->type) + get_access_time(req->io_data.len, req->type) ) >
                     ( get_access_time(current_size + req->io_data.len, req->type) + (delta * (1.0 - prediction_alpha)) ) )
 		{
 			/*the time to process the requests separately is larger than the time to process the two requests together plus the waiting time between them. Therefore, we should wait to process them together!*/
@@ -565,14 +566,14 @@ void predict_aggregations_onlist(struct related_list_t *predicted_l, short int c
 		{
 			req->predicted_aggregation_size = 1;
 			req->predicted_aggregation_start = NULL;
-			req->already_waited=0;  
+			req->already_waited=0;
 		}
 	}
 
 	req_l = predicted_l->list.next;
 	while((req_l) && (req_l != &(predicted_l->list)))
 	{
-		req = agios_list_entry(req_l, struct request_t, related);		
+		req = agios_list_entry(req_l, struct request_t, related);
 
 		if(req->predicted_aggregation_start == NULL)
 		{
@@ -605,9 +606,9 @@ void predict_aggregations_onlist(struct related_list_t *predicted_l, short int c
 					/*update current_size*/
 					current_size = current_size + req_next->io_data.len - (req->io_data.offset + current_size - req_next->io_data.offset);
 				}
-			
+
 				req_l_next = req_l_next->next;
-			} 
+			}
 			req->globalinfo->stats_file.sum_of_agg_reqs+= req->predicted_aggregation_size;
 			if(req->predicted_aggregation_size > req->globalinfo->best_agg)
 				req->globalinfo->best_agg = req->predicted_aggregation_size;
@@ -623,7 +624,7 @@ void predict_aggregations(short int cleanup)
 	int i;
 	struct agios_list_head *hash_list;
 	struct request_file_t *req_file;
-	
+
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
@@ -633,7 +634,7 @@ void predict_aggregations(short int cleanup)
 			/*go through all the files of this hash value*/
 			agios_list_for_each_entry(req_file, hash_list, hashlist)
 			{
-				if(!agios_list_empty(&(req_file->predicted_reads.list)))	
+				if(!agios_list_empty(&(req_file->predicted_reads.list)))
 				{
 					/*the predicted reads list*/
 					predict_aggregations_onlist(&req_file->predicted_reads, cleanup);
@@ -653,17 +654,17 @@ void predict_aggregations(short int cleanup)
 }
 
 /*calculate the "average stripe access time difference"
- *for that we go through all requests inside a queue considering one stripe at a time. 
- *Between the requests from this stripe, we calculate the difference between the maximum and the minimum arrival times. 
+ *for that we go through all requests inside a queue considering one stripe at a time.
+ *Between the requests from this stripe, we calculate the difference between the maximum and the minimum arrival times.
  *Then we take the average between all stripes' differences
  */
 //TODO it probably does not make sense for orangefs
-void calculate_average_stripe_access_time_difference(struct related_list_t *related_list) 
+void calculate_average_stripe_access_time_difference(struct related_list_t *related_list)
 {
 	long long int arrival_times_differences_sum, max_arrival_time, min_arrival_time;
 	int current_stripe, current_count, stripes_count;
 	struct request_t *req;
-	
+
 	if(!agios_list_empty(&related_list->list))
 	{
 		current_stripe = 0;
@@ -693,7 +694,7 @@ void calculate_average_stripe_access_time_difference(struct related_list_t *rela
 			if(req->jiffies_64 < min_arrival_time)
 				min_arrival_time = req->jiffies_64;
 			current_count++;
-		} 
+		}
 		if(current_count > 1) //we've finished going through all requests while treating the last stripe
 		{
 			arrival_times_differences_sum = max_arrival_time - min_arrival_time;
@@ -701,7 +702,7 @@ void calculate_average_stripe_access_time_difference(struct related_list_t *rela
 		}
 		/*now we have the metric*/
 		if(stripes_count > 0)
-			related_list->avg_stripe_difference =  (arrival_times_differences_sum/stripes_count)/1000000; //ms		
+			related_list->avg_stripe_difference =  (arrival_times_differences_sum/stripes_count)/1000000; //ms
 		else
 			related_list->avg_stripe_difference=-1;
 	}
@@ -728,7 +729,7 @@ void print_access_pattern(char * operation)
 		agios_just_print("LARGE");
 	agios_just_print(".\n");
 }
-/*1. updates the "average distance between consecutive requests" metric to all files with predicted requests. 
+/*1. updates the "average distance between consecutive requests" metric to all files with predicted requests.
  *The avg_distance variable received the sum of the differences between every pair of consecutive requests while reading them, so we have to divide it by avg_distance_count to get the average */
 /*2. calculates the "average stripe arrival time difference" metric to all files with predicted requests. */
 /*3. uses 1, 2, and a decision tree to detect access pattern's spatiality and application request size aspects*/
@@ -747,10 +748,10 @@ void update_traced_access_pattern()
 	long long read_server_reqsize = 0;
 	long long write_server_reqsize = 0;
 
-	
-	
+
+
 	PRINT_FUNCTION_NAME;
-	
+
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
@@ -762,7 +763,7 @@ void update_traced_access_pattern()
 			{
 				if((!agios_list_empty(&req_file->predicted_reads.list)) || (req_file->predicted_reads.stats_file.avg_distance > -1))
 				{
-					//average distance between consecutive requests (we keep summing the difference while adding the requests, so we just have to take the average 
+					//average distance between consecutive requests (we keep summing the difference while adding the requests, so we just have to take the average
 					if(req_file->predicted_reads.stats_file.avg_distance_count > 1)
 					{
 						req_file->predicted_reads.stats_file.avg_distance= ((long double) req_file->predicted_reads.stats_file.avg_distance)/req_file->predicted_reads.stats_file.avg_distance_count;
@@ -790,8 +791,8 @@ void update_traced_access_pattern()
 						req_file->predicted_writes.stats_file.avg_distance_count=1;
 					}
 
-					calculate_average_stripe_access_time_difference(&req_file->predicted_writes);	
-			
+					calculate_average_stripe_access_time_difference(&req_file->predicted_writes);
+
 					if((req_file->predicted_writes.avg_stripe_difference >= 0) && (req_file->predicted_writes.stats_file.avg_distance >= 0))
 					{
 						writes_count++;
@@ -802,7 +803,7 @@ void update_traced_access_pattern()
 						write_reqsize_count[req_file->predicted_writes.app_request_size]++;
 					}
 				}
-	
+
 			}
 		}
 
@@ -817,7 +818,7 @@ void update_traced_access_pattern()
 		predicted_ap_reqsize = get_index_max(read_reqsize_count);
 		predicted_ap_server_reqsize = round(((float) read_server_reqsize) / reads_count);
 		print_access_pattern("READS");
-		
+
 	}
 	else if (writes_count > 0)
 	{
@@ -836,10 +837,10 @@ void update_requests_arrival_times()
 	struct agios_list_head *hash_list;
 	struct request_file_t *req_file;
 	struct request_t *req;
-	
-	
+
+
 	PRINT_FUNCTION_NAME;
-	
+
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
@@ -877,7 +878,7 @@ void update_requests_arrival_times()
 		hashtable_unlock(i);
 	}
 
-				
+
 
 }
 /************************************************************************************************************
@@ -888,9 +889,9 @@ void reset_files_first_arrival_time()
 	int i;
 	struct agios_list_head *hash_list;
 	struct request_file_t *req_file;
-	
+
 	PRINT_FUNCTION_NAME;
-	
+
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		hash_list = hashtable_lock(i);
@@ -909,7 +910,7 @@ void reset_files_first_arrival_time()
 	}
 }
 /* read tracefiles, put all requests into the data structures (hashtable and timeline), and calculates metrics
- * last = the number of files from which we already got predictions (in the first execution it must 
+ * last = the number of files from which we already got predictions (in the first execution it must
  * be 0, and in the next ones it will be the tracefile_counter)
  * files_nb = the number of existing tracefiles*/
 void read_predictions_from_traces(int last, int files_nb)
@@ -949,15 +950,15 @@ void read_predictions_from_traces(int last, int files_nb)
 		}
 		if(ret > 0)
 			agios_print("Error while reading the trace file %s.%d.%s. Stopping for this file.\n", config_trace_agios_file_prefix, i, config_trace_agios_file_sufix);
-	
+
 		/*we have to reset the first arrival times for the files because the next trace can have accesses to the same file, and it would be harder to identify duplicate predictions*/
 		reset_files_first_arrival_time();
-			
+
 		fclose(input_file);
-	}	
+	}
 	/*we have to take the average between repeated predictions' arrival times*/
 	update_requests_arrival_times();
-		
+
 }
 /* start = the number of tracefiles we already know exist*/
 int how_many_tracefiles_there_are(int start)
@@ -985,7 +986,7 @@ int how_many_tracefiles_there_are(int start)
 }
 /************************************************************************************************************
  * SIMPLIFIED TRACE FILES
- * instead of tracing requests, these files only give some metrics previously measured for files 
+ * instead of tracing requests, these files only give some metrics previously measured for files
  * (they are substantially faster than normal traces, very useful to repeat tests)
  ************************************************************************************************************/
 //return the number of files for which we obtained information from simplified traces
@@ -999,7 +1000,7 @@ int read_predictions_from_simple_traces(void)
 	long hash_val;
 	struct request_file_t *req_file;
 	int count =0;
-	
+
 
 	PRINT_FUNCTION_NAME;
 	if((config_simple_trace_agios_file_prefix == NULL) || (config_trace_agios_file_sufix == NULL))
@@ -1106,9 +1107,9 @@ void *prediction_thr(void *arg)
 	int new_tracefile_counter;
 	struct timespec predict_init_start;
 
-	pthread_mutex_lock(&prediction_thr_refresh_mutex);	
+	pthread_mutex_lock(&prediction_thr_refresh_mutex);
 	agios_gettime(&predict_init_start);
-	
+
 	if(tracefile_counter == -1)
 	{
 		/*we still do not know how many trace files there are*/
@@ -1138,17 +1139,17 @@ void *prediction_thr(void *arg)
 	predict_init_time = get_nanoelapsed(predict_init_start);
 	debug("finished reading from %d traces in %llu ns\n", tracefile_counter, predict_init_time);
 	signal_predict_init();
-	pthread_mutex_unlock(&prediction_thr_refresh_mutex);	
+	pthread_mutex_unlock(&prediction_thr_refresh_mutex);
 
 	/*wait for refresh requests*/
 	do {
-		pthread_mutex_lock(&prediction_thr_refresh_mutex);	
+		pthread_mutex_lock(&prediction_thr_refresh_mutex);
 		pthread_cond_wait(&prediction_thr_refresh_cond, &prediction_thr_refresh_mutex);
 		pthread_mutex_unlock(&prediction_thr_refresh_mutex);
 
 		if(!prediction_thr_should_stop())
 		{
-			pthread_mutex_lock(&prediction_thr_refresh_mutex);	
+			pthread_mutex_lock(&prediction_thr_refresh_mutex);
 			if(new_trace_file)
 			{
 				/*read new predictions before recalculating everything*/
@@ -1156,7 +1157,7 @@ void *prediction_thr(void *arg)
 				new_trace_file = 0;
 				new_tracefile_counter = how_many_tracefiles_there_are(tracefile_counter);
 				new_tracefile_counter--; //we take one out, because it's the one the Trace Module is using right now.
-				
+
 				if(config_predict_agios_read_traces)
 				{
 					read_predictions_from_traces(tracefile_counter, new_tracefile_counter);
@@ -1177,7 +1178,7 @@ void *prediction_thr(void *arg)
 	} while(!prediction_thr_should_stop());
 
 	return 0;
-} 
+}
 
 int prediction_module_init(int file_counter)
 {

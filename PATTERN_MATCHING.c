@@ -1,5 +1,5 @@
 /* File:	PATTERN_MATCHING.c
- * Created: 	2016 
+ * Created: 	2016
  * License:	GPL version 3
  * Author:
  *		Francieli Zanon Boito <francielizanon (at) gmail.com>
@@ -50,7 +50,7 @@ void free_PM_pattern_t(struct PM_pattern_t **pattern)
 	{
 		//free the access pattern description structure
 		free_access_pattern_t(&((*pattern)->description));
-		//free the performance information structure 
+		//free the performance information structure
 		if(!agios_list_empty(&((*pattern)->performance)))
 		{
 			struct scheduler_info_t *tmp, *aux=NULL;
@@ -62,14 +62,14 @@ void free_PM_pattern_t(struct PM_pattern_t **pattern)
 					free_scheduler_info_t(&aux);
 				}
 				aux = tmp;
-			} 
+			}
 			if(aux)
 			{
 				agios_list_del(&aux->list);
 				free_scheduler_info_t(&aux);
 			}
 		}
-		//free the probability network 
+		//free the probability network
 		if(!agios_list_empty(&((*pattern)->next_patterns)))
 		{
 			struct next_patterns_element_t *tmp, *aux=NULL;
@@ -108,8 +108,8 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 		free(ret);
 		return NULL;
 	}
-	
-	//description of the access pattern first	
+
+	//description of the access pattern first
 	error = 0;
 	error += fread(&(ret->description->reqnb), sizeof(int), 1, fd);
 	error += fread(&(ret->description->total_size), sizeof(long), 1, fd);
@@ -134,17 +134,16 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 	error = 0;
 	for(i =0; i<ret->description->reqnb; i++)
 	{
-		error += fread(&(ret->description->time_series[i].timestamp), sizeof(long int), 1, fd); 
-		error += fread(&(ret->description->time_series[i].offset), sizeof(long long int), 1, fd); 
+		error += fread(&(ret->description->time_series[i].offset), sizeof(long long int), 1, fd);
 		init_agios_list_head(&(ret->description->time_series[i].list));
 	}
-	if(error != ret->description->reqnb*2)
+	if(error != ret->description->reqnb)
 	{
 		free_PM_pattern_t(&ret);
 		return NULL;
 	}
 	ret->description->original_size = ret->description->reqnb;
-	ret->description->aggPtSize = NULL;	
+	ret->description->aggPtSize = NULL;
 	//read performance information for this access pattern
 	init_agios_list_head(&(ret->performance));
 	error = fread(&sched_count, sizeof(int), 1, fd); //we store a counter of to how many schedulers we have performance masurements
@@ -197,7 +196,7 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 		free_PM_pattern_t(&ret);
 		return NULL;
 	}
-	
+
 	//initialize the rest of the structure to fill probability network later
 	init_agios_list_head(&(ret->next_patterns));
 	ret->all_counters = 0;
@@ -215,7 +214,7 @@ void read_pattern_matching_file()
 	int i;
 
 	PRINT_FUNCTION_NAME;
-	
+
 	//initialize the list of patterns
 	init_agios_list_head(&all_observed_patterns);
 
@@ -233,7 +232,7 @@ void read_pattern_matching_file()
 	{
 		agios_print("PANIC! Could not read from access pattern file %s\n", config_pattern_filename);
 		fclose(fd);
-		return;	
+		return;
 	}
 	//we'll allocate a vector to help us while reading
 	patterns = malloc(sizeof(struct PM_pattern_t *)*(access_pattern_count+1));
@@ -285,7 +284,7 @@ void read_pattern_matching_file()
 			agios_list_add_tail(&tmp->list, &new->next_patterns);
 		}
 		if(this_ret != pat_nb*3)
-		{	
+		{
 			agios_print("PANIC! Could not read pattern matching probability network information\n");
 			fclose(fd);
 			free(patterns);
@@ -305,7 +304,7 @@ void read_pattern_matching_file()
 	if(ret != 1)
 	{
 		agios_print("Error! Could not read maximum dtw result from pattern matching file\n");
-	}	
+	}
 
 	//close file
 	fclose(fd);
@@ -348,7 +347,7 @@ short int compatible_pattern(struct access_pattern_t *A, struct access_pattern_t
 	//let's see the difference in the total number of requests
 	if(A->reqnb > 0)
 		diff = ((A->reqnb - B->reqnb)*100)/A->reqnb;
-	else 
+	else
 		diff = 100;
 	if(diff < 0)
 		diff = 0 - diff;
@@ -357,7 +356,7 @@ short int compatible_pattern(struct access_pattern_t *A, struct access_pattern_t
 	//let`s see the difference in the number of reads
 	if(A->read_nb > 0)
 		diff = ((A->read_nb - B->read_nb)*100)/A->read_nb;
-	else 
+	else
 		diff = 100;
 	if(diff < 0)
 		diff = 0 - diff;
@@ -366,7 +365,7 @@ short int compatible_pattern(struct access_pattern_t *A, struct access_pattern_t
 	//let's see the difference in the number of writes
 	if(A->write_nb > 0)
 		diff = ((A->write_nb - B->write_nb)*100)/A->write_nb;
-	else 
+	else
 		diff = 100;
 	if(diff < 0)
 		diff = 0 - diff;
@@ -375,13 +374,13 @@ short int compatible_pattern(struct access_pattern_t *A, struct access_pattern_t
 	//let's see the difference in the number of accessed files
 	if(A->filenb > 0)
 		diff = ((A->filenb - B->filenb)*100)/A->filenb;
-	else 
+	else
 		diff = 100;
 	if(diff < 0)
 		diff = 0 - diff;
 	if(diff > config_maximum_pattern_difference)
 		return 0;
-	//ok, they passed all our tests, so we say they are compatible	
+	//ok, they passed all our tests, so we say they are compatible
 	//TODO more heuristics?
 	return 1;
 }
@@ -414,14 +413,14 @@ struct PM_pattern_t *match_seen_pattern(struct access_pattern_t *pattern)
 		{
 			this_result = apply_DTW(tmp->description, pattern);
 			//among the similar ones, we get the most similar one
-			if((this_result >= config_pattern_matching_threshold) && (this_result > best_result)) 
+			if((this_result >= config_pattern_matching_threshold) && (this_result > best_result))
 			{
 				best_result = this_result;
 				ret = tmp;
 			}
 		}
 	}
-	return ret; 
+	return ret;
 }
 //store a new access pattern in the list of known access patterns
 //returns a pointer to it
@@ -462,7 +461,7 @@ void update_probability_network(struct PM_pattern_t *new_pattern)
 				break;
 			}
 		}
-	}	
+	}
 	//if we did not find it, we need to add a new data structure
 	if(!found)
 	{
@@ -497,7 +496,7 @@ struct PM_pattern_t *predict_next_pattern(void)
 			if(tmp->probability > best_prob)
 			{
 				best_prob = tmp->probability;
-				ret = tmp->pattern;		
+				ret = tmp->pattern;
 			}
 		}
 	}
@@ -541,21 +540,21 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 		agios_gettime(&this_time);
 		timestamp = get_timespec2llu(this_time);
 		recent_measurements = agios_get_performance_bandwidth();
-	
+
 		//give recent measurements to ARMED BANDIT so it will have updated information
-		if(!first_performance_measurement)	
+		if(!first_performance_measurement)
 			ARMED_BANDIT_update_bandwidth(recent_measurements,0);
 		else
 		{
-			agios_reset_performance_counters(); //we really discard that first measurement		     
+			agios_reset_performance_counters(); //we really discard that first measurement
 			free(recent_measurements);
 			recent_measurements=NULL;
-			first_performance_measurement=0;	
+			first_performance_measurement=0;
 		}
 	}
 
 	//get the most recently tracked access pattern from the pattern tracker module
-	seen_pattern = get_current_pattern(); 
+	seen_pattern = get_current_pattern();
 
 	//look for the recently observed pattern in our list of known patterns
 	if(seen_pattern->reqnb >= config_minimum_pattern_size) //we ignore patterns which are too small
@@ -572,11 +571,11 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	//if we know this pattern, we store the performance information (if we have the information, because we might have dropped it if it was the first performance measurement)
 	if((matched_pattern) && (recent_measurements))
 	{
-		add_measurement_to_performance_table(&matched_pattern->performance, current_selection, timestamp, recent_measurements[agios_performance_get_latest_index()]); 
+		add_measurement_to_performance_table(&matched_pattern->performance, current_selection, timestamp, recent_measurements[agios_performance_get_latest_index()]);
 	}
 	if(recent_measurements) //we may cleanup now, we already got what we needed
 		free(recent_measurements);
-	
+
 	//we link the previous pattern to this one we've just detected
 	if(matched_pattern)
 	{
@@ -592,7 +591,7 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	//if we found it, then we can try selecting the best algorithm for the situation
 	if(matched_pattern)
 	{
-		new_sched = get_best_scheduler_for_pattern(&matched_pattern->performance);	
+		new_sched = get_best_scheduler_for_pattern(&matched_pattern->performance);
 	}
 
 	//if we were able to select a scheduling algorithm, we just have to return, otherwise we'll let armed bandit make the choice for us
@@ -633,10 +632,9 @@ int write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
 	error = 0;
 	for(i = 0; i < pattern->description->reqnb; i++)
 	{
-		error += fwrite(&(pattern->description->time_series[i].timestamp), sizeof(long int), 1, fd);
 		error += fwrite(&(pattern->description->time_series[i].offset), sizeof(long long int), 1, fd);
 	}
-	if(error != pattern->description->reqnb*2)
+	if(error != pattern->description->reqnb)
 		return 0;
 	//performance information for this access pattern
 	//(first we need to know to how many schedulers we have information)
@@ -654,10 +652,9 @@ int write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
 		this_error = 0;
 		while(start != tmp->measurements_end)
 		{
-			this_error += fwrite(&(tmp->bandwidth_measurements[start].timestamp), sizeof(long int), 1, fd);
 			this_error += fwrite(&(tmp->bandwidth_measurements[start].bandwidth), sizeof(double), 1, fd);
-		}	
-		if(this_error != measurements*2)
+		}
+		if(this_error != measurements)
 			return 0;
 		error += fwrite(&tmp->bandwidth, sizeof(double), 1, fd);
 		error += fwrite(&tmp->selection_counter, sizeof(int), 1, fd);
@@ -697,12 +694,12 @@ void write_pattern_matching_file(void)
 	else
 	{
 		//write the number of access patterns
-		ret = fwrite(&access_pattern_count, sizeof(int), 1, fd);		
+		ret = fwrite(&access_pattern_count, sizeof(int), 1, fd);
 		if(!ret)
 		{
 			agios_print("PANIC! Could not write to pattern matching file\n");
 			fclose(fd);
-			return;	
+			return;
 		}
 		//write basic information on the access patterns (general information, the time series and performance observed with scheduling algorithms)
 		agios_list_for_each_entry(tmp, &all_observed_patterns, list)
@@ -731,7 +728,7 @@ void write_pattern_matching_file(void)
 				this_error += fwrite(&next->pattern->id, sizeof(int), 1, fd);
 				this_error += fwrite(&next->counter, sizeof(int), 1, fd);
 				this_error += fwrite(&next->probability, sizeof(int), 1, fd);
-			}	
+			}
 			if(this_error != pat_count*3)
 			{
 				agios_print("PANIC! Could not write probability network to pattern matching file\n");
@@ -765,14 +762,14 @@ void PATTERN_MATCHING_exit(void)
 	agios_list_for_each_entry(tmp, &all_observed_patterns, list)
 	{
 		if(aux)
-		{	
+		{
 			agios_list_del(&aux->list);
 			free_PM_pattern_t(&aux);
 		}
 		aux = tmp;
-	}	
+	}
 	if(aux)
-	{	
+	{
 		agios_list_del(&aux->list);
 		free_PM_pattern_t(&aux);
 	}
