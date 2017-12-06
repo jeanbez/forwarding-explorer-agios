@@ -262,6 +262,7 @@ void generic_init()
 /**********************************************************************************************************************/
 int current_alg = 0;
 struct io_scheduler_instance_t *current_scheduler=NULL;
+static AGIOS_LIST_HEAD(io_schedulers); //the list of scheduling algorithms (with their parameters)
 
 //change the current scheduling algorithm and update local parameters
 //here we assume the scheduling thread is NOT running, so it won't mess with the structures
@@ -331,7 +332,6 @@ void change_selected_alg(int new_alg)
 }
 
 
-static AGIOS_LIST_HEAD(io_schedulers); //the list of scheduling algorithms (with their parameters)
 //counts how many scheduling algorithms we have
 int get_io_schedulers_size(void)
 {
@@ -458,7 +458,7 @@ void register_static_io_schedulers(void)
 			.max_aggreg_size = MAX_AGGREG_SIZE,
 			.sync=1,
 			.needs_hashtable=1,
-			.can_be_dynamically_selected=1,
+			.can_be_dynamically_selected=0,
 			.is_dynamic = 0,
 			.name = "aIOLi",
 			.index = 4,
@@ -483,7 +483,7 @@ void register_static_io_schedulers(void)
 			.select_algorithm = NULL,
 			.max_aggreg_size = 1,
 			.sync=0,
-			.needs_hashtable=0, // Não ocupa o hash table, coloca as requisições em uma lista
+			.needs_hashtable=0, 
 			.can_be_dynamically_selected=0,
 			.is_dynamic = 0,
 			.name = "TW",
@@ -529,16 +529,16 @@ void register_static_io_schedulers(void)
 			.index = 9,
 		},
 		{
-			.init = &EXCLUSIVE_TW_init,
-			.exit = &EXCLUSIVE_TW_exit,
-			.schedule = &EXCLUSIVE_TW,
+			.init = &TWINS_init,
+			.exit = &TWINS_exit,
+			.schedule = &TWINS,
 			.select_algorithm = NULL,
 			.max_aggreg_size = 1,
 			.sync = 0, 
 			.needs_hashtable = 0, 
 			.can_be_dynamically_selected = 0, //The functions that implement the migration between different scheduling algorithms were not adapted for this algorithm, so it should never be used with a dynamic algorithm until we fix that.  
 			.is_dynamic = 0,
-			.name = "EXCLUSIVE_TIME_WINDOW",
+			.name = "TWINS",
 			.index = 10,
 		},
 		{

@@ -41,7 +41,7 @@
 short int config_trace_agios=0;
 short int config_trace_agios_predict=0;
 short int config_trace_agios_full=0;
-short int config_predict_agios_read_traces = 1;
+short int config_predict_agios_read_traces = 0;
 short int config_predict_agios_request_aggregation = 0;
 char *config_trace_agios_file_prefix=NULL;
 char *config_trace_agios_file_sufix=NULL;
@@ -64,37 +64,15 @@ int config_waiting_time = 900000;
 int config_aioli_quantum = 8192;
 int config_mlf_quantum = 8192;
 long int config_tw_size = 1000000000L;
-long int config_exclusive_tw_window_duration=250000000L; //250ms
+int config_twins_window=250000000L; //250ms
 
 int config_minimum_pattern_size = 5;
 int config_maximum_pattern_difference = 10;
 int config_pattern_matching_threshold=75; 
 char *config_pattern_filename=NULL;
-int config_static_pattern_matching=0;
+short int config_static_pattern_matching=0;
 
 
-void config_set_waiting_time(int value)
-{
-	config_waiting_time = value;
-}
-void config_set_aioli_quantum(int value)
-{
-	config_aioli_quantum = value;
-}
-void config_set_mlf_quantum(int value)
-{
-	config_mlf_quantum = value;
-}
-void config_set_starting_algorithm(int value)
-{
-	config_agios_starting_algorithm = value;
-	if((config_agios_starting_algorithm == DYN_TREE_SCHEDULER) || (config_agios_starting_algorithm == ARMED_BANDIT_SCHEDULER))
-	{
-		config_agios_starting_algorithm = SJF_SCHEDULER;
-		agios_print("Error! Starting algorithm cannot be a dynamic one. Using SJF instead");
-	}
-	
-}
 void config_set_trace_predict(short int value)
 {
 	config_trace_agios_predict = value;
@@ -107,43 +85,7 @@ void config_set_trace_full(short int value)
 	if((config_trace_agios_full) && (!config_trace_agios))
 		config_trace_agios_full = 0;
 }
-void config_set_predict_request_aggregation(short int value)
-{
-	config_predict_agios_request_aggregation = value;
-	if((config_predict_agios_request_aggregation) && (!config_predict_agios_read_traces))
-		config_predict_agios_request_aggregation = 0;
-}
-void config_set_trace_file_name(short int index, const char *value)
-{
-	if(index == 1)
-	{
-		config_trace_agios_file_prefix = malloc(sizeof(char)*(strlen(value)+1));
-		strcpy(config_trace_agios_file_prefix, value);
-	}
-	else
-	{
-		config_trace_agios_file_sufix = malloc(sizeof(char)*(strlen(value)+1));
-		strcpy(config_trace_agios_file_sufix, value);
-	}
-}
-void config_set_simple_trace_file_prefix(const char *value)
-{
-	config_simple_trace_agios_file_prefix = malloc(sizeof(char)*(strlen(value)+1));
-	strcpy(config_simple_trace_agios_file_prefix, value);
-}
-void config_set_access_times_file(const char *value)
-{
-	config_agios_access_times_file = (char *)malloc(sizeof(char)*(strlen(value)+1));
-	strcpy(config_agios_access_times_file, value);
-}
-void config_set_pattern_filename(const char *value)
-{
-	config_pattern_filename = (char *)malloc(sizeof(char)*(strlen(value)+1));
-	if(!config_pattern_filename)
-		agios_print("PANIC! Could not allocate memory for configuration parameters\n");
-	else
-		strcpy(config_pattern_filename, value);	
-}
+
 void config_agios_cleanup(void)
 {
 	if(config_trace_agios_file_prefix)
@@ -168,6 +110,9 @@ int config_agios_max_trace_buffer_size = 1*1024*1024;
 //SPREAD CONFIGURATION PARAMETERS TO OTHER MODULES
 //----------------------------------------------------------------------------------------------------------
 /*returns 0 in case of success*/
+//this function uses libconfig to parse the configuration file config_file. 
+//If config_file is NULL, will read DEFAULT_CONFIGFILE instead
+//If the file does not exist, it will use default values.
 short int read_configuration_file(char *config_file)
 {
 #ifndef AGIOS_KERNEL_MODULE 
@@ -185,7 +130,12 @@ short int read_configuration_file(char *config_file)
 	if(ret != CONFIG_TRUE)
 	{
 		agios_just_print("Error reading agios config file\n%s", config_error_text(&agios_config));
-		return 0; //no need to be an error, we'll just run with default values
+		//no need to be an error, we'll just run with default values
+		config_agios_access_times_file = malloc(sizeof(char)*(strlen(DEFAULT_ACCESSTIMESFILE)+1));
+		if(!config_agios_access_times_file)
+			return -ENOMEM;
+		strcpy(config_agios_access_times_file, DEFAULT_ACCESSTIMESFILE);	
+		return 0; 
 	}
 	/*read configuration*/
 	/*1. library options*/
@@ -197,33 +147,64 @@ short int read_configuration_file(char *config_file)
 	config_set_trace_full(ret);
 	config_lookup_bool(&agios_config, "library_options.predict_read_traces", &ret);
 	config_predict_agios_read_traces = ret;
+
 	config_lookup_bool(&agios_config, "library_options.predict_request_aggregation", &ret);
-	config_set_predict_request_aggregation(ret);
+	config_predict_agios_request_aggregation = ret;
+	if((config_predict_agios_request_aggregation) && (!config_predict_agios_read_traces))
+	{
+		agios_print("Configuration error! Cannot predict request aggregation if we cannot read information from traces. Disabling it.");
+		config_predict_agios_request_aggregation = 0;
+	}
+
 	config_lookup_string(&agios_config, "library_options.trace_file_prefix", &ret_str);
-	config_set_trace_file_name(1,ret_str);
+	config_trace_agios_file_prefix = malloc(sizeof(char)*(strlen(ret_str)+1));
+	if(!config_trace_agios_file_prefix)
+		return -ENOMEM;
+	strcpy(config_trace_agios_file_prefix, ret_str);
+	
 	config_lookup_string(&agios_config, "library_options.trace_file_sufix", &ret_str);
-	config_set_trace_file_name(2, ret_str);
+	config_trace_agios_file_sufix = malloc(sizeof(char)*(strlen(ret_str)+1));
+	if(!config_trace_agios_file_sufix)
+		return -ENOMEM;
+	strcpy(config_trace_agios_file_sufix, ret_str);
+
 	config_lookup_string(&agios_config, "library_options.simple_trace_prefix", &ret_str);
-	config_set_simple_trace_file_prefix(ret_str);
+	config_simple_trace_agios_file_prefix = malloc(sizeof(char)*(strlen(ret_str)+1));
+	if(!config_simple_trace_agios_file_prefix)
+		return -ENOMEM;
+	strcpy(config_simple_trace_agios_file_prefix, ret_str);
+
 	config_lookup_string(&agios_config, "library_options.default_algorithm", &ret_str);
 	config_agios_default_algorithm = get_algorithm_from_string(ret_str);
 	config_lookup_int(&agios_config, "library_options.prediction_time_error", &config_predict_agios_time_error);
 	config_lookup_int(&agios_config, "library_options.prediction_recalculate_alpha_period", &config_predict_agios_recalculate_alpha_period);
 	config_lookup_int(&agios_config, "library_options.predict_write_simplified_traces", &ret);
 	config_agios_write_simplified_traces = ret;
+
 	config_lookup_string(&agios_config, "library_options.access_times_func_file", &ret_str);
-	config_set_access_times_file(ret_str);
+	config_agios_access_times_file = (char *)malloc(sizeof(char)*(strlen(ret_str)+1));
+	if(!config_agios_access_times_file)
+		return -ENOMEM;
+	strcpy(config_agios_access_times_file, ret_str);
+
 	config_lookup_int(&agios_config, "library_options.waiting_time", &ret);
-	config_set_waiting_time(ret);
+	config_waiting_time = ret;
 	config_lookup_int(&agios_config, "library_options.aioli_quantum", &ret);
-	config_set_aioli_quantum(ret);
+	config_aioli_quantum = ret;
 	config_lookup_int(&agios_config, "library_options.mlf_quantum", &ret);
-	config_set_mlf_quantum(ret);
+	config_mlf_quantum = ret;
 	config_lookup_int(&agios_config, "library_options.select_algorithm_period", &ret);
 	config_agios_select_algorithm_period = ret*1000000L; //convert it to ns
 	config_lookup_int(&agios_config, "library_options.select_algorithm_min_reqnumber", &config_agios_select_algorithm_min_reqnumber);
+	
 	config_lookup_string(&agios_config, "library_options.starting_algorithm", &ret_str);
-	config_set_starting_algorithm(get_algorithm_from_string(ret_str));
+	config_agios_starting_algorithm = get_algorithm_from_string(ret_str);
+	if((config_agios_starting_algorithm == DYN_TREE_SCHEDULER) || (config_agios_starting_algorithm == ARMED_BANDIT_SCHEDULER))
+	{
+		config_agios_starting_algorithm = SJF_SCHEDULER;
+		agios_print("Configuration error! Starting algorithm cannot be a dynamic one. Using SJF instead");
+	}
+	
 	config_lookup_int(&agios_config, "library_options.min_ab_probability", &config_agios_min_ab_probability);
 	config_lookup_int(&agios_config, "library_options.validity_window", &ret);
 	config_agios_validity_window = ret*1000000L; //convert it to ns
@@ -236,15 +217,21 @@ short int read_configuration_file(char *config_file)
 	config_lookup_int(&agios_config, "library_options.time_window_size", &ret);
 	config_tw_size = ret*1000000L; //convert to ns
 	assert(config_tw_size >= 0);
-	config_lookup_int(&agios_config, "library_options.exclusive_tw_window_duration", &ret);
-	config_exclusive_tw_window_duration = ret*1000L; //convert us to ns
+	config_lookup_int(&agios_config, "library_options.twins_window", &ret);
+	config_twins_window = ret*1000L; //convert us to ns
 
 	config_lookup_int(&agios_config, "library_options.minimum_pattern_size", &ret);
 	config_minimum_pattern_size = ret;
 	config_lookup_int(&agios_config, "library_options.maximum_pattern_difference", &config_maximum_pattern_difference);
 	config_lookup_int(&agios_config, "library_options.pattern_matching_threshold", &config_pattern_matching_threshold);
+
 	config_lookup_string(&agios_config, "library_options.pattern_matching_filename", &ret_str);	
-	config_set_pattern_filename(ret_str);
+	config_pattern_filename = (char *)malloc(sizeof(char)*(strlen(ret_str)+1));
+	if(!config_pattern_filename)
+		return -ENOMEM;
+	else
+		strcpy(config_pattern_filename, ret_str);	
+
 	config_lookup_bool(&agios_config, "library_options.pattern_matching_static_algorithm", &config_static_pattern_matching);
 
 	/*2. user info*/

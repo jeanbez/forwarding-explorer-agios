@@ -78,7 +78,7 @@ int agios_add_request(char *file_id, short int type, long int offset,
 int agios_add_request(char *file_id, short int type, long int offset,
 		       long int len, void * data, struct client *clnt, int app_id);
 #endif
-int agios_release_request(char *file_id, short int type, long int len, long int offset);
+int agios_release_request(char *file_id, short int type, long int len, long int offset); //returns 1 on success
 
 int agios_set_stripe_size(char *file_id, int stripe_size);
 

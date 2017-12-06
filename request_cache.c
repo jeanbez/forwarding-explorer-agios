@@ -482,7 +482,6 @@ int request_cache_init(int max_app_id)
 	int ret=0;
 
 	reset_global_reqstats(); //put all statistics to zero
-	agios_reset_performance_counters();
 
 	timeline_init(max_app_id); //initializes the timeline
 

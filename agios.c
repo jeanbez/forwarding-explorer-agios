@@ -83,7 +83,11 @@ int __init __agios_init(void)
 
 #endif
 
+//initializes agios
 //returns 0 on success
+//if config_file is NULL, the DEFAULT_CONFIGFILE will be read instead. 
+//If it does not exist, will use default values
+//if requests are not passed to AGIOS with an application id, max_app_id should be 0
 int agios_init(struct client *clnt, char *config_file, int max_app_id)
 {
 	int ret;
@@ -92,7 +96,7 @@ int agios_init(struct client *clnt, char *config_file, int max_app_id)
 #ifdef AGIOS_KERNEL_MODULE
 	if(agios_in_use)
 	{
-		agios_print("module already in use, concurrent use is not supported yet.");
+		agios_print("module already in use, concurrent use is not supported.");
 		return -EINVAL;
 	}
 #endif

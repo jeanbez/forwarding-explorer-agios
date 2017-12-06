@@ -5,6 +5,7 @@
 
 //if not provided a filename, we'll try to read from this one
 #define DEFAULT_CONFIGFILE	"/etc/agios.conf"
+#define DEFAULT_ACCESSTIMESFILE "/etc/access_times.func"
 
 short int read_configuration_file(char *config_file);
 

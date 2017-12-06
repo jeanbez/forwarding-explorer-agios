@@ -81,7 +81,7 @@ void EXCLUSIVE_TW(void *clnt)
 			exclusive_tw_first_req = 0;
 			current_exclusive_tw = 0;
 		}
-		else if(get_nanoelapsed(window_start) >= config_exclusive_tw_window_duration)
+		else if(get_nanoelapsed(window_start) >= config_twins_window)
 		{
 			//we're done with this window, time to move to the next one
 			agios_gettime(&window_start);

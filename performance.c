@@ -37,11 +37,17 @@ long int agios_processed_reqnb; //processed requests counter. I've decided not t
 /************************************************************************************************************
  * GLOBAL PERFORMANCE METRICS
  ************************************************************************************************************/
-static long long int *performance_time; 
-static long long int *performance_size;
-static long int *performance_timestamps;
-int *performance_algs;
-int performance_start, performance_end;
+struct performance_entry_t //information about one time period, corresponding to one scheduling algorithm selection
+{
+	long timestamp;	//timestamp of when we started this time period
+	int alg; //scheduling algorithm in use in this time period
+	long time; //the sum of time to process of every requests in this time period
+	long size; //the sum of size of every request in this time period
+	struct agios_list_head list; 	
+};
+static AGIOS_LIST_HEAD(performance_info); //the list with all information we are holding about performance measurements
+static int performance_info_len=0; //how many entries in performance_info
+struct performance_entry_t *current_performance_entry; //the latest entry to performance_info
 static pthread_mutex_t performance_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* 
@@ -50,22 +56,20 @@ static pthread_mutex_t performance_mutex = PTHREAD_MUTEX_INITIALIZER;
  * used by the proc module to write the stats file
  * must NOT hold performance_mutex
  */
-long long int agios_get_performance_size(void)
+long int agios_get_performance_size(void)
 {
-	long long int ret=0;
-	int i;
+	long int ret=0;
+	struct performance_entry_t *entry=NULL;
+
 	agios_mutex_lock(&performance_mutex);
-	i = performance_start;
-	while(i != performance_end)
+	agios_list_for_each_entry(entry, &performance_info, list)
 	{
-		ret += performance_size[i];
-		i++;
-		if(i >= config_agios_performance_values)
-			i=0;
+		ret += entry->size;
 	}
 	agios_mutex_unlock(&performance_mutex);
 	return ret;
 }
+
 /* 
  * returns the total time to process all requests (sum) in the last PERFORMANCE_VALUES
  * time periods. Each time period corresponds to one scheduling algorithm selection 
@@ -73,62 +77,48 @@ long long int agios_get_performance_size(void)
  * used by the proc module to write the stats file
  * must NOT hold performance_mutex
  */
-long long int agios_get_performance_time(void)
+long int agios_get_performance_time(void)
 {
-	long long int ret=0;
-	int i;
+	long int ret=0;
+	struct performance_entry_t *entry=NULL;
+
 	agios_mutex_lock(&performance_mutex);
-	i = performance_start;
-	while(i != performance_end)
+	agios_list_for_each_entry(entry, &performance_info, list)
 	{
-		ret += performance_time[i];
-		i++;
-		if(i >= config_agios_performance_values)
-			i=0;
+		ret += entry->time;
 	}
 	agios_mutex_unlock(&performance_mutex);
 	return ret;
 }
+
 /*
  * returns an array with the last PERFORMANCE VALUES performance measurements
- * additionally, gives pointer to the array with the list of the last
- * PERFORMANCE_VALUES selected scheduling algorithms (start and end are the
- * indexes to access the circular arrays) 
  * used by the proc module to write the stats file
  * must NOT hold performance mutex
  */
 double * agios_get_performance_bandwidth() 
 {
 	double *ret = malloc(sizeof(double)*config_agios_performance_values);
-	long double tmp_time;
-	int i;
+	int i=0;
+	struct performance_entry_t *entry;
+	if(!ret)
+		return NULL;
 
 	agios_mutex_lock(&performance_mutex);
-
-	for(i = 0; i< config_agios_performance_values; i++)
+	agios_list_for_each_entry(entry, &performance_info, list)
 	{
-		ret[i] = 0.0;
-		
-		if(performance_time[i] > 0)
-		{
-			tmp_time = get_ns2s(performance_time[i]);
-			if(tmp_time > 0)
-				ret[i] = (performance_size[i]) / tmp_time;
-		}
+		if(entry->time > 0) 
+			ret[i] = ((double) entry->size) / get_ns2s(entry->time);
+		else
+			ret[i] = 0.0;
+		i++;
 	}
 	agios_mutex_unlock(&performance_mutex);
+
+	for(; i<config_agios_performance_values;i++) //it is possible we have less entries than expected
+		ret[i] = 0.0;
+
 	return ret;
-}
-/*
- * returns the index of the most recent scheduling algorithm (the current one)
- */
-int agios_performance_get_latest_index()
-{
-	int i;
-	i = performance_end-1;
-	if(i < 0)
-		i = config_agios_performance_values-1;
-	return i;
 }
 /*
  * returns the bandwidth observed so far with the current scheduling algorithm
@@ -137,93 +127,21 @@ int agios_performance_get_latest_index()
 double agios_get_current_performance_bandwidth(void)
 {
 	double ret;
-	int i;
-	long double tmp_time;
 
 	PRINT_FUNCTION_NAME;
 
 	agios_mutex_lock(&performance_mutex);
-	i = agios_performance_get_latest_index();
-	tmp_time = get_ns2s(performance_time[i]);
-	if(tmp_time > 0)
-		ret = (performance_size[i])/tmp_time;
+	if(current_performance_entry->time > 0)
+		ret = ((double) current_performance_entry->size) / get_ns2s(current_performance_entry->time);
 	else
-		ret = 0;
+		ret = 0.0;
 	agios_mutex_unlock(&performance_mutex);	
 	return ret;
-}
-/*
- * resets all performance counters
- * must NOT hold performance mutex
- */
-void agios_reset_performance_counters(void)
-{
-	int i;
-	agios_mutex_lock(&performance_mutex);
-	for(i=0; i< config_agios_performance_values; i++)
-	{
-		performance_time[i] = 0;
-		performance_size[i] = 0;
-		performance_timestamps[i] = 0;
-		performance_algs[i] = -1;
-	}
-	performance_start = performance_end = 0;
-	agios_mutex_unlock(&performance_mutex);
 }
 //returns 0 on success
 int agios_performance_init(void)
 {
-	performance_algs = (int *)malloc(sizeof(int)*config_agios_performance_values);
-	if(!performance_algs)
-	{
-		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
-		return -ENOMEM;
-	}
-	performance_time = (long long int *)malloc(sizeof(long long int)*config_agios_performance_values);
-	if(!performance_time)
-	{
-		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
-		agios_free(performance_algs);
-		return -ENOMEM;
-	}
-	performance_size = (long long int *)malloc(sizeof(long long int)*config_agios_performance_values);
-	if(!performance_size)
-	{
-		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
-		agios_free(performance_algs);
-		agios_free(performance_time);
-		return -ENOMEM;
-	}
-	performance_timestamps = (long int *)malloc(sizeof(long int)*config_agios_performance_values);
-	if(!performance_timestamps)
-	{
-		fprintf(stderr, "PANIC! could not allocate memory for the performance module!\n");
-		agios_free(performance_algs);
-		agios_free(performance_time);
-		agios_free(performance_size);
-		return -ENOMEM;
-	}
-	
 	return 0;
-}
-/*
- * the arrays used to store performance data are circular, with two indexes to represent where the current
- * version of the array begins and ends. This is an auxiliar function to increment indexes (because a new
- * measurement was added) while respecting physical array limits 
- * must hold performance mutex
- */
-void increment_performance_index()
-{
-	performance_end++;
-	if(performance_end >= config_agios_performance_values);
-		performance_end = 0;
-	if(performance_end == performance_start)
-	{
-		performance_start++;
-		if(performance_start >= config_agios_performance_values)
-			performance_start = 0;
-	}
-	
 }
 /*
  * function called when a new scheduling algorithm is selected, to add a slot to it in the performance
@@ -232,49 +150,69 @@ void increment_performance_index()
  */
 void performance_set_new_algorithm(int alg)
 {
+	
 	struct timespec now;
-
-	agios_mutex_lock(&performance_mutex);
+	struct performance_entry_t *new = malloc(sizeof(struct performance_entry_t));
+	if(!new)
+	{
+		agios_print("PANIC! could not allocate memory for the performance module!");
+		return; //TODO what now?
+	}
+	new->time = 0;
+	new->size = 0;
 	agios_gettime(&now);
-	performance_timestamps[performance_end] = get_timespec2llu(now);
-	performance_algs[performance_end] = alg;
-	increment_performance_index();
+	new->timestamp = get_timespec2llu(now);
+	new->alg = alg;
+	
+	agios_mutex_lock(&performance_mutex);
+	
+	agios_list_add_tail(&(new->list), &performance_info);
+	current_performance_entry = new;
+	performance_info_len++;
 	agios_processed_reqnb=0; 
+
+	//need to check if we dont have too many entries
+	while(performance_info_len > config_agios_performance_values)
+	{
+		agios_list_for_each_entry(new, &performance_info, list) //we reuse the new variable since we are no longer using it to hold the new entry (it is already in the list)
+			break; //this is to get the first entry of the list so we can remove it
+		agios_list_del(&new->list); //remove the first of the list 
+		performance_info_len--;
+	}
+	
 	agios_mutex_unlock(&performance_mutex);
 }
+
 /* 
  * function called when a request was released by the user (meaning it was already executed).
- * it returns the index among the performance arrays corresponding to the scheduling algorithm
- * which was executing when this request was sent for processing (because it makes no sense to
+ * it returns the entry of the scheduling algorithm that was executing when this request was 
+ * sent for processing (because it makes no sense to
  * account this performance measurement to an algorithm which was not responsible for deciding
  * the execution of this request).
  * must hold performance mutex
  */
-int get_request_timestamp_index(struct request_t *req)
+struct performance_entry_t * get_request_entry(struct request_t *req)
 {
-	int i;
+	struct performance_entry_t *ret = current_performance_entry;
 	int found=0;
-	
-	i = agios_performance_get_latest_index();
-	while(i != performance_start) //go through all performance measurements we're keeping
+
+	do
 	{
-		if(req->dispatch_timestamp > performance_timestamps[i]) //when we found an algorithm timestamp older than this request (it works because we are looking from most recent to least recent)
+		if(ret->timestamp > req->dispatch_timestamp) //not this period
+		{
+			if(ret->list.prev == &performance_info) //end of the list
+				break;
+			ret = agios_list_entry(ret->list.prev, struct performance_entry_t, list); //go to the previous period	
+		}
+		else
 		{
 			found = 1;
 			break;
 		}
-		i--;
-		if(i < 0)
-			i = config_agios_performance_values-1;
-	}
-	//we did not compare with the oldest measurement
-	if(req->dispatch_timestamp > performance_timestamps[performance_start])
-		found = 1;
-
-	if(found)
-		return i;
-	else
-		return -1;
+	} while(1);
+	if(found == 0)
+		ret = NULL;
+	return ret;
 }
 /* 
  * for debug
@@ -282,19 +220,16 @@ int get_request_timestamp_index(struct request_t *req)
  */
 void print_all_performance_data()
 {
-	int i;
+	struct performance_entry_t *aux;
 
 	debug("current situation of the performance model:");
-	i = performance_start;
-	while(i != performance_end)
+
+	agios_list_for_each_entry(aux, &performance_info, list)
 	{
-		if(performance_time[i] > 0)
-			debug("%s - %llu bytes in %llu ns = %Lf bytes/s (timestamp %lu)", get_algorithm_name_from_index(performance_algs[i]), performance_size[i], performance_time[i], ((double)performance_size[i])/(((long double)performance_time[1])/1000000000L), performance_timestamps[i]);
+		if(aux->time > 0)
+			debug("%s - %llu bytes in %llu ns = %.6f bytes/s (timestamp %lu)", get_algorithm_name_from_index(aux->alg), aux->size, aux->time, ((double)aux->size)/get_ns2s(aux->time), aux->timestamp);
 		else
-			debug("%s - %llu bytes in %llu ns (timestamp %lu)", get_algorithm_name_from_index(performance_algs[i]), performance_size[i], performance_time[i], performance_timestamps[i]);
-		i++;
-		if(i == config_agios_performance_values)
-			i = 0;
+			debug("%s - %llu bytes in %llu ns (timestamp %lu)", get_algorithm_name_from_index(aux->alg), aux->size, aux->time, aux->timestamp);
 	}
 }
 
@@ -311,8 +246,8 @@ int agios_release_request(char *file_id, short int type, long int len, long int 
 	struct request_t *req;
 	short int found=0;
 	long int elapsed_time;
-	int index;
 	short int previous_needs_hashtable;
+	struct performance_entry_t *entry;
 
 	PRINT_FUNCTION_NAME;
 
@@ -388,19 +323,17 @@ int agios_release_request(char *file_id, short int type, long int len, long int 
 		//update global performance information
 		agios_mutex_lock(&performance_mutex);
 		//we need to figure out to each time slice this request belongs
-		index = get_request_timestamp_index(req); //we use the timestamp from when the request was sent for processing, because we want to relate its performance to the scheduling algorithm who choose to process the request
-		if(index >= 0) //maybe the request took so long to process we don't even have a record for the scheduling algorithm which issued it
+		entry = get_request_entry(req); //we use the timestamp from when the request was sent for processing, because we want to relate its performance to the scheduling algorithm who choose to process the request
+		if(entry) //maybe the request took so long to process we don't even have a record for the scheduling algorithm that issued it
 		{
-			performance_time[index] += elapsed_time;
-			performance_size[index] += req->io_data.len;
+			entry->time += elapsed_time;
+			entry->time += req->io_data.len;
 
-			if(index == agios_performance_get_latest_index())
+			if(entry == current_performance_entry)
 			{
 				agios_processed_reqnb++; //we only count it as a new processed request if it was issued by the current scheduling algorithm
 				debug("a request issued by the current scheduling algorithm has come back! processed_reqnb is %lu", agios_processed_reqnb);
 			}
-#ifdef AGIOS_DEBUG
-#endif
 		}
 
 		agios_mutex_unlock(&performance_mutex);
