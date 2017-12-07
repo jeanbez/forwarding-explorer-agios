@@ -36,7 +36,7 @@ struct io_scheduler_instance_t {
 	 * Called when new consumer thread using this scheduler is started.
 	 * Intended to allow I/O scheduler to initialized it's private data.
 	 */
-	int (*init)(void); //must return 1 in success	
+	int (*init)(void); //must return 0 on success	
 
 	/*
 	 * Called when scheduler is no longer use by some thread, but remember

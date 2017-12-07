@@ -313,6 +313,7 @@ void read_pattern_matching_file()
 	PRINT_FUNCTION_EXIT;
 }
 
+//returns 0 on success
 int PATTERN_MATCHING_init(void)
 {
 	struct timespec start_time;
@@ -328,7 +329,7 @@ int PATTERN_MATCHING_init(void)
 	if((!config_static_pattern_matching) && (ARMED_BANDIT_aux_init(&start_time) != 1))
 	{
 		agios_print("PANIC! Could not initialize Armed Bandit\n");
-		return 0;
+		return -1;
 	}
 
 	//read the pattern matching file we keep between executions so we are always smart
@@ -336,7 +337,7 @@ int PATTERN_MATCHING_init(void)
 
 	current_selection = config_agios_starting_algorithm;
 
-	return 1;
+	return 0;
 }
 
 //apply some heuristics to decide if two access patterns are close enough to compare their time series

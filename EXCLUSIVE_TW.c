@@ -50,11 +50,12 @@ static int exclusive_tw_first_req;
 static int current_exclusive_tw;
 static struct timespec window_start;
 
-int EXCLUSIVE_TW_init()
+//returns 0 on success
+int TWINS_init()
 {
 	exclusive_tw_first_req = 1; //we'll start the first time window only when the first request is selected for processing (in the future we might want to reset it every once in a while)
 	current_exclusive_tw = 0; //the first id we will prioritize
-	return 1;
+	return 0;
 }
 void EXCLUSIVE_TW_exit()
 {

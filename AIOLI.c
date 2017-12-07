@@ -50,12 +50,13 @@
 static int aioli_quantum; 
 static struct timespec aioli_start;
 
+//returns 0 on success
 int AIOLI_init()
 {
 	generic_init();
 	aioli_quantum = 0;
 	agios_gettime(&aioli_start);
-	return 1;
+	return 0;
 }
 
 int AIOLI_select_from_list(struct related_list_t *related_list, struct related_list_t **selected_queue, long int *selected_timestamp)

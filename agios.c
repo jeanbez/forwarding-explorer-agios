@@ -7,7 +7,6 @@
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the interface to its users
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
@@ -109,8 +108,6 @@ int agios_init(struct client *clnt, char *config_file, int max_app_id)
 		return -EINVAL;
 	}
 
-	register_static_io_schedulers();
-
 	if((ret = read_configuration_file(config_file)) != 0)
 		return ret;
 
@@ -118,7 +115,8 @@ int agios_init(struct client *clnt, char *config_file, int max_app_id)
 		return ret;
 
 	//read the access times file
-	read_access_times_functions(config_agios_access_times_file);
+	if((ret = read_access_times_functions(config_agios_access_times_file)) != 0)
+		return ret;
 
 	/*init the memory structures*/
 	if ((ret = request_cache_init(max_app_id)))

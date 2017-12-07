@@ -27,6 +27,7 @@
 
 static int last_selected_algorithm=0;
 
+//returns 0 on success
 int DYN_TREE_init(void)
 {
 	int ret;
@@ -51,7 +52,7 @@ int DYN_TREE_init(void)
 	}
 	else
 		last_selected_algorithm = config_agios_starting_algorithm;
-	return 1;	
+	return 0;	
 }
 int DYN_TREE_select_next_algorithm(void)
 {

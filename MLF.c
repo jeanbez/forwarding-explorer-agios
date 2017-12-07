@@ -49,6 +49,7 @@ static int MLF_current_hash=0;
 static int *MLF_lock_tries=NULL;
 
 
+//returns 0 on success
 int MLF_init()
 {
 	int i;
@@ -60,12 +61,12 @@ int MLF_init()
 	if(!MLF_lock_tries)
 	{
 		agios_print("AGIOS: cannot allocate memory for MLF structures\n");
-		return 0;
+		return -ENOMEM;
 	}
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 		MLF_lock_tries[i]=0;
 	
-	return 1;
+	return 0;
 }
 
 void MLF_exit()

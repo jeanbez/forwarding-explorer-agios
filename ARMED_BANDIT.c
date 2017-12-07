@@ -176,14 +176,14 @@ int ARMED_BANDIT_aux_init(struct timespec *start_time)
 
 //this function is called during initialization. It initializes data structures used by this algorithm. 
 //the first scheduling algorithm is not randomly picked, but defined in AGIOS' configuration file (unless this definition makes no sense)
-//returns 1 on success
+//returns 0 on success
 int ARMED_BANDIT_init(void)
 {
 	struct timespec start_time;
 	if(ARMED_BANDIT_aux_init(&start_time) != 1)
 	{
 		agios_print("PANIC! could not initialize Armed Bandit\n");
-		return 0;
+		return -1;
 	}
 	
 	//start with the starting algorithm (defined in the configuration file), unless it is something we cannot use here
@@ -198,14 +198,14 @@ int ARMED_BANDIT_init(void)
 			config_set_starting_algorithm(current_sched);
 		}
 		else
-			return 0;
+			return -1;
 	}
 //	AB_table[current_sched].selection_counter++;  (because we'll skip the first window)
 
 	fprintf(ab_trace, "Starting Armed Bandit at timestamp %lu\n", get_timespec2llu(start_time));
 	print_ab_trace_probs();
 
-	return 1;
+	return 0;
 }
 
 //since we have performance measurements to all scheduling algorithms, we are able to use these values to give more probability to algorithms which result in better performance

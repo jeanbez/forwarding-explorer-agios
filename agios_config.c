@@ -8,7 +8,6 @@
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It obtains configuration parameters from the configuration files and 
  *		provides them to all other modules
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)

@@ -263,141 +263,8 @@ void generic_init()
 int current_alg = 0;
 struct io_scheduler_instance_t *current_scheduler=NULL;
 static AGIOS_LIST_HEAD(io_schedulers); //the list of scheduling algorithms (with their parameters)
-
-//change the current scheduling algorithm and update local parameters
-//here we assume the scheduling thread is NOT running, so it won't mess with the structures
-// it will acquire the lock to all data structures, must call unlock afterwards
-void change_selected_alg(int new_alg)
-{
-	int previous_alg;
-	struct io_scheduler_instance_t *previous_scheduler; 
-
-	//TODO handle prediction thread
-
-	PRINT_FUNCTION_NAME;
-
-	//lock all data structures so no one is adding or releasing requests while we migrate
-	lock_all_data_structures();
-
-	if(current_alg != new_alg)
-	{
-		//change scheduling algorithm
-		previous_scheduler = current_scheduler;
-		previous_alg = current_alg;
-		current_scheduler = initialize_scheduler(new_alg);
-		current_alg = new_alg;
-
-		//do we need to migrate data structure?
-		//first situation: both use hashtable
-		if(current_scheduler->needs_hashtable && previous_scheduler->needs_hashtable)
-		{
-			//the only problem here is if we decreased the maximum aggregation
-			//For now we chose to do nothing. If we no longer tolerate aggregations of a certain size, we are not spliting already performed aggregations since this would not benefit us at all. We could rethink that at some point
-		}
-		//second situation: from hashtable to timeline
-		else if (previous_scheduler->needs_hashtable && (!current_scheduler->needs_hashtable))
-		{
-#ifdef AGIOS_DEBUG
-			print_hashtable();
-#endif
-			migrate_from_hashtable_to_timeline();
-#ifdef AGIOS_DEBUG
-			print_timeline();
-#endif
-		}
-		//third situation: from timeline to hashtable
-		else if ((!previous_scheduler->needs_hashtable) && current_scheduler->needs_hashtable)
-		{
-#ifdef AGIOS_DEBUG
-			print_timeline();
-#endif
-			migrate_from_timeline_to_hashtable();
-#ifdef AGIOS_DEBUG
-			print_hashtable();
-#endif
-		}	
-		//fourth situation: both algorithms use timeline
-		else
-		{
-			//now it depends on the algorithms. 
-			//if we are changing to NOOP, it does not matter because it does not really use the data structure
-			//if we are changing from or to TIME_WINDOW, we need to reorder the list
-			//if we are changing to the timeorder with aggregation, we need to reorder the list
-			if((current_alg != NOOP_SCHEDULER) && ((previous_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIMEORDER_SCHEDULER)))
-			{
-//				reorder_timeline(); 
-			}
-		}
-	}
-}
-
-
-//counts how many scheduling algorithms we have
-int get_io_schedulers_size(void)
-{
-	struct io_scheduler_instance_t *last_scheduler;
-
-	if(agios_list_empty(&io_schedulers))
-		return 0;
-
-	//get the last scheduler (because they have ordered indexes)
-	last_scheduler = agios_list_entry(io_schedulers.prev, struct io_scheduler_instance_t, list);
-	return last_scheduler->index + 1;	//+1 because indexes start at 0
-}
-//finds and returns the current scheduler indicated by index. If this scheduler needs an initialization function, calls it
-struct io_scheduler_instance_t *initialize_scheduler(int index) 
-{
-	struct io_scheduler_instance_t *ret = find_io_scheduler(index);
-	int this_ret;
-	
-	if(ret)
-	{
-		debug("Initializing scheduler %s", ret->name);
-		if(ret->init)
-		{
-			debug("will call specific initialization routine for this algorithm");
-			this_ret = ret->init();
-			if(this_ret != 1)
-				return NULL;
-		}
-	}
-		
-	PRINT_FUNCTION_EXIT;
-	return ret;
-}
-
-struct io_scheduler_instance_t *find_io_scheduler(int index)
-{
-	struct io_scheduler_instance_t *ret=NULL;
-	int i=0;
-	
-	agios_list_for_each_entry(ret, &io_schedulers, list)
-	{
-		if(i == index)
-			return ret;
-		i++;
-	}
-	return NULL;
-}
-		
-int register_io_scheduler(struct io_scheduler_instance_t *io_sched)
-{
-	agios_list_add_tail(&io_sched->list, &io_schedulers);
-	return 0;
-}
-
-void unregister_io_scheduler(int index)
-{
-	struct io_scheduler_instance_t *sched;
-
-	sched = find_io_scheduler(index);
-	if (sched)
-		agios_list_del(&sched->list);
-}
-
-void register_static_io_schedulers(void)
-{
-	static struct io_scheduler_instance_t scheds[] = {
+static int io_schedulers_nb = 12
+static struct io_scheduler_instance_t io_schedulers[] = { //ATTENTION! If you are going to add or remove an I/O scheduler, dont forget to update io_schedulers_nb and the indexes here and in the iosched.h file! 
 		{
 			.init = MLF_init,
 			.exit = MLF_exit,
@@ -555,61 +422,130 @@ void register_static_io_schedulers(void)
 			.index = 11,
 		}
 	};
-	int i = 0;
 
-	for (i = 0; i < sizeof(scheds) / sizeof(scheds[0]); ++i)
-		register_io_scheduler(&scheds[i]);
+//change the current scheduling algorithm and update local parameters
+//here we assume the scheduling thread is NOT running, so it won't mess with the structures
+// it will acquire the lock to all data structures, must call unlock afterwards
+void change_selected_alg(int new_alg)
+{
+	int previous_alg;
+	struct io_scheduler_instance_t *previous_scheduler; 
 
-	time_spent_waiting=0;
-	waiting_time_overlapped = 0;
+	//TODO handle prediction thread
+
+	PRINT_FUNCTION_NAME;
+
+	//lock all data structures so no one is adding or releasing requests while we migrate
+	lock_all_data_structures();
+
+	if(current_alg != new_alg)
+	{
+		//change scheduling algorithm
+		previous_scheduler = current_scheduler;
+		previous_alg = current_alg;
+		current_scheduler = initialize_scheduler(new_alg);
+		current_alg = new_alg;
+
+		//do we need to migrate data structure?
+		//first situation: both use hashtable
+		if(current_scheduler->needs_hashtable && previous_scheduler->needs_hashtable)
+		{
+			//the only problem here is if we decreased the maximum aggregation
+			//For now we chose to do nothing. If we no longer tolerate aggregations of a certain size, we are not spliting already performed aggregations since this would not benefit us at all. We could rethink that at some point
+		}
+		//second situation: from hashtable to timeline
+		else if (previous_scheduler->needs_hashtable && (!current_scheduler->needs_hashtable))
+		{
+#ifdef AGIOS_DEBUG
+			print_hashtable();
+#endif
+			migrate_from_hashtable_to_timeline();
+#ifdef AGIOS_DEBUG
+			print_timeline();
+#endif
+		}
+		//third situation: from timeline to hashtable
+		else if ((!previous_scheduler->needs_hashtable) && current_scheduler->needs_hashtable)
+		{
+#ifdef AGIOS_DEBUG
+			print_timeline();
+#endif
+			migrate_from_timeline_to_hashtable();
+#ifdef AGIOS_DEBUG
+			print_hashtable();
+#endif
+		}	
+		//fourth situation: both algorithms use timeline
+		else
+		{
+			//now it depends on the algorithms. 
+			//if we are changing to NOOP, it does not matter because it does not really use the data structure
+			//if we are changing from or to TIME_WINDOW, we need to reorder the list
+			//if we are changing to the timeorder with aggregation, we need to reorder the list
+			if((current_alg != NOOP_SCHEDULER) && ((previous_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIMEORDER_SCHEDULER)))
+			{
+//				reorder_timeline(); 
+			}
+		}
+	}
 }
 
+
+//finds and returns the current scheduler indicated by index. If this scheduler needs an initialization function, calls it
+struct io_scheduler_instance_t *initialize_scheduler(int index) 
+{
+	if((index >= io_schedulers_nb) || (index < 0))
+		return NULL;
+	if(io_schedulers[index].init)
+	{
+		if(io_schedulers[index].init() != 0)
+			return NULL;
+	}
+	PRINT_FUNCTION_EXIT;
+	return &(io_schedulers[index]);
+}
+
+struct io_scheduler_instance_t *find_io_scheduler(int index)
+{
+	if((index >= io_schedulers_nb) || (index < 0))
+		return NULL;
+	return &(io_schedulers[index]);
+}
+//this is like get_algorithm_name_from_index, except that the parameter string could be "no_AGIOS", and in that case we translate it to NOOP 		
 int get_algorithm_from_string(const char *alg)
 {
 	struct io_scheduler_instance_t *sched=NULL;
 	int ret=SJF_SCHEDULER; //default in case we can't find it
-	char *this_alg = malloc(sizeof(char)*strlen(alg));
+	char *this_alg; 
+	short int need_free=0;
+	int i;
 
 	if(strcmp(alg, "no_AGIOS") == 0)
+	{	
+		this_alg = malloc(sizeof(char)*5);
 		strcpy(this_alg, "NOOP"); 
+		need_free=1;
+	}
 	else
-		strcpy(this_alg, alg);
+		this_alg = alg;
 	
-	agios_list_for_each_entry(sched, &io_schedulers, list)
+	for(i=0; i < io_schedulers_nb; i++)
 	{
-		if(strcmp(this_alg, sched->name) == 0)
+		if(strcmp(this_alg, io_schedulers[i].name) == 0)
 		{
-			ret = sched->index;
+			ret = i;
 			break;
 		}
 	}
-	free(this_alg);
 	return ret;
 }
-//index MUST be an existing scheduling algorithm
 char * get_algorithm_name_from_index(int index)
 {
-	struct io_scheduler_instance_t *sched=NULL;
-	char *ret = NULL;
-	
-	agios_list_for_each_entry(sched, &io_schedulers, list)
-	{
-		if(index == sched->index)
-		{
-			ret = sched->name;
-			break;
-		}
-	}
-	return ret;
+	if((index >= io_schedulers_nb) || (index < 0))
+		return NULL;
+	return io_schedulers[index].name;
 }
 void enable_TW(void)
 {
-	struct io_scheduler_instance_t *tw_sched;
-
-	tw_sched = find_io_scheduler(TIME_WINDOW_SCHEDULER);
-	if(!tw_sched)
-	{
-		fprintf(stderr, "PANIC! Could not find TW scheduler structure\n");
-	}
-	tw_sched->can_be_dynamically_selected=1;
+	io_schedulers[TIME_WINDOW_SCHEDULER].can_be_dynamically_selected = 1;
 }
