@@ -111,16 +111,26 @@ int agios_init(struct client *clnt, char *config_file, int max_app_id)
 	if((ret = read_configuration_file(config_file)) != 0)
 		return ret;
 
-	if((ret = agios_performance_init()) != 0)
+	if((ret = agios_performance_init()) != 0) 
+	{
+		config_agios_cleanup();
 		return ret;
+	}
 
 	//read the access times file
 	if((ret = read_access_times_functions(config_agios_access_times_file)) != 0)
+	{
+		config_agios_cleanup();
+		agios_performance_cleanup();
 		return ret;
+	}
 
 	/*init the memory structures*/
 	if ((ret = request_cache_init(max_app_id)))
 	{
+		config_agios_cleanup();
+		agios_performance_cleanup();
+		access_times_functions_cleanup();
 		return ret;
 	}
 
@@ -200,6 +210,7 @@ void agios_exit(void)
 		agios_trace_close();
 	proc_stats_exit();
 	config_agios_cleanup();
+	access_times_functions_cleanup();
 	agios_print("stopped for this client. It can already be used by calling agios_init\n");
 #ifdef AGIOS_KERNEL_MODULE
 	agios_in_use = 0;

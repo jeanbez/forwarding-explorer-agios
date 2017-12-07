@@ -50,6 +50,27 @@ static int performance_info_len=0; //how many entries in performance_info
 struct performance_entry_t *current_performance_entry; //the latest entry to performance_info
 static pthread_mutex_t performance_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+
+void agios_performance_cleanup(void)
+{
+	struct performance_entry_t *entry,*aux=NULL;
+
+	agios_list_for_each_entry(entry, &performance_info, list)
+	{
+		if(aux)
+		{
+			agios_list_del(&aux->list);
+			free(aux);
+		}
+		aux = entry;
+	}
+	if(aux)
+	{
+		agios_list_del(&aux->list);
+		free(aux);
+	}
+}
+
 /* 
  * returns the total amount of accessed data (in the last PERFORMANCE_VALUES time periods)
  * each time period corresponds to one scheduling algorithm selection (dynamic).

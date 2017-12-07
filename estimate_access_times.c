@@ -27,7 +27,7 @@
 #include "agios_request.h"
 
 static int intervals=0;
-static long int **interval_sizes;
+static int **interval_sizes;
 static double ***funcs;
 
 #define SEQUENTIAL_WRITE 0
@@ -61,11 +61,11 @@ int read_access_times_functions(char *filename)
 	}
 
 	//allocate enough space for the data structures
-	interval_sizes = (long int **)malloc(sizeof(long int *)*intervals);
+	interval_sizes = (int **)malloc(sizeof(int *)*intervals);
 	funcs = (double ***)malloc(sizeof(double **)*intervals);
 	for(i=0; i<intervals; i++)
 	{
-		interval_sizes[i] = (long int *)malloc(sizeof(long int)*2);
+		interval_sizes[i] = (int *)malloc(sizeof(int)*2);
 		funcs[i] = (double **)malloc(sizeof(double *)*4);
 		for(j=0; j<4; j++)
 			funcs[i][j] = (double *)malloc(sizeof(double)*2);
@@ -75,7 +75,7 @@ int read_access_times_functions(char *filename)
 	for(i=0; i<intervals; i++)
 	{
 		//the first line gives the interval
-		ret = fscanf(fd, "%lu\t%lu\n", &interval_sizes[i][0], &interval_sizes[i][1]);
+		ret = fscanf(fd, "%d\t%d\n", &interval_sizes[i][0], &interval_sizes[i][1]);
 		if(ret != 2)
 		{
 			agios_print("Error! Could not read from access times file %s", filename);
@@ -99,17 +99,47 @@ int read_access_times_functions(char *filename)
 	fclose(fd);
 	return 0;
 }
+void access_times_functions_cleanup(void)
+{
+	int i,j;
 
-long long int get_access_time(long int size, int operation)
+	if(interval_sizes)
+	{
+		for(i=0; i< intervals;i++)
+		{
+			if(interval_sizes[i])
+				free(interval_sizes[i]);
+		}
+		free(interval_sizes);
+	} 
+	if(funcs)
+	{
+		if(i=0; i< intervals; i++)
+		{
+			if(funcs[i])
+			{
+				for(j=0; j < 4; j++)
+				{
+					if(funcs[i][j])
+						free(funcs[i][j]);
+				}
+				free(funcs[i]);	
+			}
+		}
+		free(funcs);
+	}
+}
+
+long int get_access_time(long int size, int operation)
 {
 	int inter=intervals-1;
 	int i, index;
-	float this_size = (float)size/1024; //the functions were designed by providing request size in KB
+	long int this_size = size/1024; //the functions were designed by providing request size in KB
 
 	//we have to find out to which interval this size belongs to
 	for(i=0; i< intervals; i++)
 	{
-		if(size <= interval_sizes[i][1]*1024) //intervals are described in KB, we are comparing with bytes
+		if(this_size <= interval_sizes[i][1]) //intervals are described in KB, we are comparing with bytes (thats why we use this_size instead of size)
 		{
 			inter = i;
 			break;
@@ -126,20 +156,20 @@ long long int get_access_time(long int size, int operation)
 //	debug("looking for access time to a request of %lu bytes (%f Kbytes), type %d. It belongs to the interval %d, function is %lfx + %lf, results in %llu ns\n", size, this_size, operation, inter, funcs[inter][index][0], funcs[inter][index][1], (long long int) ( (funcs[inter][index][0]*this_size) + funcs[inter][index][1]));
 
 	//time = ax + b 
-	return (long long int)(funcs[inter][index][0]*this_size) + funcs[inter][index][1];
+	return (long int)((funcs[inter][index][0]*((double)this_size)) + funcs[inter][index][1]);
 }
 
-float get_access_ratio(long int size, int operation)
+double get_access_ratio(long int size, int operation)
 {
 	int inter=intervals-1;
 	int i, index, index_random;
 	double time_seq, time_random;
-	float this_size = (float)size/1024;
+	long int this_size = size/1024;
 
 	//we have to find out to which interval this size belongs to
 	for(i=0; i< intervals; i++)
 	{
-		if(size <= interval_sizes[i][1]*1024) //intervals are described in KB
+		if(this_size <= interval_sizes[i][1]) //intervals are described in KB
 		{
 			inter = i;
 			break;
@@ -160,13 +190,13 @@ float get_access_ratio(long int size, int operation)
 	}
 
 	//time = ax + b 
-	time_seq = (funcs[inter][index][0]*this_size) + funcs[inter][index][1];
-	time_random = (funcs[inter][index_random][0]*this_size) + funcs[inter][index_random][1];
+	time_seq = (funcs[inter][index][0]*((double)this_size)) + funcs[inter][index][1];
+	time_random = (funcs[inter][index_random][0]*((double)this_size)) + funcs[inter][index_random][1];
 
 	//debug("looking for access time ratio to a request of %lu bytes (%f Kbytes), type %d. It belongs to the interval %d, sequential function is %lfx + %lf (results in %lf ns), random function is function is %lfx + %lf ( results in %lf ns), sequential throughput is %f, random throughput is %f, ratio is %f\n", size, this_size, operation, inter, funcs[inter][index][0], funcs[inter][index][1], time_seq, funcs[inter][index_random][0], funcs[inter][index_random][1], time_random, (this_size / time_seq), (this_size /  time_random), (float) (this_size /  time_seq) / (this_size /  time_random)  );
 
 
 
 	//calculate the ratio by dividing the sequential throughput by the random one
-	return (float) (this_size / time_seq) / (this_size / time_random);
+	return (((double)this_size) / time_seq) / (((double)this_size) / time_random);
 }
