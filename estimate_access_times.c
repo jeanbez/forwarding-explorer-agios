@@ -25,6 +25,7 @@
 #include "estimate_access_times.h"
 #include "agios.h"
 #include "agios_request.h"
+#include "common_functions.h"
 
 static int intervals=0;
 static int **interval_sizes;
@@ -114,7 +115,7 @@ void access_times_functions_cleanup(void)
 	} 
 	if(funcs)
 	{
-		if(i=0; i< intervals; i++)
+		for(i=0; i< intervals; i++)
 		{
 			if(funcs[i])
 			{
