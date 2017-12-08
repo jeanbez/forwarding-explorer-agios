@@ -10,7 +10,6 @@
  *		handling predicted requests, predicting request aggregations, detecting
  *		access pattern's aspects (spatiality and request size), and scheduling
  *		algorithm selection through a decision tree.
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)

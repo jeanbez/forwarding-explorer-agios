@@ -79,6 +79,14 @@ short int get_global_window_operation(void)
 		return RT_READ;
 }
 
+long int get_global_reqsize(void)
+{
+	if(stats_for_window->total_reqnb == 0)
+		return -1;
+	else
+		return stats_for_window->global_req_size / stats_for_window->total_reqnb;
+}
+
 
 /***********************************************************************************************************
  * LOCAL COPIES OF PARAMETERS *
@@ -167,7 +175,6 @@ void update_local_stats(struct related_list_statistics_t *stats, struct request_
 	get_long2timespec(req->jiffies_64, &req->globalinfo->last_req_time);
 
 	//update local statistics on average offset distance between consecutive requests
-	//TODO is it the same thing done by predict when including requests? should we join these codes?
 	if(req->globalinfo->last_received_finaloffset > 0)
 	{
 		if(stats->avg_distance == -1)
@@ -389,6 +396,53 @@ struct request_file_t *get_first(short int predicted_stats)
 	}
 	return req_file;
 }
+
+//we need to acquire the locks for the data structures because they could be changed during the execution of this function (other threads could be adding requests and thus adding new request_file_t entries, that could lead to us getting lost here). But we don't need to concern ourselves with the data structure changing because this function is called by the scheduling thread before changing scheduling algorithms. ATTENTION: if this function is called by other thread, need to think about that!
+double get_global_spatiality(short int operation, double timediff)
+{
+	int i;
+	struct request_file_t *req_file;
+	struct related_list_t *related;
+	double avgdiff;
+	short int reqsize;
+	short int spatiality;
+
+	if(!current_scheduler->needs_hashtable)
+		timeline_lock();
+	for(i=0; i< HASH_ENTRIES; i++)
+	{
+		if(current_scheduler->needs_hashtable)
+			hashtable_lock(i);
+	
+		//find the right list to look
+		if(operation == RT_READ)
+			related = req_file->related_reads;
+		else
+			related = req_file->related_writes;
+
+		//calculate the avgdiff of the list
+		if(related->stats_window.avg_distance_count > 1)
+			avgdiff = ((long double) req_file->predicted_reads.stats_file.avg_distance)/req_file->predicted_reads.stats_file.avg_distance_count;
+		else
+			avgdiff = 0;
+
+		//classify the access pattern of this list
+		access_pattern_detection_tree(operation, avgdiff, timediff, &spatiality, &reqsize //TODO continue here
+		
+
+		
+		
+		if(current_scheduler->needs_hashtable)
+			hashtable_unlock(i);
+	}
+	
+	if(!current_scheduler->needs_hashtable)
+		timeline_unlock();
+
+	return req_file;
+}
+
+
 
 void print_something(const char *something)
 {
