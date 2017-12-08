@@ -58,7 +58,7 @@ static pthread_mutex_t prediction_thr_refresh_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t initialized_prediction_thr_cond = PTHREAD_COND_INITIALIZER;
 int initialized_predict=0;
 
-static long double prediction_alpha=0.0; /*represents the ability to overlap waiting times with processing other requests. Used for predicting aggregations*/
+static double prediction_alpha=0.0; /*represents the ability to overlap waiting times with processing other requests. Used for predicting aggregations*/
 
 static short int new_trace_file=0; /*flag for refreshing predictions*/
 
@@ -68,7 +68,7 @@ static int simple_tracefile_counter=0;
 static int current_predicted_reqfilenb=0; /*to how many files do we have predicted requests?*/
 static pthread_mutex_t current_predicted_reqfilenb_mutex=PTHREAD_MUTEX_INITIALIZER;
 
-long long int predict_init_time=0; /*the time (in ns) it took to read all traces*/
+long int predict_init_time=0; /*the time (in ns) it took to read all traces*/
 
 
 /*predicted access pattern - updated every time the prediction module is "refreshed" with new trace information*/
@@ -76,7 +76,7 @@ long long int predict_init_time=0; /*the time (in ns) it took to read all traces
 static short int predicted_ap_spatiality=-1;
 static short int predicted_ap_reqsize=-1;
 static int predicted_ap_operation=-1;
-static long long predicted_ap_server_reqsize=-1;
+static long int predicted_ap_server_reqsize=-1;
 static long int predicted_ap_fileno = -1;
 
 
@@ -346,7 +346,7 @@ void prediction_newreq(struct request_t *req)
 	struct agios_list_head *predicted_list;
 
 #ifdef AGIOS_DEBUG
-	agios_print("looking for the request %s %d %lu %lu...", req->file_id, req->type, req->io_data.offset, req->io_data.len);
+	agios_print("looking for the request %s %d %ld %ld...", req->file_id, req->type, req->io_data.offset, req->io_data.len);
 #endif
 
 	if(req->type == RT_READ)
@@ -408,7 +408,7 @@ long long int agios_predict_should_we_wait(struct request_t *req)
 			if(waiting_time > config_waiting_time)
 			{
 #ifdef AGIOS_DEBUG
-				agios_print("was going to wait for %llu, but changed it to %d\n", waiting_time, config_waiting_time);
+				agios_print("was going to wait for %ld, but changed it to %d\n", waiting_time, config_waiting_time);
 #endif
 				waiting_time = config_waiting_time;
 			}
@@ -941,7 +941,7 @@ void read_predictions_from_traces(int last, int files_nb)
 
 		debug("reading from tracefile %s\n", filename);
 		/*read predictions from the file*/
-		while((ret = fscanf(input_file, "%llu\t%s\t%s\t%lld\t%ld\n", &timestamp, filename, operation, &offset, &len)) == 5) //it will not work if the trace was generated with the FULL_TRACE option. That is for debug only
+		while((ret = fscanf(input_file, "%ld\t%s\t%s\t%lld\t%ld\n", &timestamp, filename, operation, &offset, &len)) == 5) //it will not work if the trace was generated with the FULL_TRACE option. That is for debug only
 		{
 			if(strcmp(operation, "R") == 0)
 				type = RT_READ;
@@ -1026,7 +1026,7 @@ int read_predictions_from_simple_traces(void)
 			hash_list = hashtable_lock(hash_val);
 			req_file = find_req_file(hash_list, file_id, RS_NONE);
 
-			ret = fscanf(input_file, "%Le\t%Le\t%llu\nWRITE\t%Le\t%Le\t%llu\n", &req_file->predicted_reads.stats_file.avg_distance, &req_file->predicted_reads.avg_stripe_difference, &req_file->predicted_reads.stats_file.total_req_size, &req_file->predicted_writes.stats_file.avg_distance, &req_file->predicted_writes.avg_stripe_difference, &req_file->predicted_writes.stats_file.total_req_size);
+			ret = fscanf(input_file, "%Le\t%Le\t%ld\nWRITE\t%Le\t%Le\t%ld\n", &req_file->predicted_reads.stats_file.avg_distance, &req_file->predicted_reads.avg_stripe_difference, &req_file->predicted_reads.stats_file.total_req_size, &req_file->predicted_writes.stats_file.avg_distance, &req_file->predicted_writes.avg_stripe_difference, &req_file->predicted_writes.stats_file.total_req_size);
 			if(ret != 6)
 			{
 				agios_print("could not read from simplified trace file %s\n", filename);
@@ -1034,7 +1034,7 @@ int read_predictions_from_simple_traces(void)
 				hashtable_unlock(hash_val);
 				continue;
 			}
-			debug("READ\t%Le\t%Le\t%llu\tWRITE\t%Le\t%Le\t%llu\n", req_file->predicted_reads.stats_file.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats_file.total_req_size, req_file->predicted_writes.stats_file.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats_file.total_req_size);
+			debug("READ\t%Le\t%Le\t%ld\tWRITE\t%Le\t%Le\t%ld\n", req_file->predicted_reads.stats_file.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats_file.total_req_size, req_file->predicted_writes.stats_file.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats_file.total_req_size);
 			req_file->wrote_simplified_trace=1; //so we won't write it to another file
 			req_file->predicted_reads.stats_file.processedreq_nb = req_file->predicted_writes.stats_file.processedreq_nb = 1;
 			count++;
@@ -1085,11 +1085,11 @@ void write_simplified_trace_files(void)
 						if(agios_list_empty(&(req_file->predicted_reads.list)))
 							fprintf(output_file, "READ\t-1\t-1\t0\n");
 						else
-							fprintf(output_file, "READ\t%Le\t%Le\t%llu\n", req_file->predicted_reads.stats_file.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats_file.total_req_size / req_file->predicted_reads.stats_file.processedreq_nb);
+							fprintf(output_file, "READ\t%Le\t%Le\t%ld\n", req_file->predicted_reads.stats_file.avg_distance, req_file->predicted_reads.avg_stripe_difference, req_file->predicted_reads.stats_file.total_req_size / req_file->predicted_reads.stats_file.processedreq_nb);
 						if(agios_list_empty(&(req_file->predicted_writes.list)))
 							fprintf(output_file, "WRITE\t-1\t-1\t0\n");
 						else
-							fprintf(output_file, "WRITE\t%Le\t%Le\t%llu\n", req_file->predicted_writes.stats_file.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats_file.total_req_size / req_file->predicted_writes.stats_file.processedreq_nb);
+							fprintf(output_file, "WRITE\t%Le\t%Le\t%ld\n", req_file->predicted_writes.stats_file.avg_distance, req_file->predicted_writes.avg_stripe_difference, req_file->predicted_writes.stats_file.total_req_size / req_file->predicted_writes.stats_file.processedreq_nb);
 						fclose(output_file);
 					}
 				}
@@ -1138,7 +1138,7 @@ void *prediction_thr(void *arg)
 			update_traced_access_pattern();
 	}
 	predict_init_time = get_nanoelapsed(predict_init_start);
-	debug("finished reading from %d traces in %llu ns\n", tracefile_counter, predict_init_time);
+	debug("finished reading from %d traces in %ld ns\n", tracefile_counter, predict_init_time);
 	signal_predict_init();
 	pthread_mutex_unlock(&prediction_thr_refresh_mutex);
 

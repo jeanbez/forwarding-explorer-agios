@@ -46,7 +46,7 @@ static pthread_t agios_pthread;
 #endif
 
 //start the scheduling thread
-//returns 1 in case of success
+//returns 0 in case of success
 int start_consumer(struct client *clnt)
 {
 	int ret;
@@ -66,8 +66,6 @@ int start_consumer(struct client *clnt)
 #endif
                 agios_print("Unable to start a thread to agios!\n");
 	}
-	else
-		ret = 1;
 
 	return ret;
 }
@@ -170,10 +168,21 @@ int agios_init(struct client *clnt, char *config_file, int max_app_id)
 		}
 	}
 
-	ret = start_consumer(clnt);
-	if (ret != 1)
+	if((ret = start_consumer(clnt)) != 0)
 	{
-		agios_exit();
+		config_agios_cleanup();
+		agios_performance_cleanup();
+		access_times_functions_cleanup();
+		request_cache_cleanup();
+		proc_stats_exit();
+		if(config_trace_agios)
+		{
+			agios_trace_close();
+			agios_trace_cleanup();
+		}
+		if(config_predict_agios_read_traces || config_predict_agios_request_aggregation || config_agios_write_simplified_traces) 
+			stop_prediction_thr();	
+		return ret;
 	}
 
 #ifdef AGIOS_KERNEL_MODULE
