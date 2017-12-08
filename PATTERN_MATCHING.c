@@ -41,7 +41,7 @@ AGIOS_LIST_HEAD(all_observed_patterns);
 short int first_performance_measurement;
 int access_pattern_count=0;
 int current_selection;
-long long int max_dtw_result=1;
+long int max_dtw_result=1;
 
 //cleanup a PM_pattern_t structure
 void free_PM_pattern_t(struct PM_pattern_t **pattern)
@@ -134,7 +134,7 @@ struct PM_pattern_t *read_access_pattern_from_file(FILE *fd)
 	error = 0;
 	for(i =0; i<ret->description->reqnb; i++)
 	{
-		error += fread(&(ret->description->time_series[i].offset), sizeof(long long int), 1, fd);
+		error += fread(&(ret->description->time_series[i].offset), sizeof(long int), 1, fd);
 		init_agios_list_head(&(ret->description->time_series[i].list));
 	}
 	if(error != ret->description->reqnb)
@@ -300,7 +300,7 @@ void read_pattern_matching_file()
 	}
 
 	//last information: maximum DTW result observed so far (we use it to calculate % difference between patterns)
-	ret = fread(&max_dtw_result, sizeof(long long int), 1, fd);
+	ret = fread(&max_dtw_result, sizeof(long int), 1, fd);
 	if(ret != 1)
 	{
 		agios_print("Error! Could not read maximum dtw result from pattern matching file\n");
@@ -389,7 +389,7 @@ short int compatible_pattern(struct access_pattern_t *A, struct access_pattern_t
 //apply FastDTW to get the distance between the two time series (from the two access patterns), and then use the maximum distance ever observed (possibly updating it) to give it a similarity degree between 0 and 100%.
 int apply_DTW(struct access_pattern_t *A, struct access_pattern_t *B)
 {
-	long long int dtw_result = FastDTW(A, B);
+	long int dtw_result = FastDTW(A, B);
 	if(dtw_result > max_dtw_result)
 	{
 		max_dtw_result = dtw_result;
@@ -531,7 +531,7 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	struct io_scheduler_instance_t *new_sched=NULL;
 	double *recent_measurements=NULL;
 	struct timespec this_time;
-	long long timestamp;
+	long timestamp;
 
 	PRINT_FUNCTION_NAME;
 
@@ -539,7 +539,7 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	{
 		//get recent performance measurements
 		agios_gettime(&this_time);
-		timestamp = get_timespec2llu(this_time);
+		timestamp = get_timespec2long(this_time);
 		recent_measurements = agios_get_performance_bandwidth();
 
 		//give recent measurements to ARMED BANDIT so it will have updated information
@@ -633,7 +633,7 @@ int write_access_pattern_to_file(struct PM_pattern_t *pattern, FILE *fd)
 	error = 0;
 	for(i = 0; i < pattern->description->reqnb; i++)
 	{
-		error += fwrite(&(pattern->description->time_series[i].offset), sizeof(long long int), 1, fd);
+		error += fwrite(&(pattern->description->time_series[i].offset), sizeof(long int), 1, fd);
 	}
 	if(error != pattern->description->reqnb)
 		return 0;
@@ -745,7 +745,7 @@ void write_pattern_matching_file(void)
 		}
 
 		//last information for the pattern matching file: the maximum dtw difference observed so far
-		error = fwrite(&max_dtw_result, sizeof(long long int), 1, fd);
+		error = fwrite(&max_dtw_result, sizeof(long int), 1, fd);
 		if(error != 1)
 			agios_print("PANIC! Could not write maximum dtw result to pattern matching file\n");
 		fclose(fd);

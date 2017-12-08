@@ -59,7 +59,7 @@ void print_all_armed_bandit_information()
 			j = AB_table[i].measurements_start;
 			while(j != AB_table[i].measurements_end)
 			{
-				debug("\t%lu %.2f", AB_table[i].bandwidth_measurements[j].timestamp, AB_table[i].bandwidth_measurements[j].bandwidth); 
+				debug("\t%ld %.2f", AB_table[i].bandwidth_measurements[j].timestamp, AB_table[i].bandwidth_measurements[j].bandwidth); 
 				j++;
 				if(j == config_agios_performance_window)
 					j =0;
@@ -106,7 +106,7 @@ void print_ab_trace_probs()
 			j = AB_table[i].measurements_start;
 			while(j != AB_table[i].measurements_end)
 			{
-				fprintf(ab_trace, "\t%lu %.2f", AB_table[i].bandwidth_measurements[j].timestamp, AB_table[i].bandwidth_measurements[j].bandwidth); 
+				fprintf(ab_trace, "\t%ld %.2f", AB_table[i].bandwidth_measurements[j].timestamp, AB_table[i].bandwidth_measurements[j].bandwidth); 
 				j++;
 				if(j == config_agios_performance_window)
 					j =0;
@@ -132,7 +132,7 @@ int ARMED_BANDIT_aux_init(struct timespec *start_time)
 
 	//initialize the pseudo-random number generator
 	agios_gettime(start_time);
-	srand(get_timespec2llu(*start_time));
+	srand(get_timespec2long(*start_time));
 
 	//open ab trace file
 	ab_trace = fopen("/tmp/agios_ab_trace.txt", "w");
@@ -202,7 +202,7 @@ int ARMED_BANDIT_init(void)
 	}
 //	AB_table[current_sched].selection_counter++;  (because we'll skip the first window)
 
-	fprintf(ab_trace, "Starting Armed Bandit at timestamp %lu\n", get_timespec2llu(start_time));
+	fprintf(ab_trace, "Starting Armed Bandit at timestamp %ld\n", get_timespec2long(start_time));
 	print_ab_trace_probs();
 
 	return 0;
@@ -272,17 +272,17 @@ void recalculate_AB_probabilities(void)
 //update the observed bandwidth for a scheduling algorithm after using it for a period of time
 //we keep a best bandwidth cache (best bandwidth gives the index of the scheduling algorithm for which we have observed the highest bandwidth) to make it easier to recalculate the probabilities
 //the cleanup flag says if the function needs to free recent_measurements before returning
-long long int ARMED_BANDIT_update_bandwidth(double *recent_measurements, short int cleanup)
+long int ARMED_BANDIT_update_bandwidth(double *recent_measurements, short int cleanup)
 {
 	int i;
 	//int j;
 	struct timespec this_time;
-	long long timestamp;
+	long timestamp;
 
 	PRINT_FUNCTION_NAME;
 
 	agios_gettime(&this_time);
-	timestamp = get_timespec2llu(this_time);
+	timestamp = get_timespec2long(this_time);
 
 
 	// get new measurement for the current scheduling algorithm
@@ -365,7 +365,7 @@ int ARMED_BANDIT_aux_select_next_algorithm(long int timestamp)
 	{
 		current_sched = next_alg;
 		AB_table[current_sched].selection_counter++;	
-		fprintf(ab_trace, "Armed Bandit at timestamp %lu\n", timestamp);
+		fprintf(ab_trace, "Armed Bandit at timestamp %ld\n", timestamp);
 		print_ab_trace_probs();
 	}
 
@@ -387,7 +387,7 @@ int ARMED_BANDIT_select_next_algorithm(void)
 	{
 		struct timespec this_time; //we need to calculate timestamp because we won't call the function ARMED_BANDIT_update_bandwidth, which would normally calculate this for us
 		agios_gettime(&this_time);
-		timestamp = get_timespec2llu(this_time);
+		timestamp = get_timespec2long(this_time);
 		agios_reset_performance_counters(); //we discard the first measurement
 		benchmarked_scheds--;
 		first_performance_measurement=0;	
@@ -398,9 +398,9 @@ int ARMED_BANDIT_select_next_algorithm(void)
 	return ARMED_BANDIT_aux_select_next_algorithm(timestamp);
 
 }
-void write_migration_end(long long int timestamp)
+void write_migration_end(long int timestamp)
 {
-	fprintf(ab_trace, "Finished migrating data structures at %llu\n-----------------------------------------------------\n", timestamp);
+	fprintf(ab_trace, "Finished migrating data structures at %ld\n-----------------------------------------------------\n", timestamp);
 	fflush(ab_trace);
 }
 //cleanup function

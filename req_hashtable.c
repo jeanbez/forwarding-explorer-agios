@@ -132,7 +132,7 @@ void hashtable_add_req(struct request_t *req, long hash_val, struct request_file
 
 #ifdef AGIOS_DEBUG
 	if(req->state == RS_HASHTABLE)
-		debug("adding request to file %s, offset %lu, size %lu", req->file_id, req->io_data.offset, req->io_data.len);
+		debug("adding request to file %s, offset %ld, size %ld", req->file_id, req->io_data.offset, req->io_data.len);
 #endif
 
 	/*finds the file to add to*/

@@ -75,7 +75,7 @@ void agios_trace_shift(int wait_time, char *file)
 
 	agios_mutex_lock(&agios_trace_mutex);
 
-	snprintf(aux_buf, aux_buf_size, "[SHIFT PHENOMENON]\t%lu\t%s\t%u\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
+	snprintf(aux_buf, aux_buf_size, "[SHIFT PHENOMENON]\t%ld\t%s\t%u\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
 	agios_trace_write_to_buffer();
 	
 	agios_mutex_unlock(&agios_trace_mutex);
@@ -89,7 +89,7 @@ void agios_trace_wait(int wait_time, char *file)
 
 	agios_mutex_lock(&agios_trace_mutex);
 	
-	snprintf(aux_buf, aux_buf_size, "[AGIOS WAIT]\t%lu\t%s\t%u\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
+	snprintf(aux_buf, aux_buf_size, "[AGIOS WAIT]\t%ld\t%s\t%u\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
 	agios_trace_write_to_buffer();
 
 	agios_mutex_unlock(&agios_trace_mutex);
@@ -102,7 +102,7 @@ void agios_trace_better(char *file)
 
 	agios_mutex_lock(&agios_trace_mutex);
 	
-	snprintf(aux_buf, aux_buf_size, "[BETTER AGGREGATION]\t%lu\t%s\t%d\n", get_nanoelapsed(agios_trace_t0), file, config_waiting_time);
+	snprintf(aux_buf, aux_buf_size, "[BETTER AGGREGATION]\t%ld\t%s\t%d\n", get_nanoelapsed(agios_trace_t0), file, config_waiting_time);
 	agios_trace_write_to_buffer();
 
 	agios_mutex_unlock(&agios_trace_mutex);
@@ -115,7 +115,7 @@ void agios_trace_predicted_better_aggregation(int wait_time, char *file)
 
 	agios_mutex_lock(&agios_trace_mutex);
 	
-	snprintf(aux_buf, aux_buf_size, "[PREDICTED BETTER AGGREGATION]\t%lu\t%s\t%u\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
+	snprintf(aux_buf, aux_buf_size, "[PREDICTED BETTER AGGREGATION]\t%ld\t%s\t%u\n", get_nanoelapsed(agios_trace_t0), file, wait_time);
 	agios_trace_write_to_buffer();
 
 	agios_mutex_unlock(&agios_trace_mutex);
@@ -125,24 +125,24 @@ void agios_trace_print_request(struct request_t *req)
 {
 	int index = strlen(aux_buf);
 	if(req->type == RT_READ)
-		snprintf(aux_buf+index, aux_buf_size - index, "%s\tR\t%lu\t%lu\n", req->file_id, req->io_data.offset, req->io_data.len);
+		snprintf(aux_buf+index, aux_buf_size - index, "%s\tR\t%ld\t%ld\n", req->file_id, req->io_data.offset, req->io_data.len);
 	else
-		snprintf(aux_buf+index, aux_buf_size - index, "%s\tW\t%lu\t%lu\n", req->file_id, req->io_data.offset, req->io_data.len);	
+		snprintf(aux_buf+index, aux_buf_size - index, "%s\tW\t%ld\t%ld\n", req->file_id, req->io_data.offset, req->io_data.len);	
 }
 //must have trace lock
 void agios_trace_print_predicted_request(struct request_t *req)
 {
 	int size = strlen(aux_buf);
 	if(req->type == RT_READ)
-		snprintf(aux_buf+size, aux_buf_size - size, "%s\tR\t%lu\t%lu\t%lu\n", req->file_id, req->io_data.offset, req->io_data.len, req->jiffies_64);
+		snprintf(aux_buf+size, aux_buf_size - size, "%s\tR\t%ld\t%ld\t%ld\n", req->file_id, req->io_data.offset, req->io_data.len, req->jiffies_64);
 	else
-		snprintf(aux_buf+size, aux_buf_size - size, "%s\tW\t%lu\t%lu\t%lu\n", req->file_id, req->io_data.offset, req->io_data.len, req->jiffies_64);
+		snprintf(aux_buf+size, aux_buf_size - size, "%s\tW\t%ld\t%ld\t%ld\n", req->file_id, req->io_data.offset, req->io_data.len, req->jiffies_64);
 }
 //a new request arrived to the scheduler
 void agios_trace_add_request(struct request_t *req)
 {
 	agios_mutex_lock(&agios_trace_mutex);
-	snprintf(aux_buf, aux_buf_size, "%lu\t", (req->jiffies_64 - get_timespec2llu(agios_trace_t0)));
+	snprintf(aux_buf, aux_buf_size, "%ld\t", (req->jiffies_64 - get_timespec2long(agios_trace_t0)));
 	agios_trace_print_request(req);
 	agios_trace_write_to_buffer();
 	
@@ -174,7 +174,7 @@ void agios_trace_process_requests(struct request_t *head_req)
 
 	agios_mutex_lock(&agios_trace_mutex);
 
-	snprintf(aux_buf, aux_buf_size, "[VIRTUAL REQUEST PROCESSED]\t%lu\t%s\n",get_nanoelapsed(agios_trace_t0) , head_req->file_id);
+	snprintf(aux_buf, aux_buf_size, "[VIRTUAL REQUEST PROCESSED]\t%ld\t%s\n",get_nanoelapsed(agios_trace_t0) , head_req->file_id);
 	agios_trace_write_to_buffer();
 	if(head_req->reqnb == 1)
 	{
@@ -238,7 +238,7 @@ void agios_trace_print_predicted_aggregations(struct request_file_t *req_file)
 
 	agios_mutex_lock(&agios_trace_mutex);
 
-	snprintf(aux_buf, aux_buf_size, "[PREDICTED AGGREGATIONS]\t%s\t%lu\n", req_file->file_id, get_nanoelapsed(agios_trace_t0) );
+	snprintf(aux_buf, aux_buf_size, "[PREDICTED AGGREGATIONS]\t%s\t%ld\n", req_file->file_id, get_nanoelapsed(agios_trace_t0) );
 
 	trace_print_predicted_aggregations_onlist(&req_file->predicted_reads);
 	trace_print_predicted_aggregations_onlist(&req_file->predicted_writes);

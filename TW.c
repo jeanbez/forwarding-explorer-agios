@@ -9,7 +9,6 @@
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
  *		It provides the time window scheduling algorithm 
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
@@ -36,10 +35,6 @@
 
 #include "agios.h"
 #include "TW.h"
-#include "req_timeline.h"
-#include "request_cache.h"
-#include "consumer.h"
-#include "iosched.h"
 #include "TO.h"
 
 void time_window(void *clnt)

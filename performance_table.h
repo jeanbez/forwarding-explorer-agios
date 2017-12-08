@@ -24,11 +24,11 @@ struct scheduler_info_t
 };
 
 void reset_scheduler_info(struct scheduler_info_t *info);
-void add_performance_measurement_to_sched_info(struct scheduler_info_t *info, long long timestamp, double bandwidth);
+void add_performance_measurement_to_sched_info(struct scheduler_info_t *info, long timestamp, double bandwidth);
 short int check_validity_window(struct scheduler_info_t *info, long int now);
 void update_average_bandwidth(struct scheduler_info_t *info);
 void free_scheduler_info_t(struct scheduler_info_t **info);
 int get_performance_measurements_number(struct scheduler_info_t *info);
 int get_sched_info_number(struct agios_list_head *table);
-void add_measurement_to_performance_table(struct agios_list_head *table, int current_sched, long long timestamp, double bandwidth);
+void add_measurement_to_performance_table(struct agios_list_head *table, int current_sched, long timestamp, double bandwidth);
 #endif

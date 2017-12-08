@@ -32,7 +32,7 @@ pthread_mutex_t pattern_tracker_lock = PTHREAD_MUTEX_INITIALIZER;
 
 //current access pattern
 struct access_pattern_t *current_pattern;
-long long int last_offset=0;
+long int last_offset=0;
 
 //files being accessed right now
 char * file_ids[MAXIMUM_FILE_NUMBER];
@@ -46,7 +46,7 @@ void add_request_to_pattern(long int timestamp, long int offset, long int len, s
 	if(agios_is_pattern_tracking) //so if the flag is not set (only the pattern matching algorithm sets it), this function will do nothing
 	{
 		int i;
-		long long int calculated_offset;
+		long int calculated_offset;
 
 		agios_mutex_lock(&pattern_tracker_lock);
 

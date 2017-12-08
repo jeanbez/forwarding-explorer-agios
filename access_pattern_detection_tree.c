@@ -9,7 +9,6 @@
  *		It provides a decision tree that detects access pattern aspects from 
  *		requests streams. It requires the "average distance between consecutive 
  *		requests" and "average stripe access time difference" metrics.
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Obs.: this file was generated automatically from the tree provided by the
  * Weka data mining tool.

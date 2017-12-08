@@ -4,8 +4,8 @@
 
 #include "agios.h"
 
-long long int agios_min(long long int t1, long long int t2);
-long long int agios_max(long long int t1, long long int t2);
+long int agios_min(long int t1, long int t2);
+long int agios_max(long int t1, long int t2);
 
 
 /*functions that are different for the kernel module and the user-level library versions*/
@@ -69,11 +69,11 @@ int agios_start_thread_km(struct task_struct *thread, thread_function *func, cha
 /*takes a struct timespec and tells you how many nanoseconds passed since the timespec was obtained*/
 long int get_nanoelapsed(struct timespec t1);
 /*translates a struct timespec to a long int (in nanoseconds)*/
-long int get_timespec2llu(struct timespec t);
+long int get_timespec2long(struct timespec t);
 /*traslates a long int (in nanoseconds) to struct timespec*/
-void get_llu2timespec(long int t, struct timespec *ret);
+void get_long2timespec(long int t, struct timespec *ret);
 /*does the same as get_nanoelapsed, but takes as parameter a long int instead of a struct timespec*/
-long int get_nanoelapsed_llu(long int t1);
+long int get_nanoelapsed_long(long int t1);
 long double get_ns2s(long int t1);
 
 /****************************************************************************************************/

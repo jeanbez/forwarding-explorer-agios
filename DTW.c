@@ -62,36 +62,36 @@ THE SOFTWARE.
 
 
 struct time_warp_info_t * Check_TimeWarpInfo_allocation(int tsI_reqnb, int tsJ_reqnb);
-long long int ** Check_cMatrix_allocation(int tsI_reqnb, int tsJ_reqnb);
+long int ** Check_cMatrix_allocation(int tsI_reqnb, int tsJ_reqnb);
 void Add_to_TimeWarp_Path(struct time_warp_info_t *info, int a, int b);
 struct search_window_iterator_t *SearchWindow_obtain(struct search_window_t *window);
 //=====================================================================================================================================
 //helper functions, to get max and min among values
-long long int min(long long int value1, long long int value2)
+long int min(long int value1, long int value2)
 {
-	long long int ret;
+	long int ret;
 	if(value1 > value2)
 		ret = value2;
 	else
 		ret = value1;
 	return ret;
 }
-long long int max(long long int value1, long long int value2)
+long int max(long int value1, long int value2)
 {
 	if(value1 >= value2)
 		return value1;
 	else
 		return value2;
 }
-long long int positive_sum(long long int value1, long long int value2)
+long int positive_sum(long int value1, long int value2)
 {
-	long long int ret = value1+value2;
+	long int ret = value1+value2;
 	if(ret < value1)
-		ret = LLONG_MAX;
+		ret = LONG_MAX;
 	return ret;
 }
 //calculates the distance between two elements of the time series. This element may have multiple dimensions
-long long int DTW_euclideanDist(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, int i, int j)
+long int DTW_euclideanDist(struct access_pattern_t *tsI, struct access_pattern_t *tsJ, int i, int j)
 {
 	//TODO make it ready for multiple dimensions!	
 //	return pow(sqrt(pow(tsI->time_series[indexI].offset - tsJ->time_series[indexJ].offset, 2.0)), 2.0);
@@ -104,7 +104,7 @@ long long int DTW_euclideanDist(struct access_pattern_t *tsI, struct access_patt
 //function used when shrinking an access pattern to a smaller one, used to combine several points into a single one
 void combine_access_pattern_points(struct pattern_tracker_req_info_t *point, struct access_pattern_t *ts, int ptToReadFrom, int ptToReadTo)
 {
-	long long int sum_offsets;
+	long int sum_offsets;
 	int pt;
 	//TODO make it ready for multiple dimensions!
 
@@ -115,9 +115,9 @@ void combine_access_pattern_points(struct pattern_tracker_req_info_t *point, str
 	{
 		sum_offsets += ts->time_series[pt].offset;
 	}
-	//could we have exceeded what a long long int can keep?
+	//could we have exceeded what a long int can keep?
 	if(sum_offsets < 0)
-		sum_offsets = LLONG_MAX;
+		sum_offsets = LONG_MAX;
 	//determine the average of the range and add to the new time series
 	point->offset = sum_offsets/(ptToReadTo-ptToReadFrom+1);
 }
@@ -135,7 +135,7 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	}
 
 	//allocate a cost matrix
-	long long int **costMatrix = Check_cMatrix_allocation(tsI->reqnb, tsJ->reqnb);
+	long int **costMatrix = Check_cMatrix_allocation(tsI->reqnb, tsJ->reqnb);
 	if(!costMatrix)
 	{
 		agios_print("PANIC! Could not allocate cost matrix for DTW");
@@ -178,20 +178,20 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 		while((i > 0) || (j > 0))
 		{
 			//find the costs of moving in all three possible directions: left, down, and diagonal (down and left at the same time)
-			long long int diagCost, leftCost, downCost;
+			long int diagCost, leftCost, downCost;
 			
 			if(( i > 0) & (j > 0))
 				diagCost = costMatrix[i-1][j-1];
 			else
-				diagCost = LLONG_MAX;
+				diagCost = LONG_MAX;
 			if (i > 0)
 				leftCost = costMatrix[i-1][j];
 			else
-				leftCost = LLONG_MAX;
+				leftCost = LONG_MAX;
 			if(j > 0)
 				downCost = costMatrix[i][j-1];
 			else
-				downCost = LLONG_MAX;
+				downCost = LONG_MAX;
 			//determine which direction to move in. Prefer moving diagonally and moving towards i == j axis of the matrixif there are ties
 			if((diagCost <= leftCost) && (diagCost <= downCost) && (i > 0) && (j > 0))
 			{
@@ -219,7 +219,7 @@ struct time_warp_info_t * DTW_DynamicTimeWarp(struct access_pattern_t *tsI, stru
 	return ret;
 }
 //function to call directly, applies full DTW and returns the distance only (without the path)
-long long int DTW(struct access_pattern_t *tsI, struct access_pattern_t *tsJ)
+long int DTW(struct access_pattern_t *tsI, struct access_pattern_t *tsJ)
 {
 	struct time_warp_info_t *info = DTW_DynamicTimeWarp(tsI, tsJ, 1); //we ask DTW to calculate the distance only, no need to recreate the whole path if we are not using it
 	if(info)
@@ -227,12 +227,12 @@ long long int DTW(struct access_pattern_t *tsI, struct access_pattern_t *tsJ)
 	else
 	{
 		agios_print("PANIC! Could not apply fast DTW");
-		return LLONG_MAX;
+		return LONG_MAX;
 	}
 }
 //=====================================================================================================================================
 //functions to manage - allocate, access, free - a constrainedDTW_cost_t structure, used by constrained DTW.
-//this structure has two arrays, one of long long ints, called cellValues, and another of ints, called colOffsets. Each one has a _size int to keep track of values.
+//this structure has two arrays, one of long ints, called cellValues, and another of ints, called colOffsets. Each one has a _size int to keep track of values.
 //we'll try to keep this structure allocated between executions, so we won't have to re-allocate and free it every time we call constrainedDTW 
 int max_constrainedDTW_cost_columns=0;
 int max_constrainedDTW_cost_points=0;
@@ -276,7 +276,7 @@ struct constrainedDTW_cost_t *Check_constrainedDTWcost_allocation(struct search_
 	{	
 		if(CDTW_cost->cellValues)
 			free(CDTW_cost->cellValues);
-		CDTW_cost->cellValues = malloc(sizeof(long long int)*window->size);
+		CDTW_cost->cellValues = malloc(sizeof(long int)*window->size);
 		if(!CDTW_cost->cellValues)
 		{
 			agios_print("PANIC! Could not allocate memory for constrained DTW cost matrix");
@@ -296,7 +296,7 @@ struct constrainedDTW_cost_t *Check_constrainedDTWcost_allocation(struct search_
 
 	return CDTW_cost;
 }
-void add_to_constrainedDTWcost(struct constrainedDTW_cost_t *cost, struct search_window_t *window, int row, int col, long long int value)
+void add_to_constrainedDTWcost(struct constrainedDTW_cost_t *cost, struct search_window_t *window, int row, int col, long int value)
 {
 /*	if((row < window->ranges[col].min) || (row > window->ranges[col].max))
 	{
@@ -309,10 +309,10 @@ void add_to_constrainedDTWcost(struct constrainedDTW_cost_t *cost, struct search
 	cost->cellValues_size++;
 	cost->cellValues[cost->colOffsets[col]+row-window->ranges[col].min] = value;
 }
-long long int get_from_constrainedDTWcost(struct constrainedDTW_cost_t *cost, struct search_window_t *window, int row, int col)
+long int get_from_constrainedDTWcost(struct constrainedDTW_cost_t *cost, struct search_window_t *window, int row, int col)
 {
 	if((row < window->ranges[col].min) || (row > window->ranges[col].max))
-		return LLONG_MAX;
+		return LONG_MAX;
 	else
 		return cost->cellValues[cost->colOffsets[col]+row - window->ranges[col].min];
 }
@@ -323,7 +323,7 @@ struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, s
 //	PRINT_FUNCTION_NAME;
 	int colu;
 	int i, j;
-	long long int diagCost, leftCost, downCost, mincost;
+	long int diagCost, leftCost, downCost, mincost;
 	struct time_warp_info_t *ret = Check_TimeWarpInfo_allocation(tsI->reqnb, tsJ->reqnb);
  
 	if(ret == NULL)
@@ -383,19 +383,19 @@ struct time_warp_info_t *DTW_constrainedTimeWarp(struct access_pattern_t *tsI, s
 			diagCost = get_from_constrainedDTWcost(costMatrix, window, i-1, j-1);
 		}
 		else
-			diagCost = LLONG_MAX;
+			diagCost = LONG_MAX;
 		if(i > 0)
 		{
 			leftCost =get_from_constrainedDTWcost(costMatrix, window, i-1,j);
 		}
 		else
-			leftCost = LLONG_MAX;
+			leftCost = LONG_MAX;
 		if(j > 0)
 		{
 			downCost = get_from_constrainedDTWcost(costMatrix, window, i, j-1);
 		}
 		else
-			downCost = LLONG_MAX;
+			downCost = LONG_MAX;
 		//determine which direction to move in. Prefer moving diagonally and towards the i==j axis of the matrix if there are ties
 		if((diagCost <=	leftCost) && (diagCost <= downCost) && (i > 0) && (j > 0))
 		{
@@ -493,9 +493,9 @@ void Add_to_TimeWarp_Path(struct time_warp_info_t *info, int a, int b)
 //functions to handle the cost matrix, used by the DTW_DynamicTipeWarp function. We'll allocate it once and keep during calculations
 int costMatrix_sizeI = 0;
 int costMatrix_sizeJ = 0;
-long long int **cMatrix = NULL;
+long int **cMatrix = NULL;
 
-long long int ** Check_cMatrix_allocation(int tsI_reqnb, int tsJ_reqnb)
+long int ** Check_cMatrix_allocation(int tsI_reqnb, int tsJ_reqnb)
 {
 	int i;
 
@@ -513,7 +513,7 @@ long long int ** Check_cMatrix_allocation(int tsI_reqnb, int tsJ_reqnb)
 			free(cMatrix);
 		}
 		//now allocate a new one
-		cMatrix = malloc(sizeof(long long int *)*(tsI_reqnb));
+		cMatrix = malloc(sizeof(long int *)*(tsI_reqnb));
 		if(cMatrix == NULL)
 		{
 			agios_print("PANIC! Could not allocate cost Matrix for DTW");
@@ -521,7 +521,7 @@ long long int ** Check_cMatrix_allocation(int tsI_reqnb, int tsJ_reqnb)
 		}
 		for(i = 0; i < tsI_reqnb; i++)
 		{
-			cMatrix[i] = malloc(sizeof(long long int)*(tsJ_reqnb));
+			cMatrix[i] = malloc(sizeof(long int)*(tsJ_reqnb));
 			if(cMatrix[i] == NULL)
 			{
 				agios_print("PANIC! Could not allocate cost Matrix for DTW");
@@ -1006,10 +1006,10 @@ struct time_warp_info_t *FastDTW_fastDTW(struct access_pattern_t *tsI, struct ac
 		return ret;
 	}
 }
-// This is the function called from outside to compare two access patterns A and B. It will return an long long int that is a score. The higher the score, the higher the distance between the patterns (the more different they are). 
-long long int FastDTW(struct access_pattern_t *A, struct access_pattern_t *B)
+// This is the function called from outside to compare two access patterns A and B. It will return an long int that is a score. The higher the score, the higher the distance between the patterns (the more different they are). 
+long int FastDTW(struct access_pattern_t *A, struct access_pattern_t *B)
 {
-	long long int ret = LLONG_MAX;
+	long int ret = LONG_MAX;
 	short int error=1;
 
 	//before calling the fast dtw function, well allocate some structures using the largest size possible for this calculation, so we won't have to reallocate logN times during it

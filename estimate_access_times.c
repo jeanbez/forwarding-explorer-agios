@@ -154,7 +154,7 @@ long int get_access_time(long int size, int operation)
 	else
 		index = SEQUENTIAL_WRITE;
 
-//	debug("looking for access time to a request of %lu bytes (%f Kbytes), type %d. It belongs to the interval %d, function is %lfx + %lf, results in %llu ns\n", size, this_size, operation, inter, funcs[inter][index][0], funcs[inter][index][1], (long long int) ( (funcs[inter][index][0]*this_size) + funcs[inter][index][1]));
+//	debug("looking for access time to a request of %ld bytes (%f Kbytes), type %d. It belongs to the interval %d, function is %lfx + %lf, results in %ld ns\n", size, this_size, operation, inter, funcs[inter][index][0], funcs[inter][index][1], (long int) ( (funcs[inter][index][0]*this_size) + funcs[inter][index][1]));
 
 	//time = ax + b 
 	return (long int)((funcs[inter][index][0]*((double)this_size)) + funcs[inter][index][1]);
@@ -194,7 +194,7 @@ double get_access_ratio(long int size, int operation)
 	time_seq = (funcs[inter][index][0]*((double)this_size)) + funcs[inter][index][1];
 	time_random = (funcs[inter][index_random][0]*((double)this_size)) + funcs[inter][index_random][1];
 
-	//debug("looking for access time ratio to a request of %lu bytes (%f Kbytes), type %d. It belongs to the interval %d, sequential function is %lfx + %lf (results in %lf ns), random function is function is %lfx + %lf ( results in %lf ns), sequential throughput is %f, random throughput is %f, ratio is %f\n", size, this_size, operation, inter, funcs[inter][index][0], funcs[inter][index][1], time_seq, funcs[inter][index_random][0], funcs[inter][index_random][1], time_random, (this_size / time_seq), (this_size /  time_random), (float) (this_size /  time_seq) / (this_size /  time_random)  );
+	//debug("looking for access time ratio to a request of %ld bytes (%f Kbytes), type %d. It belongs to the interval %d, sequential function is %lfx + %lf (results in %lf ns), random function is function is %lfx + %lf ( results in %lf ns), sequential throughput is %f, random throughput is %f, ratio is %f\n", size, this_size, operation, inter, funcs[inter][index][0], funcs[inter][index][1], time_seq, funcs[inter][index_random][0], funcs[inter][index_random][1], time_random, (this_size / time_seq), (this_size /  time_random), (float) (this_size /  time_seq) / (this_size /  time_random)  );
 
 
 

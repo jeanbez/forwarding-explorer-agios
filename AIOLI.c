@@ -168,7 +168,7 @@ struct related_list_t *AIOLI_select_queue(int *selected_index)
 }
 
 /*return the next quantum considering how much of the last one was used*/
-long long int adjust_quantum(long int elapsed_time, int quantum, short int type)
+long int adjust_quantum(long int elapsed_time, int quantum, short int type)
 {
 	long int requiredqt;
 	long int max_bound;
@@ -211,7 +211,7 @@ void AIOLI(void *clnt)
 	struct related_list_t *AIOLI_selected_queue=NULL;
 	int selected_hash = 0;
 	struct request_t *req;
-	long long int remaining=0;
+	long int remaining=0;
 	short int type;
 	short int update_time=0;
 

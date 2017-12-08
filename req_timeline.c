@@ -91,7 +91,7 @@ void __timeline_add_req(struct request_t *req, long hash_val, struct request_fil
 		PRINT_FUNCTION_NAME;
 		VERIFY_REQUEST(req);
 
-		debug("adding request %lu %lu to file %s, app_id %u", req->io_data.offset, req->io_data.len, req->file_id, req->tw_app_id);	
+		debug("adding request %ld %ld to file %s, app_id %u", req->io_data.offset, req->io_data.len, req->file_id, req->tw_app_id);	
 
 		/*find the file and update its informations if needed*/
 		req_file = find_req_file(&hashlist[hash_val], req->file_id, req->state); //we store file information in the hashtable 
@@ -237,7 +237,7 @@ struct request_t *timeline_oldest_req(long *hash)
 	//PRINT_FUNCTION_NAME;
 	
 	if (agios_list_empty(&timeline)) {
-		return 0;
+		return NULL;
 	}
 
 	tmp = agios_list_entry(timeline.next, struct request_t, related);

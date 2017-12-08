@@ -66,16 +66,16 @@ struct related_list_statistics_t
 	long int processedreq_nb; //number of processed requests 
 	long int receivedreq_nb; //number of received requests 
 
-	long long int processed_req_size; //total amount of served data
-	long long int processed_req_time; //time it took to serve the amount of data
+	long int processed_req_size; //total amount of served data
+	long int processed_req_time; //time it took to serve the amount of data
 
 	//statistics on request size
-	long long int total_req_size; //this value is not the same as processed_req_size, since this one is updated when adding a request, and the other is updated in the release function. This means the average request size among received requests is obtained by total_req_size / receivedreq_nb, and the average request size among processed requests is obtained by processed_req_size / processedreq_nb
+	long int total_req_size; //this value is not the same as processed_req_size, since this one is updated when adding a request, and the other is updated in the release function. This means the average request size among received requests is obtained by total_req_size / receivedreq_nb, and the average request size among processed requests is obtained by processed_req_size / processedreq_nb
 	long int min_req_size;
 	long int max_req_size;
 
 	//statistics on time between requests
-	long long int total_request_time;
+	long int total_request_time;
 	long int max_request_time;
 	long int min_request_time;
 

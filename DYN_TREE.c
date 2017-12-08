@@ -56,10 +56,18 @@ int DYN_TREE_init(void)
 }
 int DYN_TREE_select_next_algorithm(void)
 {
-	int next_alg = last_selected_algorithm; //if we can't choose a next one, we keep the same 
 	if(config_agios_select_algorithm_period >= 0) //dynamic scheduler
 	{
 		//TODO
+		if(get_global_window_operation() < 0) //if we dont have information, we don't make a decision
+		{
+			agios_print("Warning! DYN THREE does not have enough information to make a decision, will select %s", );
+		 	last_selected_algorithm = config_agios_starting_algorithm;
+		}
+		else
+		{
+			last_selected_algorithm = get_algorithm_from_string(scheduling_algorithm_selection_tree(get_global_window_operation(), 
+		}
 	}
-	return next_alg;
+	return last_selected_algorithm;
 }

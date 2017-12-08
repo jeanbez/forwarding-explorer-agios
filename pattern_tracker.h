@@ -8,7 +8,7 @@
 
 struct pattern_tracker_req_info_t
 {
-	long long int offset; //this is actually offset difference from the previous request
+	long int offset; //this is actually offset difference from the previous request
 	struct agios_list_head list;
 };
 

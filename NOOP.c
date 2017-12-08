@@ -93,7 +93,7 @@ void NOOP(void *clnt)
 		if(!stop_processing) 
 		{
 			req = timeline_oldest_req(&hash);
-			debug("NOOP is processing leftover requests %s %lu %lu", req->file_id, req->io_data.offset, req->io_data.len);
+			debug("NOOP is processing leftover requests %s %ld %ld", req->file_id, req->io_data.offset, req->io_data.len);
 			update_time = process_requests(req, clnt, hash);
 			generic_post_process(req);
 			if(update_time)

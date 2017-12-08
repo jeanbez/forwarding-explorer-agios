@@ -10,7 +10,6 @@
  *		function is called. Stats can be reseted by agios_reset_stats.
  *		The kernel module implementation uses the proc interface, while the user-level
  *		library creates a file in the local file system. Its name is provided as a parameter.
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
@@ -54,11 +53,13 @@ struct global_statistics_t
 {
 	long int total_reqnb; //we have a similar counter in consumer.c, but this one can be reset, that one is fixed (never set to 0, counts through the whole execution)
 //to measure time between requests
-	long long int global_req_time;
+	long int reads;
+	long int writes;
+	long int global_req_time;
 	long int global_min_req_time;
 	long int global_max_req_time;
 	//to measure request size
-	long long int global_req_size;
+	long int global_req_size;
 	long int global_min_req_size;
 	long int global_max_req_size;
 };
@@ -67,6 +68,16 @@ static struct global_statistics_t stats_for_file;
 static struct global_statistics_t stats_for_window;
 static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+//we will access information without lock because we are not expected to update it while reading
+short int get_global_window_operation(void)
+{
+	if(stats_for_window->writes == stats_for_window->reads == 0)
+		return -1; //we do not have information
+	else if(stats_for_window->writes >= stats_for_window->reads)
+		return RT_WRITE;
+	else
+		return RT_READ;
+}
 
 
 /***********************************************************************************************************
@@ -88,7 +99,7 @@ void proc_set_new_algorithm(int alg)
 	struct proc_alg_entry_t *new = malloc(sizeof(struct proc_alg_entry_t));
 
 	agios_gettime(&now);
-	new->timestamp = get_timespec2llu(now);
+	new->timestamp = get_timespec2long(now);
 	new->alg = alg;
 	agios_list_add_tail(&new->list, &proc_algs);
 	proc_algs_len++;
@@ -142,7 +153,7 @@ void update_local_stats(struct related_list_statistics_t *stats, struct request_
 		stats->total_request_time = 1;
 	else
 	{
-		elapsedtime = (req->jiffies_64 - get_timespec2llu(req->globalinfo->last_req_time))/1000; //nano to microseconds
+		elapsedtime = (req->jiffies_64 - get_timespec2long(req->globalinfo->last_req_time))/1000; //nano to microseconds
 		if(stats->total_request_time == 1)
 			stats->total_request_time = 0;
 
@@ -153,7 +164,7 @@ void update_local_stats(struct related_list_statistics_t *stats, struct request_
 		if(elapsedtime < stats->min_request_time)
 			stats->min_request_time = elapsedtime;
 	}
-	get_llu2timespec(req->jiffies_64, &req->globalinfo->last_req_time);
+	get_long2timespec(req->jiffies_64, &req->globalinfo->last_req_time);
 
 	//update local statistics on average offset distance between consecutive requests
 	//TODO is it the same thing done by predict when including requests? should we join these codes?
@@ -195,6 +206,11 @@ void update_global_stats_newreq(struct global_statistics_t *stats, struct reques
 		stats->global_max_req_size = req->io_data.len;
 	if(req->io_data.len < stats->global_min_req_size)
 		stats->global_min_req_size = req->io_data.len;
+	//update global statistics on operation
+	if(req->type == RT_READ)
+		stats->reads++;
+	else
+		stats->writes++;
 }
 /*update the stats after the arrival of a new request
  * must hold the hashtable mutex
@@ -219,10 +235,10 @@ void proc_stats_newreq(struct request_t *req)
 		if(req->jiffies_64 == req->globalinfo->req_file->first_request_time)
 			elapsedtime=0;
 		else
-			elapsedtime = (req->jiffies_64 - get_timespec2llu(last_req)) / 1000; //nano to microseconds
+			elapsedtime = (req->jiffies_64 - get_timespec2long(last_req)) / 1000; //nano to microseconds
 		update_global_stats_newreq(&stats_for_file, req, elapsedtime);
 		update_global_stats_newreq(&stats_for_window, req, elapsedtime);
-		get_llu2timespec(req->jiffies_64, &last_req);
+		get_long2timespec(req->jiffies_64, &last_req);
 
 		agios_mutex_unlock(&global_statistics_mutex);
 
@@ -245,6 +261,8 @@ void _reset_global_reqstats(struct global_statistics_t *stats)
 	stats->global_req_size = 0;
 	stats->global_min_req_size = LONG_MAX;
 	stats->global_max_req_size=0;
+	stats->reads = 0;
+	stats->writes = 0;
 }
 void reset_global_reqstats(void)
 {

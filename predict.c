@@ -100,7 +100,7 @@ void signal_predict_init()
 	initialized_predict=1;
 	agios_cond_broadcast(&initialized_prediction_thr_cond);
 }
-long long int get_predict_init_time()
+long int get_predict_init_time()
 {
 	return predict_init_time;
 }
@@ -182,7 +182,7 @@ int get_current_predicted_reqfilenb()
 	return ret;
 }
 /*build a new request structure and initialize some fields*/
-struct request_t *predicted_request_constructor(char *file_id, int type, long long offset, long len, long long int predicted_time)
+struct request_t *predicted_request_constructor(char *file_id, int type, long offset, long len, long int predicted_time)
 {
 	struct request_t *new = request_constructor(file_id, type, offset, len, 0, predicted_time, RS_PREDICTED, 0);
 
@@ -194,7 +194,7 @@ struct request_t *predicted_request_constructor(char *file_id, int type, long lo
 }
 /*checks if time1 is close enough to time2 considering an error factor of prediction_time_error
  *this is used to deciding if predictions are for the same request*/
- int request_time_is_close_enough(long long int time1, long long int time2)
+ int request_time_is_close_enough(long int time1, long int time2)
 {
 	if(time1 >= (time2 - (time2 * config_predict_agios_time_error)/100))
 	{
@@ -213,7 +213,7 @@ void predict_timeline_add_req(struct request_t *req)
 	agios_list_add_tail(&req->timeline, &predict_timeline);
 }
 /*searches for the already existing predicted request inside a related list. MUST hold hashtable lock*/
-int check_existing_prediction_onlist(struct agios_list_head *related_list, long long offset, long len, long long int predicted_time, struct request_t **same_req)
+int check_existing_prediction_onlist(struct agios_list_head *related_list, long offset, long len, long int predicted_time, struct request_t **same_req)
 {
 	struct request_t *tmp;
 	int request_found = 0;
@@ -234,7 +234,7 @@ int check_existing_prediction_onlist(struct agios_list_head *related_list, long 
 	return request_found;
 }
 /*searches for the already existing predicted request. Returns it in same_req and its hash value to access in the hashtable*/
-int check_existing_prediction(char *file_id, int type, long long offset, long len, long long int predicted_time, struct request_t **same_req, long *hash)
+int check_existing_prediction(char *file_id, int type, long offset, long len, long int predicted_time, struct request_t **same_req, long *hash)
 {
 	long hash_val;
 	struct agios_list_head *hash_list;
@@ -285,11 +285,11 @@ int check_existing_prediction(char *file_id, int type, long long offset, long le
 	return ret;
 }
 /*used by the prediction thread, adds a predicted request to the data structures*/
-int add_prediction(char *file_id, int type, long long offset, long len, long long int predicted_time)
+int add_prediction(char *file_id, int type, long offset, long len, long int predicted_time)
 {
 	long hash;
 	struct request_t *req;
-	long long int new_predicted_time;
+	long int new_predicted_time;
 	struct request_file_t *req_file;
 	struct agios_list_head *hash_list;
 
@@ -362,12 +362,12 @@ void prediction_newreq(struct request_t *req)
 }
 
 /*see if the performed aggregation is as good as predicted. If it is not,  decides how much time we should wait for new requests*/
-long long int agios_predict_should_we_wait(struct request_t *req)
+long int agios_predict_should_we_wait(struct request_t *req)
 {
-	long long int waiting_time = 0;
+	long int waiting_time = 0;
 	struct request_t *predicted_head=NULL;
 	struct request_t *tmp;
-	long long int max, pmax;
+	long int max, pmax;
 
 
 	/*TODO maybe remove the already_waited condition. In order to avoid starvation, we could make it not wait if all the requests of the aggregation were supposed to be here by now (see the method to obtain the waiting_time below) */
@@ -434,7 +434,7 @@ int predict_select_best_algorithm(void)
 //FUNCTIONS RELATED TO ACCESS PATTERN DETECTION
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /*upon adding a request, considers its offset difference from the previous request to the same queue*/
-void update_average_distance(struct related_list_t *related_list, long long offset, long len)
+void update_average_distance(struct related_list_t *related_list, long offset, long len)
 {
 	long int this_distance;
 
@@ -452,7 +452,7 @@ void update_average_distance(struct related_list_t *related_list, long long offs
 	related_list->lastfinaloff = offset+len;
 }
 /*calculates the alpha factor, that represents the workload's provided ability to overlap waiting times with processing of other requests. More detail in the ICPADS 2013 paper or in my thesis*/
-void calculate_prediction_alpha(long long int time_spent_waiting, long long int waiting_time_overlapped, short int first_prediction)
+void calculate_prediction_alpha(long int time_spent_waiting, long int waiting_time_overlapped, short int first_prediction)
 {
 
 	if(first_prediction)
@@ -460,8 +460,8 @@ void calculate_prediction_alpha(long long int time_spent_waiting, long long int 
 		/*we don't have any measures of waiting times overlapping because the scheduler just started. we will have to estimate it*/
 		struct agios_list_head *req_l, *req_l_next;
 		struct request_t *req, *req_next;
-		long long int time_between;
-		long long int A, B;
+		long int time_between;
+		long int A, B;
 
 		A = B = 0;
 		req_l = predict_timeline.next;
@@ -525,7 +525,7 @@ void calculate_prediction_alpha(long long int time_spent_waiting, long long int 
 /* for more detail about this algorithm, please see our paper from ICPADS 2013 (AGIOS: Application-guided I/O Scheduling for Parallel File Systems)*/
 int aggregation_is_possible(long int current_size, struct request_t *agg_head, struct request_t *req)
 {
-	long long int delta;
+	long int delta;
 
 	/*see if they are contiguous*/
 	if(agg_head->io_data.offset + current_size < req->io_data.offset)
@@ -662,7 +662,7 @@ void predict_aggregations(short int cleanup)
 //TODO it probably does not make sense for orangefs
 void calculate_average_stripe_access_time_difference(struct related_list_t *related_list)
 {
-	long long int arrival_times_differences_sum, max_arrival_time, min_arrival_time;
+	long int arrival_times_differences_sum, max_arrival_time, min_arrival_time;
 	int current_stripe, current_count, stripes_count;
 	struct request_t *req;
 
@@ -670,7 +670,7 @@ void calculate_average_stripe_access_time_difference(struct related_list_t *rela
 	{
 		current_stripe = 0;
 		current_count = 0;
-		min_arrival_time = LLONG_MAX;
+		min_arrival_time = LONG_MAX;
 		max_arrival_time = 0;
 		arrival_times_differences_sum=0;
 		stripes_count=0;
@@ -686,7 +686,7 @@ void calculate_average_stripe_access_time_difference(struct related_list_t *rela
 					stripes_count++;
 				}
 				current_count = 0;
-				min_arrival_time = LLONG_MAX;
+				min_arrival_time = LONG_MAX;
 				max_arrival_time = 0;
 			}
 			/*update min and max*/
@@ -746,8 +746,8 @@ void update_traced_access_pattern()
 	int write_spatiality_count[2] = {0,0};
 	int read_reqsize_count[2] = {0,0};
 	int write_reqsize_count[2] = {0,0};
-	long long read_server_reqsize = 0;
-	long long write_server_reqsize = 0;
+	long read_server_reqsize = 0;
+	long write_server_reqsize = 0;
 
 
 
@@ -918,11 +918,11 @@ void read_predictions_from_traces(int last, int files_nb)
 {
 	FILE *input_file;
 
-	long long int timestamp;
+	long int timestamp;
 	char filename[300];
 	char operation[300];
 	int type;
-	long long offset;
+	long offset;
 	long len;
 	int ret=5;
 	int i;

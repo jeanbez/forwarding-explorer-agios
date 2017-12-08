@@ -6,9 +6,8 @@
  *
  * Description:
  *		This file is part of the AGIOS I/O Scheduling tool.
- *		It provides a structure so the pattern matching appraoch and the armed bandit
+ *		It provides a structure so the pattern matching approach and the armed bandit
  *		algorithm may keep performance information.
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
  *
  * Contributors:
  *		Federal University of Rio Grande do Sul (UFRGS)
@@ -82,7 +81,7 @@ int get_performance_measurements_number(struct scheduler_info_t *info)
 }
 
 //updates information about a scheduler with a new performance measurement
-void add_performance_measurement_to_sched_info(struct scheduler_info_t *info, long long timestamp, double bandwidth)
+void add_performance_measurement_to_sched_info(struct scheduler_info_t *info, long timestamp, double bandwidth)
 {
 	info->bandwidth_measurements[info->measurements_end].timestamp = timestamp;
 	info->bandwidth_measurements[info->measurements_end].bandwidth = bandwidth;
@@ -98,7 +97,7 @@ void add_performance_measurement_to_sched_info(struct scheduler_info_t *info, lo
 			info->measurements_start=0;
 	}
 }
-void add_measurement_to_performance_table(struct agios_list_head *table, int current_sched, long long timestamp, double bandwidth)
+void add_measurement_to_performance_table(struct agios_list_head *table, int current_sched, long timestamp, double bandwidth)
 {
 	struct scheduler_info_t *tmp;
 	short int found=0;

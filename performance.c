@@ -182,7 +182,7 @@ void performance_set_new_algorithm(int alg)
 	new->time = 0;
 	new->size = 0;
 	agios_gettime(&now);
-	new->timestamp = get_timespec2llu(now);
+	new->timestamp = get_timespec2long(now);
 	new->alg = alg;
 	
 	agios_mutex_lock(&performance_mutex);
@@ -249,9 +249,9 @@ void print_all_performance_data()
 	agios_list_for_each_entry(aux, &performance_info, list)
 	{
 		if(aux->time > 0)
-			debug("%s - %llu bytes in %llu ns = %.6f bytes/s (timestamp %lu)", get_algorithm_name_from_index(aux->alg), aux->size, aux->time, ((double)aux->size)/get_ns2s(aux->time), aux->timestamp);
+			debug("%s - %ld bytes in %ld ns = %.6f bytes/s (timestamp %ld)", get_algorithm_name_from_index(aux->alg), aux->size, aux->time, ((double)aux->size)/get_ns2s(aux->time), aux->timestamp);
 		else
-			debug("%s - %llu bytes in %llu ns (timestamp %lu)", get_algorithm_name_from_index(aux->alg), aux->size, aux->time, aux->timestamp);
+			debug("%s - %ld bytes in %ld ns (timestamp %ld)", get_algorithm_name_from_index(aux->alg), aux->size, aux->time, aux->timestamp);
 	}
 }
 
@@ -354,7 +354,7 @@ int agios_release_request(char *file_id, short int type, long int len, long int 
 			if(entry == current_performance_entry)
 			{
 				agios_processed_reqnb++; //we only count it as a new processed request if it was issued by the current scheduling algorithm
-				debug("a request issued by the current scheduling algorithm has come back! processed_reqnb is %lu", agios_processed_reqnb);
+				debug("a request issued by the current scheduling algorithm has come back! processed_reqnb is %ld", agios_processed_reqnb);
 			}
 		}
 
@@ -363,7 +363,7 @@ int agios_release_request(char *file_id, short int type, long int len, long int 
 		generic_cleanup(req);
 	}
 	else
-		debug("PANIC! Could not find the request %lu %lu to file %s\n", offset, len, file_id);
+		debug("PANIC! Could not find the request %ld %ld to file %s\n", offset, len, file_id);
 	//else //what to do if we can't find the request???? is this possible????
 
 	//release data structure lock

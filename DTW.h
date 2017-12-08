@@ -11,7 +11,7 @@ struct DTW_point {
 
 struct time_warp_info_t {
 	//distance
-	long long int distance;
+	long int distance;
 	//path that results in this distance
 	struct DTW_point *points;
 	int index;
@@ -36,15 +36,15 @@ struct search_window_iterator_t {
 }; 
 
 struct constrainedDTW_cost_t {
-	long long int *cellValues;
+	long int *cellValues;
 	int cellValues_size;
 	int *colOffsets;
 	int colOffsets_size;
 };
 
-long long int DTW(struct access_pattern_t *tsI, struct access_pattern_t *tsJ);
+long int DTW(struct access_pattern_t *tsI, struct access_pattern_t *tsJ);
 
-long long int FastDTW(struct access_pattern_t *A, struct access_pattern_t *B);
+long int FastDTW(struct access_pattern_t *A, struct access_pattern_t *B);
 
 
 void DTW_cleanup();

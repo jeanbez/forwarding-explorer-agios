@@ -23,14 +23,14 @@
 
 
 
-long long int agios_min( long long int t1,  long long int t2)
+long int agios_min( long int t1,  long int t2)
 {
 	if(t1 < t2)
 		return t1;
 	else
 		return t2;
 }
-long long int agios_max( long long int t1, long long int t2)
+long int agios_max( long int t1, long int t2)
 {
 	if(t1 > t2)
 		return t1;
@@ -75,24 +75,24 @@ long int get_nanoelapsed(struct timespec t1)
 }
 
 /*translates a struct timespec to a long int (in nanoseconds)*/
-long int get_timespec2llu(struct timespec t)
+long int get_timespec2long(struct timespec t)
 {
 	return (t.tv_sec*1000000000L + t.tv_nsec);
 }
 
 /*traslates a long int (in nanoseconds) to struct timespec*/
-void get_llu2timespec(long int t, struct timespec *ret)
+void get_long2timespec(long int t, struct timespec *ret)
 {
 	ret->tv_sec = t / 1000000000L;
 	ret->tv_nsec = t % 1000000000L;
 }
 
 /*does the same as get_nanoelapsed, but takes as parameter a long int instead of a struct timespec*/
-long int get_nanoelapsed_llu(long int t1)
+long int get_nanoelapsed_long(long int t1)
 {
 	struct timespec t2;
 	agios_gettime(&t2);
-	return (get_timespec2llu(t2) - t1);
+	return (get_timespec2long(t2) - t1);
 }
 double get_ns2s(long int t1)
 {

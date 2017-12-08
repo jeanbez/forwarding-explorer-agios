@@ -76,10 +76,10 @@ struct related_list_t *SJF_get_shortest_job(int *current_hash)
 		{
 			if((!agios_list_empty(&req_file->related_writes.list)) || (!agios_list_empty(&req_file->related_reads.list)))
 			{	 
-				//debug("file %s, related_reads com %lu e related_writes com %lu, min_size is %lu\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size, min_size);
+				//debug("file %s, related_reads com %ld e related_writes com %ld, min_size is %ld\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size, min_size);
 				if((req_file->related_reads.current_size < 0) || (req_file->related_writes.current_size < 0))
 				{
-					printf("PANIC! current_size for file %s is %lu and %lu\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size);
+					printf("PANIC! current_size for file %s is %ld and %ld\n", req_file->file_id, req_file->related_reads.current_size, req_file->related_writes.current_size);
 					exit(-1);			
 				}
 				evaluated_reqfiles++; //we count only files that have requests (others could have predicted requests but no actual ones)
