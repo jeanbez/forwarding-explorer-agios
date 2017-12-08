@@ -129,7 +129,7 @@ void __timeline_add_req(struct request_t *req, long hash_val, struct request_fil
 
 		return;
 	} 
-	if(current_alg == EXCLUSIVE_TIME_WINDOW)
+	if(current_alg == TWINS_SCHEDULER)
 	{
 		agios_list_add_tail(&req->related, &(app_timeline[req->tw_app_id]));
 		return;
@@ -183,7 +183,7 @@ void __timeline_add_req(struct request_t *req, long hash_val, struct request_fil
 
 }
 
-/* this function is called when migrating between two scheduling algorithms when both use timeline and one of them is the TIME_WINDOW. In this case, it is necessary to redo the timeline so requests will be processed in the new relevant order */
+/* this function is called when migrating between two scheduling algorithms when both use timeline and one of them is the TIME_WINDOW or TWINS. In this case, it is necessary to redo the timeline so requests will be processed in the new relevant order */
 void reorder_timeline()
 {
 	struct agios_list_head *new_timeline;

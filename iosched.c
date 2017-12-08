@@ -480,11 +480,12 @@ void change_selected_alg(int new_alg)
 		{
 			//now it depends on the algorithms. 
 			//if we are changing to NOOP, it does not matter because it does not really use the data structure
-			//if we are changing from or to TIME_WINDOW, we need to reorder the list
+			//if we are changing from or to TIME_WINDOW or TWINS, we need to reorder the list
 			//if we are changing to the timeorder with aggregation, we need to reorder the list
-			if((current_alg != NOOP_SCHEDULER) && ((previous_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIMEORDER_SCHEDULER)))
+			if((current_alg != NOOP_SCHEDULER) && 
+			   ((previous_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TWINS_SCHEDULER) || (previous_alg == TWINS_SCHEDULER)))
 			{
-//				reorder_timeline(); 
+				reorder_timeline(); 
 			}
 		}
 	}

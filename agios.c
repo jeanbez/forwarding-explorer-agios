@@ -216,7 +216,8 @@ void agios_exit(void)
 #endif
 
 	/*stop the prediction thread*/
-	stop_prediction_thr();
+	if(config_predict_agios_read_traces || config_predict_agios_request_aggregation || config_agios_write_simplified_traces) 
+		stop_prediction_thr();
 
 	if (consumer_task != 0) 
 	{
@@ -239,7 +240,8 @@ void agios_exit(void)
 	proc_stats_exit();
 	config_agios_cleanup();
 	access_times_functions_cleanup();
-	agios_print("stopped for this client. It can already be used by calling agios_init\n");
+	agios_performance_cleanup();
+	agios_print("stopped for this client. AGIOS can be used again by calling agios_init\n");
 #ifdef AGIOS_KERNEL_MODULE
 	agios_in_use = 0;
 #endif

@@ -281,17 +281,19 @@ void check_update_time()
 
 	//is it time to change the scheduling algorithm?
 	//TODO it is possible that at this moment the prediction thread is reading traces and making predictions, i.e., accessing the hashtable. This could lead to awful problems. If we want to test with recalculate_alpha_period, we need to take care of that!
-	if((dynamic_scheduler->is_dynamic) && (config_agios_select_algorithm_period >= 0) && (agios_processed_reqnb >= config_agios_select_algorithm_min_reqnumber) && (get_nanoelapsed(last_algorithm_update) >= config_agios_select_algorithm_period))
+	if((dynamic_scheduler->is_dynamic) && (config_agios_select_algorithm_period >= 0) &&  //we are using a dynamic scheduler and configured a time period between selections
+	   (agios_processed_reqnb >= config_agios_select_algorithm_min_reqnumber) &&  //we have processed more requests than what is required before changing the algorithm
+	   (get_nanoelapsed(last_algorithm_update) >= config_agios_select_algorithm_period)) //and it is time to select a new one
 	{
 		//make a decision on the next scheduling algorithm
 		next_alg = dynamic_scheduler->select_algorithm();
 		//change it
-		debug("HEYYYYYYYYYYYYYYYY I'M HEEEEEEEEEEEEEEEERREEEEEEEEEEEEEE\n\n\n\n");
+		debug("HEY IM CHANGING THE SCHEDULING ALGORITHM\n\n\n\n");
 		change_selected_alg(next_alg);
 		proc_set_new_algorithm(current_alg);
 		performance_set_new_algorithm(current_alg);
 		reset_stats_window(); //reset all stats so they will not affect the next selection
-		unlock_all_data_structures();
+		unlock_all_data_structures(); //we can allow new requests to be added now
 		agios_gettime(&last_algorithm_update); 
 		if(dynamic_scheduler->index == ARMED_BANDIT_SCHEDULER) 
 			write_migration_end(get_timespec2llu(last_algorithm_update));	
@@ -320,7 +322,7 @@ void * agios_thread(void *arg)
 	PRINT_FUNCTION_NAME;
 
 	//let's find out which I/O scheduling algorithm we need to use
-	dynamic_scheduler = initialize_scheduler(config_agios_default_algorithm);
+	dynamic_scheduler = initialize_scheduler(config_agios_default_algorithm); //if the scheduler has an init function, it will be called
 	if(!dynamic_scheduler->is_dynamic) //we are NOT using a dynamic scheduling algorithm
 	{
 		current_alg = config_agios_default_algorithm;

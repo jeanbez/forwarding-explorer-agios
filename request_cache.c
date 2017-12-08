@@ -236,6 +236,8 @@ void put_req_in_hashtable(struct request_t *req)
 	if((req->reqnb > 1) && (current_scheduler->max_aggreg_size <= 1))
 	{
 		put_all_requests_in_hashtable(&req->reqs_list);
+		if(req->file_id)
+			agios_free(req->file_id);
 		agios_free(req);
 	}
 	else
