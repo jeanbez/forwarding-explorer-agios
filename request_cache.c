@@ -115,23 +115,23 @@ void dec_current_reqfilenb()
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
 
-
+//for debug 
 void print_request(struct request_t *req)
 {
 	struct request_t *aux_req;
 
 	if(req->reqnb > 1)
 	{
-		debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
+		debug("\t\t\t%ld %ld", req->io_data.offset, req->io_data.len);
 		debug("\t\t\t\t\t(virtual request size %d)", req->reqnb);
 		agios_list_for_each_entry(aux_req, &req->reqs_list, related)
-			debug("\t\t\t\t\t(%lu %lu %s)", aux_req->io_data.offset, aux_req->io_data.len, aux_req->file_id);
+			debug("\t\t\t\t\t(%ld %ld %s)", aux_req->io_data.offset, aux_req->io_data.len, aux_req->file_id);
 
 	}
 	else
-		debug("\t\t\t%lu %lu", req->io_data.offset, req->io_data.len);
+		debug("\t\t\t%ld %ld", req->io_data.offset, req->io_data.len);
 }
-
+//for debug
 void print_hashtable_line(int i)
 {
 	struct agios_list_head *hash_list;
@@ -202,6 +202,8 @@ void put_this_request_in_timeline(struct request_t *req, long hash, struct reque
 	{
 		//this is a virtual request, we need to break it into parts
 		put_all_requests_in_timeline(&req->reqs_list, req_file, hash);
+		if(req->file_id)
+			agios_free(req->file_id);
 		agios_free(req);
 	}
 	else
@@ -276,19 +278,6 @@ void migrate_from_hashtable_to_timeline()
 void migrate_from_timeline_to_hashtable()
 {
 	put_all_requests_in_hashtable(&timeline);
-}
-
-
-/*
- * Frees @req
- */
-void request_cache_free(struct request_t *req)
-{
-	if(req)
-	{
-		VERIFY_REQUEST(req);
-		agios_free(req);
-	}
 }
 
 
@@ -481,9 +470,10 @@ int request_cache_init(int max_app_id)
 {
 	int ret=0;
 
-	reset_global_reqstats(); //put all statistics to zero
+	reset_global_reqstats(); //puts all statistics to zero (from the proc module)
 
-	timeline_init(max_app_id); //initializes the timeline
+	if((ret = timeline_init(max_app_id)) != 0) //initializes the timeline
+		return ret;
 
 #ifdef AGIOS_KERNEL_MODULE
 	/*allocates slab caches of the most used types (request_t and request_file_t)
@@ -526,6 +516,8 @@ void request_cleanup(struct request_t *aux_req)
 		list_of_requests_cleanup(&aux_req->reqs_list);
 	}
 	//free the memory space
+	if(aux_req->file_id)
+		agios_free(aux_req->file_id)
 	agios_free(aux_req);
 }
 //free all requests from a queue
@@ -551,13 +543,13 @@ void list_of_requests_cleanup(struct agios_list_head *list)
 void request_cache_cleanup(void)
 {
 	//TODO we were having serious issues with this portion of code, go through it looking for the errors
-/*	PRINT_FUNCTION_NAME;
-	lock_all_data_structures();
-	print_hashtable();
+	PRINT_FUNCTION_NAME;
+//	lock_all_data_structures();
+//	print_hashtable();
 	hashtable_cleanup();
-	print_timeline();
+//	print_timeline();
 	timeline_cleanup();
-	PRINT_FUNCTION_EXIT;*/
+	PRINT_FUNCTION_EXIT;
 }
 
 //aggregation_head is a normal request which is about to become a virtual request upon aggregation with another contiguous request.

@@ -115,6 +115,7 @@ void stop_prediction_thr(void)
 	pthread_mutex_unlock(&prediction_thr_stop_mutex);
 #endif
 	prediction_notify_new_trace_file(); //notify the thread, otherwise it will keep waiting (it has to be awake to see that we want it to stop)
+	pthread_join(&prediction_thread);
 }
 /*used by this prediction thread to check if it is time to stop*/
 int prediction_thr_should_stop()
@@ -1180,6 +1181,7 @@ void *prediction_thr(void *arg)
 	return 0;
 }
 
+//returns 0 on success
 int prediction_module_init(int file_counter)
 {
 	int ret;
@@ -1188,7 +1190,7 @@ int prediction_module_init(int file_counter)
 	current_predicted_reqfilenb=0;
 	ret = agios_start_thread(prediction_thread, prediction_thr, "agios_prediction_thread", NULL);
 	if(ret != 0)
-		agios_print("Unable to start a thread for the prediction module of agios!\n");
+		agios_print("Unable to start a thread for the prediction module of agios!");
 	return ret;
 }
 #endif

@@ -12,7 +12,7 @@ void proc_stats_newreq(struct request_t *req);
 
 void reset_stats_window(void);
 
-void proc_stats_init(void);
+int proc_stats_init(void);
 void proc_stats_exit(void);
 
 void proc_set_needs_hashtable(short int value);

@@ -111,7 +111,7 @@ int agios_init(struct client *clnt, char *config_file, int max_app_id)
 	if((ret = read_configuration_file(config_file)) != 0)
 		return ret;
 
-	if((ret = agios_performance_init()) != 0) 
+	if((ret = agios_performance_init()) != 0)  //start the performance module
 	{
 		config_agios_cleanup();
 		return ret;
@@ -126,7 +126,7 @@ int agios_init(struct client *clnt, char *config_file, int max_app_id)
 	}
 
 	/*init the memory structures*/
-	if ((ret = request_cache_init(max_app_id)))
+	if ((ret = request_cache_init(max_app_id)) != 0)
 	{
 		config_agios_cleanup();
 		agios_performance_cleanup();
@@ -134,24 +134,40 @@ int agios_init(struct client *clnt, char *config_file, int max_app_id)
 		return ret;
 	}
 
-	proc_stats_init();
+	//init the statistics module
+	if((ret = proc_stats_init()) != 0)
+	{
+		config_agios_cleanup();
+		agios_performance_cleanup();
+		access_times_functions_cleanup();
+		request_cache_cleanup();
+		return ret;
+	}
 
+	//if we are going to generate traces, init the tracing module
 	if(config_trace_agios)
 	{
 		if((file_counter = agios_trace_init()) == -1)
 		{
-			agios_print("Error opening trace file %s.%d.%s!\n", config_trace_agios_file_prefix, file_counter, config_trace_agios_file_sufix);
-			file_counter = 0;
-			request_cache_cleanup(); /*clean up cache structures already allocated*/
+			config_agios_cleanup();
+			agios_performance_cleanup();
+			access_times_functions_cleanup();
+			request_cache_cleanup();
 			proc_stats_exit();
 			return ret;
 		}
 	}
 
+	/*init the prediction module structures*/
 	if(config_predict_agios_read_traces || config_predict_agios_request_aggregation || config_agios_write_simplified_traces) 
 	{
-		/*init the prediction module structures*/
-		prediction_module_init(file_counter-1); /*we use (file_counter-1) because file_counter includes the current trace file being written. we don't want to open it to read by the prediction thread*/
+		ret = prediction_module_init(file_counter-1); /*we use (file_counter-1) because file_counter includes the current trace file being written. we don't want to open it to read by the prediction thread*/
+		if(ret != 0) //we could not start the prediction  module, so we disable these options
+		{
+			config_predict_agios_read_traces = 0;
+			config_predict_agios_request_aggregation = 0;
+			config_agios_write_simplified_traces = 0;
+		}
 	}
 
 	ret = start_consumer(clnt);
@@ -207,7 +223,10 @@ void agios_exit(void)
 
 	request_cache_cleanup();
 	if(config_trace_agios)
+	{
 		agios_trace_close();
+		agios_trace_cleanup();
+	}
 	proc_stats_exit();
 	config_agios_cleanup();
 	access_times_functions_cleanup();

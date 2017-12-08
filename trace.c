@@ -250,7 +250,7 @@ void agios_trace_print_predicted_aggregations(struct request_file_t *req_file)
 	agios_mutex_unlock(&agios_trace_mutex);
 }
 
-
+//returns the index of the opened trace file, or < 0 if it fails
 int agios_trace_init()
 {
 	char filename[256];	
@@ -295,21 +295,31 @@ int agios_trace_init()
 		ret =  agios_trace_counter;
 	}
 	else
-		ret =  -1;
+	{
+		agios_print("Could not open trace file %s for write!", filename);
+		ret =  -EINVAL;
+	}
 
-	if(!aux_buf)
+	if((!aux_buf) && (req >= 0))
 	{
 		aux_buf = (char *)malloc(aux_buf_size); //TODO could we have a trace line with more than 300 characters? It would depend on filenames...
 		if(!aux_buf)
 		{
 			agios_print("PANIC! Could not allocate memory for trace file buffer!\n");
-			ret = -1;
+			ret = -ENOMEM;
 		}
 	}
 
 	agios_mutex_unlock(&agios_trace_mutex);
 
 	return ret;
+}
+void agios_trace_cleanup(void)
+{
+	if(agios_tracefile_buffer)
+		agios_free(agios_tracefile_buffer);
+	if(aux_buf)
+		agios_free(aux_buf);
 }
 void agios_trace_close()
 {

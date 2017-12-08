@@ -72,25 +72,34 @@ static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER;
 /***********************************************************************************************************
  * LOCAL COPIES OF PARAMETERS *
  ***********************************************************************************************************/
-static int *proc_algs; //the list of the last PROC_ALGS_SIZE selected scheduling algorithms
-static long int *proc_algs_timestamps; //the timestamps of the last PROC_ALGS_SIZE algorithms selections
-static int proc_algs_start, proc_algs_end=0; //indexes to access the proc_algs list
+//this module keeps a list of all selected algorithms and the timestamp of selection (mostly used for debugging the dynamic schedulers)
+struct proc_alg_entry_t
+{
+	long int timestamp;
+	int alg;
+	struct agios_list_head list;
+};
+static AGIOS_LIST_HEAD(proc_algs);
+static int proc_algs_len=0;
 
 void proc_set_new_algorithm(int alg)
 {
 	struct timespec now;
+	struct proc_alg_entry_t *new = malloc(sizeof(struct proc_alg_entry_t));
 
 	agios_gettime(&now);
-	proc_algs[proc_algs_end] = alg;
-	proc_algs_timestamps[proc_algs_end] = get_timespec2llu(now);
-	proc_algs_end++;
-	if(proc_algs_end >= config_agios_proc_algs)
-		proc_algs_end=0; //circular list
-	if(proc_algs_start == proc_algs_end)
+	new->timestamp = get_timespec2llu(now);
+	new->alg = alg;
+	agios_list_add_tail(&new->list, &proc_algs);
+	proc_algs_len++;
+
+	//need to keep the configured maximum size for the list
+	while(proc_algs_len > config_agios_proc_algs)
 	{
-		proc_algs_start++; 	//we remove the oldest
-		if(proc_algs_start >= config_agios_proc_algs)
-			proc_algs_start = 0;
+		agios_list_for_each_entry(new, &proc_algs, list)
+			break; //we get the first element of the list
+		agios_list_del(&new->list);
+		free(new);
 	}
 }
 long int *proc_get_alg_timestamps(int *start, int *end)
@@ -376,20 +385,18 @@ void print_something(const char *something)
 void print_selected_algs(void)
 {
 	int i;
+	struct proc_alg_entry_t *entry;
 
 	print_something("Scheduling algorithms:\n");
-	i = proc_algs_start;
-	while(i != proc_algs_end)
+
+	agios_list_for_each_entry(entry, &proc_algs, list)
 	{
 #ifdef AGIOS_KERNEL_MODULE
 		seq_printf(stats_file,
 #else
 		fprintf(stats_file,
 #endif
-			"%lu\t%s\n", proc_algs_timestamps[i], get_algorithm_name_from_index(proc_algs[i]));
-		i++;
-		if(i >= config_agios_proc_algs)
-			i =0;
+			"%ld\t%s\n", entry->timestap, get_algorithm_name_from_index(entry->alg));
 	}
 	print_something("\n");
 }
@@ -429,7 +436,7 @@ void print_predicted_stats_start(void)
 #else
 	fprintf(stats_file,
 #endif
-	"\nPREDICTED_STATISTICS\n\ntracefile_counter: %d\nprediction_thread_init_time: %llu\nprediction_time_accepted_error: %d\ncurrent_predicted_reqfilenb: %d\n", get_predict_tracefile_counter(), get_predict_init_time(), config_predict_agios_time_error, get_current_predicted_reqfilenb());
+	"\nPREDICTED_STATISTICS\n\ntracefile_counter: %d\nprediction_thread_init_time: %ld\nprediction_time_accepted_error: %d\ncurrent_predicted_reqfilenb: %d\n", get_predict_tracefile_counter(), get_predict_init_time(), config_predict_agios_time_error, get_current_predicted_reqfilenb());
 
 	print_something("\t\treqs\tsize\tsize_avg\tsize_min\tsize_max\tsum_/_aggs\tagg_bigg\ttbr_avg\ttbr_min\ttbr_max\n");
 
@@ -472,7 +479,7 @@ void predicted_stats_show_related_list(struct related_list_t *related, const cha
 #else
 	fprintf(stats_file,
 #endif
-	"\t%s:\t%lu\t%llu\t%lu\t%lu\t%lu\t%lu/%lu=%.2f\t%u\t%Le\t%Le\n",
+	"\t%s:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld/%ld=%.2f\t%d\t%Le\t%Le\n",
 	   list_name,
 	   related->stats_file.processedreq_nb,
 	   related->stats_file.total_req_size,
@@ -589,7 +596,7 @@ void stats_show_related_list(struct related_list_t *related, const char *list_na
 #else
 	seq_printf(stats_file,
 #endif
-	   "\t%s:\t%lu\t%llu\t%lu\t%lu\t%lu\t%lu/%lu=%.2f\t%u\t%u\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%.2f\n",
+	   "\t%s:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld/%ld=%.2f\t%u\t%u\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%.2f\n",
 	   list_name,
 	   related->stats_file.receivedreq_nb,
 	   related->stats_file.total_req_size,
@@ -666,7 +673,7 @@ void stats_show_ending(void)
 #else
 	seq_printf(stats_file,
 #endif
-	"total of %lu requests\n\tavg\tmin\tmax\nglobal time between requests:\t%lu\t%lu\t%lu\nrequest size:\t%lu\t%lu\t%lu\n",
+	"total of %ld requests\n\tavg\tmin\tmax\nglobal time between requests:\t%ld\t%ld\t%ld\nrequest size:\t%ld\t%ld\t%ld\n",
 	stats_for_file.total_reqnb,
 	global_avg_time,
 	stats_for_file.global_min_req_time,
@@ -694,7 +701,7 @@ void stats_show_ending(void)
 #else
 	seq_printf(stats_file,
 #endif
-	"served an amount of %llu bytes in a total of %llu ns, bandwidth was:%s",
+	"served an amount of %ld bytes in a total of %ld ns, bandwidth was:%s",
 	agios_get_performance_size(),
 	agios_get_performance_time(),
 	band_str);
@@ -846,13 +853,10 @@ void agios_print_stats_file(char *filename)
 }
 #endif
 
-/*register proc entries (useful only to the kernel module implementation) and some other structures*/
-void proc_stats_init(void)
+//register proc entries (useful only to the kernel module implementation)
+//returns 0 on success
+int proc_stats_init(void)
 {
-	proc_algs = agios_alloc(sizeof(int)*(config_agios_proc_algs+1));
-	proc_algs_timestamps = agios_alloc(sizeof(long int)*(config_agios_proc_algs+1));
-	proc_algs_start = proc_algs_end = 0;
-
 #ifdef AGIOS_KERNEL_MODULE
 	struct proc_dir_entry *entry;
 
@@ -860,7 +864,7 @@ void proc_stats_init(void)
 	if(!agios_proc_dir)
 	{
 		agios_print("Cannot create /proc/agios entry");
-		return;
+		return -ENOMEM;
 	}
 
 	entry = create_proc_entry("stats", 444, agios_proc_dir);
@@ -878,10 +882,13 @@ void proc_stats_init(void)
 #endif
 
 #endif
+	return 0;
 }
 /*unregister proc entries (useful only to the kernel module implementation) and free data structures*/
 void proc_stats_exit(void)
 {
+	struct proc_alg_entry_t *entry, *aux=NULL;
+
 #ifdef AGIOS_KERNEL_MODULE
 	remove_proc_entry("stats", agios_proc_dir);
 	remove_proc_entry("predicted_stats", agios_proc_dir);
@@ -890,8 +897,21 @@ void proc_stats_exit(void)
 #endif
 	remove_proc_entry("agios", NULL);
 #endif
-	free(proc_algs);
-	free(proc_algs_timestamps);
+
+	agios_list_for_each_entry(entry, &proc_algs, list)
+	{
+		if(aux)
+		{
+			agios_list_del(&aux->list);
+			free(aux);
+		}
+		aux = entry;
+	}
+	if(aux)
+	{
+		agios_list_del(&aux->list);
+		free(aux);
+	}
 }
 
 /***********************************************************************************

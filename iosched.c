@@ -111,10 +111,11 @@ void generic_post_process(struct request_t *req)
 	if(req->reqnb > 1) //this was an aggregated request
 	{
 		stats_aggregation(req->globalinfo);
-		request_cache_free(req); //we free the virtual request structure, since its parts were included in the dispatch queue as separated requests
+		req->reqnb = 1; //we need to set it like this otherwise the request_cleanup function will try to free the sub-requests, but they were inserted in the dispatch queue and we will only free them after the release
+		request_cleanup(req);
 	}
 }
-/*this function is called by the release function, when the library user signaled it finished processing a request. In the case of a virtual request, its requests will be signaled separately, so here we are sure to receive a singel request */
+/*this function is called by the release function, when the library user signaled it finished processing a request. In the case of a virtual request, its requests will be signaled separately, so here we are sure to receive a single request */
 void generic_cleanup(struct request_t *req)
 {
 	//update the processed requests counter
@@ -125,8 +126,7 @@ void generic_cleanup(struct request_t *req)
 	req->globalinfo->stats_window.processed_req_size += req->io_data.len;
 	req->globalinfo->stats_file.processed_req_size += req->io_data.len;
 
-	agios_list_del(&req->related); //remove from the dispatch queue
-	request_cache_free(req); //free the memory
+	request_cleanup(req); //remove from the list and free the memory
 }
 /* post process function for scheduling algorithms which use waiting times (AIOLI and MLF)*/
 void waiting_algorithms_postprocess(struct request_t *req)

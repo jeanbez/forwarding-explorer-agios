@@ -248,8 +248,9 @@ struct request_t *timeline_oldest_req(long *hash)
 }
 
 //initializes data structures
-//max_app_id is only relevant for EXCLUSIVE_TIME_WINDOW. Pass 0 otherwise to prevent unnecessary memory allocation
-void timeline_init(int max_app_id)
+//max_app_id is only relevant for TWINS. Pass 0 otherwise to prevent unnecessary memory allocation
+//returns 0 on success
+int timeline_init(int max_app_id)
 {
 	int i;
 	init_agios_list_head(&timeline);
@@ -259,16 +260,24 @@ void timeline_init(int max_app_id)
 		app_timeline_size = max_app_id+1;
 		if(!app_timeline)
 		{
-			fprintf(stderr, "no memory to allocate the app timeline for exclusive time window\n");
-			return; //what to do?
+			agios_print("PANIC! No memory to allocate the app timeline for TWINS");
+			return -ENOMEM;
 		}
 		for(i=0; i< app_timeline_size; i++)
 		{
 			init_agios_list_head(&(app_timeline[i]));
 		}
 	}
+	return 0;
 }
 void timeline_cleanup()
 {
+	int i;
 	list_of_requests_cleanup(&timeline);
+	if(app_timeline_size > 0)
+	{
+		for(i=0; i< app_timeline_size; i++)
+			list_of_requests_cleanup(&app_timeline[i]);
+		free(app_timeline);
+	}
 }

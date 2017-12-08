@@ -20,7 +20,6 @@ void dec_current_reqfilenb(void);
 /* data structures management functions */
 void lock_all_data_structures();
 void unlock_all_data_structures();
-void request_cache_free(struct request_t *req);
 #ifdef ORANGEFS_AGIOS
 struct request_t * request_constructor(char *file_id, short int type, long int offset, long int len, int64_t data, long int arrival_time, short int state, int app_id);
 #else

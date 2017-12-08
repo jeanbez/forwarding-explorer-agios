@@ -17,7 +17,7 @@ struct request_t *timeline_oldest_req(long *hash);
 
 /* timeline management functions*/
 void reorder_timeline();
-void timeline_init();
+int timeline_init();
 void timeline_cleanup();
 
 #endif

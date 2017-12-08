@@ -12,6 +12,7 @@
 int agios_trace_init(); 
 void agios_trace_reset();
 void agios_trace_close();
+void agios_trace_cleanup(void);
 void agios_trace_add_request(struct request_t *req);
 
 void agios_trace_process_requests(struct request_t *head_req);

@@ -198,6 +198,7 @@ void performance_set_new_algorithm(int alg)
 		agios_list_for_each_entry(new, &performance_info, list) //we reuse the new variable since we are no longer using it to hold the new entry (it is already in the list)
 			break; //this is to get the first entry of the list so we can remove it
 		agios_list_del(&new->list); //remove the first of the list 
+		free(new);
 		performance_info_len--;
 	}
 	

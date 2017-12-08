@@ -132,9 +132,7 @@ int agios_cancel_request(char *file_id, short int type, long int len, long int o
 		//remove it from the queue
 		if(req->reqnb == 1) //it's just a simple request
 		{
-			agios_list_del(&req->related);
-		
-			//the request is out of the queue, so now we update information about the file and request counters
+			//update information about the file and request counters
 			req->globalinfo->current_size -= req->io_data.len;
 			req->globalinfo->req_file->timeline_reqnb--;
 			if(req->globalinfo->req_file->timeline_reqnb == 0)
@@ -142,7 +140,7 @@ int agios_cancel_request(char *file_id, short int type, long int len, long int o
 			dec_current_reqnb(hash_val);
 	
  			//finally, free the structure
-			request_cache_free(req);
+			request_cleanup(req);
 		}
 		else	//it's inside an aggregated request
 		{
@@ -194,7 +192,8 @@ int agios_cancel_request(char *file_id, short int type, long int len, long int o
 				agios_list_del(&req->related);
 				tmp = agios_list_entry(req->reqs_list.next, struct request_t, related);
 				__agios_list_add(&tmp->related, prev, next);
-				request_cache_free(req);
+				req->reqnb = 1; //otherwise the request_cleanup function will try to free the sub requests, that is not what we want here
+				request_cleanup(req);
 			}
 		
 			//the request is out of the queue, so now we update information about the file and request counters
@@ -205,13 +204,13 @@ int agios_cancel_request(char *file_id, short int type, long int len, long int o
 			dec_current_reqnb(hash_val);
 	
 	 		//finally, free the structure
-			request_cache_free(aux_req);
+			request_cleanup(aux_req);
 		}
 
 			
 	}
 	else
-		debug("PANIC! Could not find the request %lu %lu to file %s\n", offset, len, file_id);
+		debug("PANIC! Could not find the request %ld %ld to file %s\n", offset, len, file_id);
 		
 	//release data structure lock
 	if(previous_needs_hashtable)
