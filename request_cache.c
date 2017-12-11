@@ -519,7 +519,7 @@ void request_cleanup(struct request_t *aux_req)
 	}
 	//free the memory space
 	if(aux_req->file_id)
-		agios_free(aux_req->file_id)
+		agios_free(aux_req->file_id);
 	agios_free(aux_req);
 }
 //free all requests from a queue

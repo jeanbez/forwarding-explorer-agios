@@ -59,7 +59,7 @@
 #include "NOOP.h"
 #include "DYN_TREE.h"
 #include "ARMED_BANDIT.h"
-#include "EXCLUSIVE_TW.h"
+#include "TWINS.h"
 #include "PATTERN_MATCHING.h"
 
 
@@ -262,8 +262,7 @@ void generic_init()
 /**********************************************************************************************************************/
 int current_alg = 0;
 struct io_scheduler_instance_t *current_scheduler=NULL;
-static AGIOS_LIST_HEAD(io_schedulers); //the list of scheduling algorithms (with their parameters)
-static int io_schedulers_nb = 12
+static int io_schedulers_nb = 12;
 static struct io_scheduler_instance_t io_schedulers[] = { //ATTENTION! If you are going to add or remove an I/O scheduler, dont forget to update io_schedulers_nb and the indexes here and in the iosched.h file! 
 		{
 			.init = MLF_init,
@@ -512,10 +511,10 @@ struct io_scheduler_instance_t *find_io_scheduler(int index)
 		return NULL;
 	return &(io_schedulers[index]);
 }
-//this is like get_algorithm_name_from_index, except that the parameter string could be "no_AGIOS", and in that case we translate it to NOOP 		
+//this is like get_algorithm_name_from_index, except that the parameter string could be "no_AGIOS", and in that case we translate it to NOOP 	
+//returns < 0 in case of problems
 int get_algorithm_from_string(const char *alg)
 {
-	struct io_scheduler_instance_t *sched=NULL;
 	int ret=SJF_SCHEDULER; //default in case we can't find it
 	char *this_alg; 
 	short int need_free=0;
@@ -524,11 +523,16 @@ int get_algorithm_from_string(const char *alg)
 	if(strcmp(alg, "no_AGIOS") == 0)
 	{	
 		this_alg = malloc(sizeof(char)*5);
+		if(!this_alg)
+		{
+			agios_print("PANIC! Could not allocate memory!");
+			return -ENOMEM;
+		}
 		strcpy(this_alg, "NOOP"); 
 		need_free=1;
 	}
 	else
-		this_alg = alg;
+		this_alg = (char *) alg;
 	
 	for(i=0; i < io_schedulers_nb; i++)
 	{
@@ -538,6 +542,8 @@ int get_algorithm_from_string(const char *alg)
 			break;
 		}
 	}
+	if(need_free)
+		free(this_alg);
 	return ret;
 }
 char * get_algorithm_name_from_index(int index)

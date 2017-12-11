@@ -17,5 +17,6 @@ void proc_stats_exit(void);
 
 void proc_set_needs_hashtable(short int value);
 void proc_set_new_algorithm(int alg);
-long int *proc_get_alg_timestamps(int *start, int *end);
+
+short int get_window_access_pattern(short int *global_spatiality, short int *global_reqsize, long int *server_reqsize, short int *global_operation);
 #endif

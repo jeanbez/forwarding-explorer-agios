@@ -2,8 +2,8 @@ ccflags-y += -DAGIOS_DEBUG=1
 #ccflags-y += -DAGIOS_KERNEL_MODULE=1
 #ccflags-y += -DORANGEFS_AGIOS=1
 
-FILES=mylist.c hash.c proc.c request_cache.c consumer.c iosched.c agios.c predict.c trace.c estimate_access_times.c common_functions.c agios_config.c access_pattern_detection_tree.c scheduling_algorithm_selection_tree.c TO.c AIOLI.c MLF.c SJF.c SRTF.c NOOP.c TW.c req_hashtable.c req_timeline.c DYN_TREE.c ARMED_BANDIT.c performance.c EXCLUSIVE_TW.c performance_table.c cancel_request.c DTW.c PATTERN_MATCHING.c pattern_tracker.c 
-OBJS=mylist.o hash.o proc.o request_cache.o consumer.o iosched.o agios.o predict.o trace.o estimate_access_times.o common_functions.o agios_config.o access_pattern_detection_tree.o scheduling_algorithm_selection_tree.o TO.o AIOLI.o MLF.o SJF.o SRTF.o NOOP.o TW.o req_hashtable.o req_timeline.o DYN_TREE.o ARMED_BANDIT.o performance.o EXCLUSIVE_TW.o performance_table.o cancel_request.o DTW.o PATTERN_MATCHING.o pattern_tracker.o 
+FILES=mylist.c hash.c proc.c request_cache.c consumer.c iosched.c agios.c predict.c trace.c estimate_access_times.c common_functions.c agios_config.c access_pattern_detection_tree.c scheduling_algorithm_selection_tree.c TO.c AIOLI.c MLF.c SJF.c SRTF.c NOOP.c TW.c req_hashtable.c req_timeline.c DYN_TREE.c ARMED_BANDIT.c performance.c TWINS.c performance_table.c cancel_request.c DTW.c PATTERN_MATCHING.c pattern_tracker.c 
+OBJS=mylist.o hash.o proc.o request_cache.o consumer.o iosched.o agios.o predict.o trace.o estimate_access_times.o common_functions.o agios_config.o access_pattern_detection_tree.o scheduling_algorithm_selection_tree.o TO.o AIOLI.o MLF.o SJF.o SRTF.o NOOP.o TW.o req_hashtable.o req_timeline.o DYN_TREE.o ARMED_BANDIT.o performance.o TWINS.o performance_table.o cancel_request.o DTW.o PATTERN_MATCHING.o pattern_tracker.o 
 #/usr/local/lib/libconfig.so
 obj-m += agiosmodule.o
 agiosmodule-objs := ${OBJS}

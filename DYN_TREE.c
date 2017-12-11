@@ -23,6 +23,10 @@
 #include "predict.h"
 #include "common_functions.h"
 #include "agios_request.h"
+#include "proc.h"
+#include "scheduling_algorithm_selection_tree.h"
+#include "request_cache.h"
+#include "estimate_access_times.h"
 
 static int last_selected_algorithm=0;
 
@@ -55,42 +59,26 @@ int DYN_TREE_init(void)
 }
 int DYN_TREE_select_next_algorithm(void)
 {
-	int operation;
+	short int operation;
 	long int reqsize;
 	short int reqsize_class;
-	double timediff;
 	short int spatiality;
-	double avgdist;
+	int ret;
 	
 
 	if(config_agios_select_algorithm_period >= 0) //dynamic scheduler
 	{
 		//get information from the current window 
-		operation = get_global_window_operation();
-		reqsize = get_global_reqsize();
-		
-		if((operation < 0) || (reqsize <= 0)) //if we dont have information, we don't make a decision
+		if(get_window_access_pattern(&spatiality, &reqsize_class, &reqsize, &operation) == -1) //if we dont have information, we don't make a decision
 		{
 			agios_print("Warning! DYN THREE does not have enough information to make a decision");
 		}
 		else
 		{
-			//we have to classify reqsize into small or large. In the prediction module this is done using the avg stripe difference, but that does not make sense in the context of systems like OrangeFS. Instead, we'll use the stripe size as a threshold, and then give to the access pattern detection tree a value that would make it conclude on this class.
-			if(reqsize <= config_agios_stripe_size)
-			{
-				timediff = 1000.0; //small request
-				reqsize_class = AP_SMALL;
-			}
-			else
-			{
-				timediff = 0.0; //large request
-				reqsize_class = AP_LARGE;
-			}
-			//get spatiality
-			get_global_spatiality(operation,timediff); //TODO continue here
-			
 			//use the decision tree to select a new algorithm
-			last_selected_algorithm = get_algorithm_from_string(scheduling_algorithm_selection_tree(operation, current_reqfilenb, get_access_ratio(reqsize, operation), spatiality, reqsize_class)); 
+			ret  = get_algorithm_from_string(scheduling_algorithm_selection_tree(operation, current_reqfilenb, get_access_ratio(reqsize, operation), spatiality, reqsize_class)); 
+			if(ret >= 0)
+				last_selected_algorithm = ret;
 		}
 	}
 	return last_selected_algorithm;

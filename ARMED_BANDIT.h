@@ -7,6 +7,6 @@ void ARMED_BANDIT_exit(void);
 void write_migration_end(long int timestamp);
 int ARMED_BANDIT_aux_init(struct timespec *start_time);
 void ARMED_BANDIT_set_current_sched(int new_sched);
-long int ARMED_BANDIT_update_bandwidth(double *recent_measurements, short int cleanup);
+long int ARMED_BANDIT_update_bandwidth();
 int ARMED_BANDIT_aux_select_next_algorithm(long int timestamp);
 #endif

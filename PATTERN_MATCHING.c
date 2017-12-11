@@ -529,7 +529,6 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 	struct access_pattern_t *seen_pattern;
 	struct PM_pattern_t *matched_pattern=NULL;
 	struct io_scheduler_instance_t *new_sched=NULL;
-	double *recent_measurements=NULL;
 	struct timespec this_time;
 	long timestamp;
 
@@ -540,18 +539,17 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 		//get recent performance measurements
 		agios_gettime(&this_time);
 		timestamp = get_timespec2long(this_time);
-		recent_measurements = agios_get_performance_bandwidth();
 
 		//give recent measurements to ARMED BANDIT so it will have updated information
-		if(!first_performance_measurement)
-			ARMED_BANDIT_update_bandwidth(recent_measurements,0);
-		else
-		{
-			agios_reset_performance_counters(); //we really discard that first measurement
-			free(recent_measurements);
-			recent_measurements=NULL;
-			first_performance_measurement=0;
-		}
+//		if(!first_performance_measurement)
+		ARMED_BANDIT_update_bandwidth();
+//		else
+//		{
+//			agios_reset_performance_counters(); //we really discard that first measurement
+//			free(recent_measurements);
+//			recent_measurements=NULL;
+//			first_performance_measurement=0;
+//		}    TODO see if we still need to discard the first measurement
 	}
 
 	//get the most recently tracked access pattern from the pattern tracker module
@@ -570,12 +568,10 @@ int PATTERN_MATCHING_select_next_algorithm(void)
 		free_access_pattern_t(&seen_pattern);
 
 	//if we know this pattern, we store the performance information (if we have the information, because we might have dropped it if it was the first performance measurement)
-	if((matched_pattern) && (recent_measurements))
+	if(matched_pattern)
 	{
-		add_measurement_to_performance_table(&matched_pattern->performance, current_selection, timestamp, recent_measurements[agios_performance_get_latest_index()]);
+		add_measurement_to_performance_table(&matched_pattern->performance, current_selection, timestamp, agios_get_current_performance_bandwidth()); 
 	}
-	if(recent_measurements) //we may cleanup now, we already got what we needed
-		free(recent_measurements);
 
 	//we link the previous pattern to this one we've just detected
 	if(matched_pattern)

@@ -63,7 +63,7 @@ int config_waiting_time = 900000;
 int config_aioli_quantum = 8192;
 int config_mlf_quantum = 8192;
 long int config_tw_size = 1000000000L;
-int config_twins_window=250000000L; //250ms
+long int config_twins_window=250000000L; //250ms
 
 int config_minimum_pattern_size = 5;
 int config_maximum_pattern_difference = 10;
@@ -231,7 +231,8 @@ short int read_configuration_file(char *config_file)
 	else
 		strcpy(config_pattern_filename, ret_str);	
 
-	config_lookup_bool(&agios_config, "library_options.pattern_matching_static_algorithm", &config_static_pattern_matching);
+	config_lookup_bool(&agios_config, "library_options.pattern_matching_static_algorithm", &ret);
+	config_static_pattern_matching = ret;
 
 	/*2. user info*/
 	config_lookup_int(&agios_config, "user_info.stripe_size", &config_agios_stripe_size);

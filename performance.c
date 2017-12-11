@@ -114,7 +114,7 @@ long int agios_get_performance_time(void)
 
 /*
  * returns an array with the last PERFORMANCE VALUES performance measurements
- * used by the proc module to write the stats file
+ * used by the proc module to write the stats file and by the armed bandit scheduler
  * must NOT hold performance mutex
  */
 double * agios_get_performance_bandwidth() 
@@ -336,7 +336,7 @@ int agios_release_request(char *file_id, short int type, long int len, long int 
 	if(found)
 	{
 		//let's see how long it took to process this request
-		elapsed_time = get_nanoelapsed_llu(req->jiffies_64);
+		elapsed_time = get_nanoelapsed_long(req->jiffies_64);
 
 		//update local performance information (we don't update processed_req_size here because it is updated in the generic_cleanup function)
 		related->stats_window.processed_req_time += elapsed_time;

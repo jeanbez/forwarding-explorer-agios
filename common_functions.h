@@ -6,6 +6,7 @@
 
 long int agios_min(long int t1, long int t2);
 long int agios_max(long int t1, long int t2);
+short int get_index_max(int *count);
 
 
 /*functions that are different for the kernel module and the user-level library versions*/
@@ -74,7 +75,7 @@ long int get_timespec2long(struct timespec t);
 void get_long2timespec(long int t, struct timespec *ret);
 /*does the same as get_nanoelapsed, but takes as parameter a long int instead of a struct timespec*/
 long int get_nanoelapsed_long(long int t1);
-long double get_ns2s(long int t1);
+double get_ns2s(long int t1);
 
 /****************************************************************************************************/
 /*debug functions*/

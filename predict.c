@@ -114,7 +114,7 @@ void stop_prediction_thr(void)
 	pthread_mutex_unlock(&prediction_thr_stop_mutex);
 #endif
 	prediction_notify_new_trace_file(); //notify the thread, otherwise it will keep waiting (it has to be awake to see that we want it to stop)
-	pthread_join(&prediction_thread);
+	pthread_join(prediction_thread, NULL);
 }
 /*used by this prediction thread to check if it is time to stop*/
 int prediction_thr_should_stop()
@@ -395,7 +395,7 @@ long int agios_predict_should_we_wait(struct request_t *req)
 	if(predicted_head->predicted_aggregation_size > req->reqnb)
 	{
 		/*how much time has passed since the requests from this aggregation started arriving?*/
-		max = get_nanoelapsed_llu(req->jiffies_64);
+		max = get_nanoelapsed_long(req->jiffies_64);
 
 		/*how much time will pass while all the requests from the predicted aggregation arrive?*/
 		pmax = predicted_head->last_agg_time - predicted_head->first_agg_time;
@@ -515,7 +515,7 @@ void calculate_prediction_alpha(long int time_spent_waiting, long int waiting_ti
 		else
 			prediction_alpha = ((long double) waiting_time_overlapped) / ((long double) time_spent_waiting);
 	}
-	debug("prediction_alpha is now %Le", prediction_alpha);
+	debug("prediction_alpha is now %.4f", prediction_alpha);
 }
 
 /*see if req can be added to the aggregation that starts at agg_head
@@ -708,16 +708,9 @@ void calculate_average_stripe_access_time_difference(struct related_list_t *rela
 	}
 }
 
-short int get_index_max(int *count)
-{
-	if(count[0] >= count[1])
-		return 0;
-	else
-		return 1;
-}
 void print_access_pattern(char * operation)
 {
-	agios_just_print("Detected from the majority an access pattern of %s, to %ld files, server_reqsize is %lld, spatiality is ", operation, predicted_ap_fileno, predicted_ap_server_reqsize);
+	agios_just_print("Detected from the majority an access pattern of %s, to %ld files, server_reqsize is %ld, spatiality is ", operation, predicted_ap_fileno, predicted_ap_server_reqsize);
 	if(predicted_ap_spatiality ==AP_CONTIG)
 		agios_just_print("CONTIGUOUS");
 	else
@@ -940,7 +933,7 @@ void read_predictions_from_traces(int last, int files_nb)
 
 		debug("reading from tracefile %s\n", filename);
 		/*read predictions from the file*/
-		while((ret = fscanf(input_file, "%ld\t%s\t%s\t%lld\t%ld\n", &timestamp, filename, operation, &offset, &len)) == 5) //it will not work if the trace was generated with the FULL_TRACE option. That is for debug only
+		while((ret = fscanf(input_file, "%ld\t%s\t%s\t%ld\t%ld\n", &timestamp, filename, operation, &offset, &len)) == 5) //it will not work if the trace was generated with the FULL_TRACE option. That is for debug only
 		{
 			if(strcmp(operation, "R") == 0)
 				type = RT_READ;

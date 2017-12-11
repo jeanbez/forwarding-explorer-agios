@@ -34,6 +34,7 @@
 #include "req_timeline.h"
 #include "performance.h"
 #include "hash.h"
+#include "access_pattern_detection_tree.h"
 
 #ifdef AGIOS_KERNEL_MODULE
 #include <linux/string.h>
@@ -68,24 +69,6 @@ static struct global_statistics_t stats_for_file;
 static struct global_statistics_t stats_for_window;
 static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-//we will access information without lock because we are not expected to update it while reading
-short int get_global_window_operation(void)
-{
-	if(stats_for_window->writes == stats_for_window->reads == 0)
-		return -1; //we do not have information
-	else if(stats_for_window->writes >= stats_for_window->reads)
-		return RT_WRITE;
-	else
-		return RT_READ;
-}
-
-long int get_global_reqsize(void)
-{
-	if(stats_for_window->total_reqnb == 0)
-		return -1;
-	else
-		return stats_for_window->global_req_size / stats_for_window->total_reqnb;
-}
 
 
 /***********************************************************************************************************
@@ -120,12 +103,6 @@ void proc_set_new_algorithm(int alg)
 		agios_list_del(&new->list);
 		free(new);
 	}
-}
-long int *proc_get_alg_timestamps(int *start, int *end)
-{
-	*start = proc_algs_start;
-	*end = proc_algs_end;
-	return proc_algs_timestamps;
 }
 
 
@@ -397,41 +374,76 @@ struct request_file_t *get_first(short int predicted_stats)
 	return req_file;
 }
 
+//we use stats_window (the one that is eventually reseted) to detect access pattern 
+//returns -1 if receivedreq_nb is 0 (this is not supposed to happen, but...)
+short int get_list_access_pattern(struct related_list_t *related, short int operation, short int *spatiality, short int *reqsize)
+{
+	double avgdiff;
+	double timediff;
+	long int avgreqsize;
+
+	//calculate average offset distance
+	if(related->stats_window.avg_distance_count > 1)
+		avgdiff = ((long double) related->stats_window.avg_distance)/(related->stats_window.avg_distance_count-1);
+	else
+		avgdiff = 0;
+
+	//calculate request size
+	if(related->stats_window.receivedreq_nb <= 0)
+		return -1;
+	avgreqsize = related->stats_window.total_req_size/related->stats_window.receivedreq_nb;
+
+	//the prediction module uses the stripe time difference to detect request size, but that does not make sense in the context of the OrangeFS, so we will use the stripe size as a threshold and come up with a value for stripe time difference that gives the right request size
+	if(avgreqsize <= config_agios_stripe_size)
+		timediff = 1000.0; //small request
+	else
+		timediff = 0.0; //large request
+	
+	access_pattern_detection_tree(operation, avgdiff, timediff, spatiality, reqsize);	
+	return 0;
+}
+
 //we need to acquire the locks for the data structures because they could be changed during the execution of this function (other threads could be adding requests and thus adding new request_file_t entries, that could lead to us getting lost here). But we don't need to concern ourselves with the data structure changing because this function is called by the scheduling thread before changing scheduling algorithms. ATTENTION: if this function is called by other thread, need to think about that!
-double get_global_spatiality(short int operation, double timediff)
+//returns -1 if we dont have enough information to decide
+short int get_window_access_pattern(short int *global_spatiality, short int *global_reqsize, long int *server_reqsize, short int *global_operation)
 {
 	int i;
 	struct request_file_t *req_file;
-	struct related_list_t *related;
-	double avgdiff;
 	short int reqsize;
 	short int spatiality;
+	//well count different outcomes
+	int read_spatiality_count[2] = {0,0};
+	int write_spatiality_count[2] = {0,0};
+	int read_reqsize_count[2] = {0,0};
+	int write_reqsize_count[2] = {0,0};
+
+
+	if(((stats_for_window.writes == 0) && (stats_for_window.reads == 0)) || (stats_for_window.total_reqnb == 0))
+		return -1; //we do not have information
+
+	*server_reqsize = stats_for_window.global_req_size / stats_for_window.total_reqnb;
 
 	if(!current_scheduler->needs_hashtable)
 		timeline_lock();
-	for(i=0; i< HASH_ENTRIES; i++)
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
 	{
 		if(current_scheduler->needs_hashtable)
 			hashtable_lock(i);
-	
-		//find the right list to look
-		if(operation == RT_READ)
-			related = req_file->related_reads;
-		else
-			related = req_file->related_writes;
 
-		//calculate the avgdiff of the list
-		if(related->stats_window.avg_distance_count > 1)
-			avgdiff = ((long double) req_file->predicted_reads.stats_file.avg_distance)/req_file->predicted_reads.stats_file.avg_distance_count;
-		else
-			avgdiff = 0;
+		agios_list_for_each_entry(req_file, &hashlist[i], hashlist)
+		{ 
+			if(get_list_access_pattern(&(req_file->related_reads), RT_READ, &spatiality, &reqsize) == 0)//-1 means we dont have requests in this list
+			{
+				read_spatiality_count[spatiality]++;
+				read_reqsize_count[reqsize]++;
+			}
+			if(get_list_access_pattern(&(req_file->related_writes), RT_WRITE, &spatiality, &reqsize) == 0)//-1 means we dont have requests in this list
+			{
+				write_spatiality_count[spatiality]++;
+				write_reqsize_count[reqsize]++;
+			}
+		}
 
-		//classify the access pattern of this list
-		access_pattern_detection_tree(operation, avgdiff, timediff, &spatiality, &reqsize //TODO continue here
-		
-
-		
-		
 		if(current_scheduler->needs_hashtable)
 			hashtable_unlock(i);
 	}
@@ -439,7 +451,21 @@ double get_global_spatiality(short int operation, double timediff)
 	if(!current_scheduler->needs_hashtable)
 		timeline_unlock();
 
-	return req_file;
+	//we return the access pattern of the majority
+	if(stats_for_window.writes >= stats_for_window.reads)
+	{
+		*global_operation = RT_WRITE;
+		*global_spatiality = get_index_max(write_spatiality_count);
+		*global_reqsize = get_index_max(write_reqsize_count);
+	}
+	else
+	{
+		*global_operation = RT_READ;
+		*global_spatiality = get_index_max(read_spatiality_count);
+		*global_reqsize = get_index_max(read_reqsize_count);
+	}
+
+	return 0;
 }
 
 
@@ -456,7 +482,6 @@ void print_something(const char *something)
 
 void print_selected_algs(void)
 {
-	int i;
 	struct proc_alg_entry_t *entry;
 
 	print_something("Scheduling algorithms:\n");
@@ -468,7 +493,7 @@ void print_selected_algs(void)
 #else
 		fprintf(stats_file,
 #endif
-			"%ld\t%s\n", entry->timestap, get_algorithm_name_from_index(entry->alg));
+			"%ld\t%s\n", entry->timestamp, get_algorithm_name_from_index(entry->alg));
 	}
 	print_something("\n");
 }
@@ -757,17 +782,18 @@ void stats_show_ending(void)
 	agios_mutex_unlock(&global_statistics_mutex);
 
 	bandwidth = agios_get_performance_bandwidth();
+
+	if(!bandwidth)
+		return;
+
 	band_str[0]='\n';
 	band_str[1]='\0';
-	i = performance_start;
-	while(i != performance_end)
+	for(i=0; i< config_agios_performance_values; i++)
 	{
 		len = strlen(band_str);
 		sprintf(band_str+len, "%.2f\n", bandwidth[i]/1024.0);
-		i++;
-		if(i >= config_agios_performance_values)
-			i = 0;
 	}
+	free(bandwidth);
 #ifndef AGIOS_KERNEL_MODULE
 	fprintf(stats_file,
 #else

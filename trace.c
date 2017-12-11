@@ -300,7 +300,7 @@ int agios_trace_init()
 		ret =  -EINVAL;
 	}
 
-	if((!aux_buf) && (req >= 0))
+	if((!aux_buf) && (ret >= 0))
 	{
 		aux_buf = (char *)malloc(aux_buf_size); //TODO could we have a trace line with more than 300 characters? It would depend on filenames...
 		if(!aux_buf)

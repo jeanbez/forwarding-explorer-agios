@@ -272,7 +272,7 @@ void recalculate_AB_probabilities(void)
 //update the observed bandwidth for a scheduling algorithm after using it for a period of time
 //we keep a best bandwidth cache (best bandwidth gives the index of the scheduling algorithm for which we have observed the highest bandwidth) to make it easier to recalculate the probabilities
 //the cleanup flag says if the function needs to free recent_measurements before returning
-long int ARMED_BANDIT_update_bandwidth(double *recent_measurements, short int cleanup)
+long int ARMED_BANDIT_update_bandwidth()
 {
 	int i;
 	//int j;
@@ -286,8 +286,8 @@ long int ARMED_BANDIT_update_bandwidth(double *recent_measurements, short int cl
 
 
 	// get new measurement for the current scheduling algorithm
-	add_performance_measurement_to_sched_info(&AB_table[current_sched], timestamp, recent_measurements[agios_performance_get_latest_index()]);
-	debug("most recent performance measurement: %.2f with scheduler %s", recent_measurements[agios_performance_get_latest_index()], AB_table[current_sched].sched->name);
+	add_performance_measurement_to_sched_info(&AB_table[current_sched], timestamp, agios_get_current_performance_bandwidth());
+	debug("most recent performance measurement: %.2f with scheduler %s", agios_get_current_performance_bandwidth(), AB_table[current_sched].sched->name);
 	//check its performance measurements for measurements which are too old
 	if(check_validity_window(&AB_table[current_sched], timestamp))
 		debug("we will discard old measurements to scheduler %s\n", AB_table[current_sched].sched->name);
@@ -322,8 +322,6 @@ long int ARMED_BANDIT_update_bandwidth(double *recent_measurements, short int cl
 			sum_of_bandwidth += AB_table[i].bandwidth;
 		}
 	}
-	if(cleanup)
-		free(recent_measurements);
 	return timestamp;
 }
 
@@ -383,17 +381,18 @@ int ARMED_BANDIT_select_next_algorithm(void)
 	print_all_armed_bandit_information();
 
 	//update bandwidth observed for the most recently selected scheduling algorithms
-	if(first_performance_measurement == 1) //we won't use the first performance measurement
-	{
-		struct timespec this_time; //we need to calculate timestamp because we won't call the function ARMED_BANDIT_update_bandwidth, which would normally calculate this for us
-		agios_gettime(&this_time);
-		timestamp = get_timespec2long(this_time);
-		agios_reset_performance_counters(); //we discard the first measurement
-		benchmarked_scheds--;
-		first_performance_measurement=0;	
-	}
-	else
-		timestamp = ARMED_BANDIT_update_bandwidth(agios_get_performance_bandwidth(), 1);
+//	if(first_performance_measurement == 1) //we won't use the first performance measurement
+//	{
+//		struct timespec this_time; //we need to calculate timestamp because we won't call the function ARMED_BANDIT_update_bandwidth, which would normally calculate this for us
+//		agios_gettime(&this_time);
+//		timestamp = get_timespec2long(this_time);
+//		agios_reset_performance_counters(); //we discard the first measurement
+//		benchmarked_scheds--;
+//		first_performance_measurement=0;	
+//	}
+//	else
+	//TODO we used to discard the first measurement because it would give a nonsensical value, but since then Ive rewritten the performance module, so it is possible we no longer have that problem, need to check
+	timestamp = ARMED_BANDIT_update_bandwidth();
 
 	return ARMED_BANDIT_aux_select_next_algorithm(timestamp);
 

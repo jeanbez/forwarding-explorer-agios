@@ -37,6 +37,13 @@ long int agios_max( long int t1, long int t2)
 	else
 		return t2;
 }
+short int get_index_max(int *count)
+{
+	if(count[0] >= count[1])
+		return 0;
+	else
+		return 1;
+}
 
 #ifdef AGIOS_KERNEL_MODULE
 

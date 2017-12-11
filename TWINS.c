@@ -1,4 +1,4 @@
-/* File:	EXCLUSIVE_TW.c
+/* File:	TWINS.c
  * Created: 	2016
  * License:	GPL version 3
  * Author:
@@ -35,7 +35,7 @@
 
 
 #include "agios.h"
-#include "EXCLUSIVE_TW.h"
+#include "TWINS.h"
 #include "request_cache.h"
 #include "consumer.h"
 #include "iosched.h"
@@ -57,11 +57,11 @@ int TWINS_init()
 	current_exclusive_tw = 0; //the first id we will prioritize
 	return 0;
 }
-void EXCLUSIVE_TW_exit()
+void TWINS_exit()
 {
 }
 
-void EXCLUSIVE_TW(void *clnt)
+void TWINS(void *clnt)
 {
 	short int update_time=0;
 	struct request_t *req;
