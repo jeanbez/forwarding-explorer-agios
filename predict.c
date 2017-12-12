@@ -423,10 +423,16 @@ long int agios_predict_should_we_wait(struct request_t *req)
 /*use the predicted access pattern to make a decision about the scheduling algorithm to use.*/
 int predict_select_best_algorithm(void)
 {
+	char *algorithm;
+	long int ret;
+
 	if(predicted_ap_operation == -1) /*we should not choose if we weren't able to detect the access pattern*/
 		return -1;
 
-	return get_algorithm_from_string(scheduling_algorithm_selection_tree(predicted_ap_operation, predicted_ap_fileno, get_access_ratio(predicted_ap_server_reqsize, predicted_ap_operation), predicted_ap_spatiality, predicted_ap_reqsize));
+	algorithm = scheduling_algorithm_selection_tree(predicted_ap_operation, predicted_ap_fileno, get_access_ratio(predicted_ap_server_reqsize, predicted_ap_operation), predicted_ap_spatiality, predicted_ap_reqsize);
+	ret = get_algorithm_from_string(algorithm);
+	free(algorithm);
+	return ret;
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

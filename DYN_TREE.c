@@ -64,6 +64,7 @@ int DYN_TREE_select_next_algorithm(void)
 	short int reqsize_class;
 	short int spatiality;
 	int ret;
+	char *algorithm;
 	
 
 	if(config_agios_select_algorithm_period >= 0) //dynamic scheduler
@@ -76,7 +77,9 @@ int DYN_TREE_select_next_algorithm(void)
 		else
 		{
 			//use the decision tree to select a new algorithm
-			ret  = get_algorithm_from_string(scheduling_algorithm_selection_tree(operation, current_reqfilenb, get_access_ratio(reqsize, operation), spatiality, reqsize_class)); 
+			algorithm = scheduling_algorithm_selection_tree(operation, current_reqfilenb, get_access_ratio(reqsize, operation), spatiality, reqsize_class);
+			ret  = get_algorithm_from_string(algorithm);
+			free(algorithm);
 			if(ret >= 0)
 				last_selected_algorithm = ret;
 		}
