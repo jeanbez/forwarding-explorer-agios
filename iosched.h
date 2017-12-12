@@ -80,11 +80,10 @@ extern long int waiting_time_overlapped;
 //functions to I/O scheduling algorithm management (setting schedulers, initializing, etc)
 int get_algorithm_from_string(const char *alg);
 char *get_algorithm_name_from_index(int index);
-void register_static_io_schedulers(void);
 struct io_scheduler_instance_t *find_io_scheduler(int index);
 struct io_scheduler_instance_t *initialize_scheduler(int index);
-int get_io_schedulers_size(void);
 void enable_TW(void);
+extern int io_schedulers_nb;
 
 //generic functions to be used by multiple scheduling algorithms
 void generic_post_process(struct request_t *req);

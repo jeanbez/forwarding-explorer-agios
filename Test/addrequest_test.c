@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#define ORANGEFS_AGIOS
 #include <agios.h>
 
 
@@ -34,7 +35,7 @@ void inc_processed_reqnb()
 	pthread_mutex_unlock(&processed_reqnb_mutex);
 }
 
-void test_process(int req_id)
+void test_process(int64_t req_id)
 {
 	inc_processed_reqnb();	
 }
@@ -62,7 +63,7 @@ void *test_thr(void *arg)
 		/*start timestamp*/
 		clock_gettime(CLOCK_MONOTONIC, &start_time);
 		/*generate a request*/
-		agios_add_request(filename, REQ_TYPE, offset, req_size, i, &clnt);
+		agios_add_request(filename, REQ_TYPE, offset, req_size, i, &clnt, 0);
 		/*end timestamp*/
 		clock_gettime(CLOCK_MONOTONIC, &end_time);
 		elapsed += ((end_time.tv_nsec - start_time.tv_nsec) + ((end_time.tv_sec - start_time.tv_sec)*1000000000L));
@@ -119,7 +120,7 @@ int main (int argc, char **argv)
 	/*start AGIOS*/
 	clnt.process_requests = NULL;
 	clnt.process_request = test_process;
-	if(agios_init(&clnt, "/tmp/agios.conf") != 0)
+	if(agios_init(&clnt, "/tmp/agios.conf", 0) != 0)
 	{
 		printf("PANIC! Could not initialize AGIOS!\n");
 		exit(1);

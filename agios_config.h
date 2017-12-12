@@ -28,7 +28,6 @@ extern int config_agios_default_algorithm;
 extern long int config_agios_select_algorithm_period;
 extern int config_agios_select_algorithm_min_reqnumber;
 extern int config_agios_starting_algorithm;
-void config_set_starting_algorithm(int value);
 extern int config_waiting_time;
 extern int config_aioli_quantum;
 extern int config_mlf_quantum;

@@ -44,7 +44,7 @@ int DYN_TREE_init(void)
 		if(ret >= 0) //it could return -1 if it is not able to decide*/
 		{
 			debug("DYN_TREE selected the %s algorithm", get_algorithm_name_from_index(ret));
-			config_set_starting_algorithm(ret);
+			config_agios_starting_algorithm = ret;
 			last_selected_algorithm = ret;
 		}
 		else

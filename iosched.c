@@ -262,7 +262,7 @@ void generic_init()
 /**********************************************************************************************************************/
 int current_alg = 0;
 struct io_scheduler_instance_t *current_scheduler=NULL;
-static int io_schedulers_nb = 12;
+int io_schedulers_nb = 12;
 static struct io_scheduler_instance_t io_schedulers[] = { //ATTENTION! If you are going to add or remove an I/O scheduler, dont forget to update io_schedulers_nb and the indexes here and in the iosched.h file! 
 		{
 			.init = MLF_init,

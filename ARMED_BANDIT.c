@@ -27,7 +27,6 @@
 #include "agios_request.h"
 #include "performance_table.h"
 
-static int scheduler_nb=0; //number of possible scheduling algorithms
 static int useful_sched_nb=0; //from the possible scheduling algorithms, how many can be dynamically selected (whe have to exclude the dynamic ones, the ones still being tested, etc)
 static int benchmarked_scheds=0; //how many of the possible scheduling algorithms were already selected
 static int best_bandwidth=-1; //we keep an updated best scheduling algorithm (according to bandwidth) so we don't have to go through all of them when recalculating probabilities
@@ -51,7 +50,7 @@ void print_all_armed_bandit_information()
 {
 	int i, j;
 	debug("ARMED BANDIT current situation: ");
-	for (i=0; i< scheduler_nb; i++)
+	for (i=0; i< io_schedulers_nb; i++)
 	{
 		if(AB_table[i].sched->can_be_dynamically_selected == 1)
 		{
@@ -82,7 +81,7 @@ int randomly_pick_algorithm()
 	//figure to which scheduling algorithm this number corresponds
 	//each scheduling algorithm receives a range of values inside [0,100) according to its probability
 	//assuming rand() follows an uniform distribution, then result has the right probability of being inside this algorithm's range
-	for(i=0; i< scheduler_nb; i++)
+	for(i=0; i< io_schedulers_nb; i++)
 	{
 		if(AB_table[i].sched->can_be_dynamically_selected == 1)
 		{
@@ -97,7 +96,7 @@ int randomly_pick_algorithm()
 void print_ab_trace_probs()
 {
 	int i, j;
-	for(i=0; i < scheduler_nb; i++) 
+	for(i=0; i < io_schedulers_nb; i++) 
 	{
 		if(AB_table[i].sched->can_be_dynamically_selected == 1)
 		{
@@ -142,28 +141,25 @@ int ARMED_BANDIT_aux_init(struct timespec *start_time)
 		return -1;
 	}
 
-	//find out how many scheduling algorithms do we have
-	scheduler_nb = get_io_schedulers_size();
-
 	//initialize a table so we can keep information separated by algorithm
-	AB_table = malloc(sizeof(struct scheduler_info_t)*(scheduler_nb+1));
+	AB_table = malloc(sizeof(struct scheduler_info_t)*(io_schedulers_nb+1));
 	if(!AB_table)
 	{
 		agios_print("PANIC! Could not allocate memory for the Armed Bandit scheduling table!");
 		return -ENOMEM; 
 	}
-	for(i=0; i< scheduler_nb; i++)
+	for(i=0; i< io_schedulers_nb; i++)
 	{
 		AB_table[i].sched = find_io_scheduler(i);
 		if(AB_table[i].sched->can_be_dynamically_selected == 1)  
 			useful_sched_nb++;
 		reset_scheduler_info(&AB_table[i]);
 	}
-	debug("Initializing Armed Bandit approach with %d scheduling algorithms, %d of them can be selected", scheduler_nb, useful_sched_nb );
+	debug("Initializing Armed Bandit approach with %d scheduling algorithms, %d of them can be selected", io_schedulers_nb, useful_sched_nb );
 
 	//give initial probabilities to all scheduling algorithms (which can be selected)
 	sum_of_all_probabilities=0;
-	for(i=0; i < scheduler_nb; i++) //this for loop *cannot* be joined with the previous one, since we use here the useful_sched_nb value (calculated in the previous loop)
+	for(i=0; i < io_schedulers_nb; i++) //this for loop *cannot* be joined with the previous one, since we use here the useful_sched_nb value (calculated in the previous loop)
 	{
 		if(AB_table[i].sched->can_be_dynamically_selected == 1)
 		{
@@ -195,7 +191,7 @@ int ARMED_BANDIT_init(void)
 		if(current_sched >= 0)
 		{
 			agios_print("Changing starting algorithm to %s", AB_table[current_sched].sched->name);
-			config_set_starting_algorithm(current_sched);
+			config_agios_starting_algorithm = current_sched;
 		}
 		else
 			return -1;
@@ -219,13 +215,13 @@ void recalculate_AB_probabilities(void)
 	PRINT_FUNCTION_NAME;
 
 	//we'll use an array to keep track of the algorithms to which we already recalculated the probability
-	calculated_algs = malloc(sizeof(int)*scheduler_nb);
+	calculated_algs = malloc(sizeof(int)*io_schedulers_nb);
 	if(!calculated_algs)
 	{
 		agios_print("PANIC! Could not allocate memory for ARMED BANDIT\n");
 		return;
 	}
-	for(i=0; i< scheduler_nb; i++)
+	for(i=0; i< io_schedulers_nb; i++)
 		calculated_algs[i]=0;
 
 	//we'll go through the algorithms in order of performance (best to worst)
@@ -241,7 +237,7 @@ void recalculate_AB_probabilities(void)
 		{
 			best_perf = 0;
 			best_i = 0;
-			for(i=0; i < scheduler_nb; i++)
+			for(i=0; i < io_schedulers_nb; i++)
 			{
 				if((AB_table[i].sched->can_be_dynamically_selected == 1) && (calculated_algs[i] == 0) && (best_perf <= AB_table[i].bandwidth))
 				{
@@ -297,7 +293,7 @@ long int ARMED_BANDIT_update_bandwidth()
 	//go through all scheduling algorithms removing performance measurements which are too old and updating their bandwidths. Also select the best bandwidth and update the sum of all values
 	sum_of_bandwidth = 0.0;
 	best_bandwidth = current_sched;
-	for(i=0; i< scheduler_nb; i++)
+	for(i=0; i< io_schedulers_nb; i++)
 	{
 		if((AB_table[i].sched->can_be_dynamically_selected == 1) && (AB_table[i].selection_counter > 0))
 		{
@@ -337,11 +333,11 @@ int ARMED_BANDIT_aux_select_next_algorithm(long int timestamp)
 	{
 		benchmarked_scheds++;
 		//randomly take one of the useful schedulers (without considering their probabilities for now)
-		next_alg = rand() % scheduler_nb;
+		next_alg = rand() % io_schedulers_nb;
 		while( !((AB_table[next_alg].sched->can_be_dynamically_selected == 1) && (AB_table[next_alg].selection_counter == 0))) 
 		{
 			next_alg++;
-			if(next_alg == scheduler_nb)
+			if(next_alg == io_schedulers_nb)
 				next_alg = 0;
 		}
 		debug("selecting %s because it has not been tried yet", AB_table[next_alg].sched->name);
@@ -408,7 +404,7 @@ void ARMED_BANDIT_exit(void)
 	int i;
 	if(AB_table)
 	{
-		for(i = 0; i< scheduler_nb; i++)
+		for(i = 0; i< io_schedulers_nb; i++)
 		{
 			if(AB_table[i].bandwidth_measurements)
 				free(AB_table[i].bandwidth_measurements);
