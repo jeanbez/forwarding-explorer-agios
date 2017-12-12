@@ -72,9 +72,9 @@ static long long int hash_long(long long int val, unsigned int bits)
 		return hash_64(val, bits);
 }
 
-long agios_hash_str(const char *ptr, unsigned int bits)
+unsigned long agios_hash_str(const char *ptr, unsigned int bits)
 {
-	long rep=0;
+	unsigned long rep=0;
 	int i;
 	/*makes a number using the sum of all the characters of the name of the file*/
 	for(i=0; i< strlen(ptr); i++)

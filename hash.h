@@ -7,6 +7,6 @@
 #define AGIOS_HASH_STR(inode)		(agios_hash_str(inode, AGIOS_HASH_SHIFT))
 
 
-long agios_hash_str(const char *ptr, unsigned int bits);
+unsigned long agios_hash_str(const char *ptr, unsigned int bits);
 
 #endif

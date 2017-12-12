@@ -245,6 +245,11 @@ void hashtable_del_req(struct request_t *req)
  */ 
 struct agios_list_head *hashtable_lock(int index)
 {
+	if((index < 0) || (index >= AGIOS_HASH_ENTRIES))
+	{
+		agios_print("PANIC! Trying to access line %d of the hashtable!", index);
+		return NULL;
+	}
 	agios_mutex_lock(&hashlist_locks[index]);
 	return &hashlist[index];
 }
