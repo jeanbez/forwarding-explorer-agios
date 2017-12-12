@@ -752,6 +752,12 @@ void stats_show_ending(void)
 	int i, len;
 	char *band_str = malloc(sizeof(char)*50*config_agios_performance_values);
 
+	if(!band_str)
+	{
+		agios_print("PANIC! Could not allocate memory");
+		return;
+	}
+
 	agios_mutex_lock(&global_statistics_mutex);
 
 	if(stats_for_file.total_reqnb > 1)
@@ -803,6 +809,8 @@ void stats_show_ending(void)
 	agios_get_performance_size(),
 	agios_get_performance_time(),
 	band_str);
+
+	free(band_str);
 
 
 }

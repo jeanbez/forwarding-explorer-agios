@@ -61,6 +61,7 @@ void *process_request_thr(void *arg)
 
 	inc_processed_reqnb();
 	free(req);	
+	free(filename);
 }
 
 void test_process(void * req_id)
@@ -72,12 +73,16 @@ void test_process(void * req_id)
 	{
 		printf("PANIC! we received more requests than generated\n");
 		agios_exit();
-		exit(0);	
+		if(req)
+			free(req);
+		exit(-1);	
 	}
-	ret = pthread_create(&processing_threads[processing_threads_index], NULL, process_request_thr, req);		
+	ret = pthread_create(&processing_threads[processing_threads_index], NULL, process_request_thr, req); //it is fine, we should not have a race condition, because this function is called only once at a time by the AGIOS scheduling thread		
 	processing_threads_index++;
 	if(ret != 0)
 	{
+		if(req)
+			free(req);
 		printf("PANIC! Unable to create thread to process request!\n");
 	}
 }
@@ -123,6 +128,7 @@ void *test_thr(void *arg)
 		timeout.tv_nsec = time_between % 1000000000L;
 		nanosleep(&timeout, NULL);
 	}
+	free(filename);
 }
 
 int main (int argc, char **argv)
@@ -199,8 +205,18 @@ int main (int argc, char **argv)
 	agios_print_stats_file(argv[5]);
 	agios_exit();
 
+	//end the threads so we wont have memory leaks
+	for(i=0; i< thread_nb; i++)
+	{
+		pthread_join(threads[i], NULL);
+	}
+	for(i=0; i < processing_threads_index; i++)
+	{
+		pthread_join(processing_threads[i], NULL);
+	}
+
 	free(processing_threads);
 	free(threads);
-
+	free(req_offset);
 	return 0;
 }

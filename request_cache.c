@@ -177,6 +177,7 @@ void print_hashtable(void)
 	{
 		print_hashtable_line(i);
 	}
+	PRINT_FUNCTION_EXIT;
 }
 void print_timeline(void)
 {
@@ -544,14 +545,8 @@ void list_of_requests_cleanup(struct agios_list_head *list)
  */
 void request_cache_cleanup(void)
 {
-	//TODO we were having serious issues with this portion of code, go through it looking for the errors
-	PRINT_FUNCTION_NAME;
-//	lock_all_data_structures();
-//	print_hashtable();
 	hashtable_cleanup();
-//	print_timeline();
 	timeline_cleanup();
-	PRINT_FUNCTION_EXIT;
 }
 
 //aggregation_head is a normal request which is about to become a virtual request upon aggregation with another contiguous request.

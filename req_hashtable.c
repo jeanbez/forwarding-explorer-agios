@@ -83,6 +83,7 @@ void hashtable_cleanup(void)
 	int i;
 	struct request_file_t *req_file, *aux_req_file=NULL;
 
+
 	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //go through all lines of the hashtable
 	{
 		if(!agios_list_empty(&hashlist[i]))
@@ -94,6 +95,8 @@ void hashtable_cleanup(void)
 				related_list_cleanup(&req_file->related_writes);
 				related_list_cleanup(&req_file->predicted_reads);
 				related_list_cleanup(&req_file->predicted_writes);
+				if(req_file->file_id)
+					free(req_file->file_id);
 				
 				if(aux_req_file)
 				{
@@ -106,14 +109,15 @@ void hashtable_cleanup(void)
 			{
 				agios_list_del(&aux_req_file->hashlist);
 				agios_free(aux_req_file);
+				aux_req_file = NULL;
 			}
 
 		}
 	}
 
-//	agios_free(hashlist);
-//	agios_free(hashlist_locks);
-//	agios_free(hashlist_reqcounter);
+	agios_free(hashlist);
+	agios_free(hashlist_locks);
+	agios_free(hashlist_reqcounter);
 	
 }
 
