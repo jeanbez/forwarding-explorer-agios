@@ -354,7 +354,7 @@ int agios_release_request(char *file_id, short int type, long int len, long int 
 			if(entry == current_performance_entry)
 			{
 				agios_processed_reqnb++; //we only count it as a new processed request if it was issued by the current scheduling algorithm
-				debug("a request issued by the current scheduling algorithm has come back! processed_reqnb is %ld", agios_processed_reqnb);
+				debug("a request issued by the current scheduling algorithm is back! processed_reqnb is %ld", agios_processed_reqnb);
 			}
 		}
 
