@@ -1,34 +1,14 @@
-/* File:	agios.h
- * Created: 	2012 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It provides the interface to its users
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- */
+/*! \file agios.h
+    \brief TODO 
 
-#ifndef AGIOS_H
-#define AGIOS_H
+    TODO a detailed description
+*/
 
-#ifdef AGIOS_KERNEL_MODULE
-#include <linux/completion.h>
-#else
+
+#pragma once AGIOS_H
+
 #include <pthread.h>
 #include <stdint.h>
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -93,4 +73,3 @@ void agios_wait_predict_init(void);
 }
 #endif
 
-#endif // #ifndef AGIOS_H
