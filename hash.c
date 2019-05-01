@@ -1,51 +1,19 @@
-/* File:	hash.c
- * Created: 	2012 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It provides hash functions, used to include a request in the hashtable
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- */
-
-#include "agios_request.h"
-#include "hash.h"
-#include "agios.h"
-
-#ifndef AGIOS_KERNEL_MODULE
+/*! \file hash.c
+    \brief Implementation of the get_hashtable_position function, used to select a line of the hashtable according to a file handle.
+*/
 #include <string.h>
-#endif
+#include "hash.h"
+#include "req_hashtable.h"
 
-#define GOLDEN_RATIO_PRIME_32 0x9e370001UL
-#define GOLDEN_RATIO_PRIME_64 0x9e37fffffffc0001UL
-
-static int hash_32(int val, unsigned int bits)
+/**
+ * function used by get_hashtable_position to calculate a hash according to a number.
+ * @param val a 64-bit value.
+ * @return a 64-bit hash value.
+ */
+int64_t calculate_hash(int64_t val)
 {
-        /* On some cpus multiply is faster, on others gcc will do shifts */
-        int hash = val * GOLDEN_RATIO_PRIME_32;
-
-        /* High bits are more random, so use them. */
-        return hash >> (32 - bits);
-}
-
-static long long int hash_64(long long int val, unsigned int bits)
-{
-        long long int hash = val;
-
-        /*  Sigh, gcc can't optimise this alone like it does for 32 bits. */
-        long long int n = hash;
+        int64_t hash = val;
+        int64_t n = hash;
         n <<= 18;
         hash -= n;
         n <<= 33;
@@ -58,27 +26,21 @@ static long long int hash_64(long long int val, unsigned int bits)
         hash += n;
         n <<= 2;
         hash += n;
-
         /* High bits are more random, so use them. */
-        return hash >> (64 - bits);
+        return hash >> (64 - AGIOS_HASH_SHIFT);
 }
-
-static long long int hash_long(long long int val, unsigned int bits)
+/**
+ * function that returns a line of the hashtable where to put information about a file handle.
+ * @param file_handle a string handle for the file.
+ * @return an index between 0 and AGIOS_HASH_ENTRIES.
+ */
+int32_t get_hashtable_position(const char *file_handle)
 {
-	int bits_per_long = sizeof(long)*8;
-	if(bits_per_long == 32)
-		return hash_32(val, bits);
-	else
-		return hash_64(val, bits);
-}
-
-unsigned long agios_hash_str(const char *ptr, unsigned int bits)
-{
-	unsigned long rep=0;
-	int i;
-	/*makes a number using the sum of all the characters of the name of the file*/
-	for(i=0; i< strlen(ptr); i++)
-		rep += ptr[i];
-	/*returns the hash*/
-	return hash_long(rep, bits);
+	//makes a number using the sum of all characters of the name of the file
+	int64_t sum=0;	
+	for(int32_t i=0; i< strlen(file_handle); i++)
+		sum += file_handle[i];
+	//calculates the hash and transforms it into a position of the hashtable
+	sum = calculate_hash(sum);
+	return sum % AGIOS_HASH_ENTRIES;
 }

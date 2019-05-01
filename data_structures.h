@@ -6,16 +6,6 @@
 struct request_t;
 struct request_file_t;
 
-/* to access the counters*/
-extern int current_reqnb;
-extern int current_reqfilenb;
-extern pthread_mutex_t current_reqnb_lock;
-int get_current_reqnb(void); //this version uses the mutex to access the current_reqnb variable, use only if critical to have updated version
-void inc_current_reqnb(void);
-void dec_current_reqnb(int hash);
-void dec_many_current_reqnb(int hash, int value);
-void inc_current_reqfilenb(void);
-void dec_current_reqfilenb(void);
 
 /* data structures management functions */
 void lock_all_data_structures();

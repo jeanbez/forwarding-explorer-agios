@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <stdtypes.h>
 
+#include "agios.h"
+
 static pthread_t g_agios_thread; /**< AGIOS thread that will run the AGIOS_thread function.  */
 
 /**
@@ -28,7 +30,7 @@ void cleanup_agios(void)
  * @param process_request the callback function from the user code used by AGIOS to process a single request. (required)
  * @param process_requests the callback function from the user code used by AGIOS to process a list of requests. (optional)
  * @param config_file the path to a configuration file. If NULL, the DEFAULT_CONFIGFILE will be read instead. If the default configuration file does not exist, it will use default values.
- * @param max_queue_id for schedulers that use multiple queues, one per server/application (TWINS and SW), define the number of queues to be used.
+ * @param max_queue_id for schedulers that use multiple queues, one per server/application (TWINS and SW), define the number of queues to be used. If it is not relevant to the used scheduler, it is better to provide 0. With each request being added, a value between 0 and max_queue_id-1 is to be provided.
  * TODO link with @see to configuration parameters
  * @return true of false for success.
  */
@@ -39,7 +41,7 @@ bool agios_init(void * process_request(void * req_id),
 {
 	//check if a callback was provided 
 	if (!process_request) {
-		agios_print("Incorrect client structure\n");
+		agios_print("Incorrect parameters to agios_init\n");
 		return false; //we don't use the goto cleanup_on_error because we have nothing to clean up
 	}
 	if (!read_configuration_file(config_file)) goto cleanup_on_error; 

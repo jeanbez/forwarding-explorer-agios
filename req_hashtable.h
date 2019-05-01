@@ -3,6 +3,9 @@
 
 #include "agios_request.h"
 
+#define AGIOS_HASH_SHIFT 6						
+#define AGIOS_HASH_ENTRIES		(1 << AGIOS_HASH_SHIFT) 		
+
 /*init and exit functions*/
 int hashtable_init(void);
 void hashtable_cleanup(void);
