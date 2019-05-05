@@ -280,6 +280,7 @@ void hashtable_unlock(int index)
 
 void print_hashtable_line(int32_t i)
 {
+#if AGIOS_DEBUG
 	struct agios_list_head *hash_list;
 	struct request_file_t *req_file;
 	struct request_t *req;
@@ -310,7 +311,7 @@ void print_hashtable_line(int32_t i)
 
 		}
 	}
-
+#endif
 }
 
 //debug functions, clean after
@@ -324,15 +325,4 @@ void print_hashtable(void)
 		print_hashtable_line(i);
 	}
 	PRINT_FUNCTION_EXIT;
-}
-void print_timeline(void)
-{
-	struct request_t *req;
-
-	debug("Current timeline status:");
-	debug("Requests:");
-	agios_list_for_each_entry(req, &timeline, related)
-	{
-		print_request(req);
-	}
 }

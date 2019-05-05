@@ -282,3 +282,16 @@ void timeline_cleanup()
 		free(app_timeline);
 	}
 }
+void print_timeline(void)
+{
+#if AGIOS_DEBUG
+	struct request_t *req;
+
+	debug("Current timeline status:");
+	debug("Requests:");
+	agios_list_for_each_entry(req, &timeline, related)
+	{
+		print_request(req);
+	}
+#endif
+}

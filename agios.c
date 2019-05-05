@@ -44,6 +44,8 @@ bool agios_init(void * process_request(int64_t req_id),
 		agios_print("Incorrect parameters to agios_init\n");
 		return false; //we don't use the goto cleanup_on_error because we have nothing to clean up
 	}
+	user_callbacks.process_request = process_request;
+	user_callbacks.process_requests = process_requests;
 	if (!read_configuration_file(config_file)) goto cleanup_on_error; 
 	if (!init_performance_module()) goto cleanup_on_error;
 	if (!allocate_data_structures(max_app_id)) goto cleanup_on_error;

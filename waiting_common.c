@@ -58,3 +58,17 @@ void increment_sched_factor(struct request_t *req)
 	if(req->sched_factor == 0) req->sched_factor = 1;
 	else req->sched_factor = req->sched_factor << 1;
 }
+/**
+ * post process function for scheduling algorithms which use waiting times (AIOLI and MLF).
+ * @param req the request that has been processed.
+ */
+void waiting_algorithms_postprocess(struct request_t *req)
+{
+	req->globalinfo->lastfinaloff = req->offset + req->len;	
+	/*try to detect the shift phenomenon*/
+	if ((req->offset < req->globalinfo->laststartoff) && (!req->globalinfo->predictedoff)) {
+		req->globalinfo->predictedoff = req->globalinfo->lastfinaloff; 
+	}	
+	req->globalinfo->laststartoff = req->offset;
+	generic_post_process(req);
+}

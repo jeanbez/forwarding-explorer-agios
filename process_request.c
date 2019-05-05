@@ -1,4 +1,5 @@
 
+struct user_callbacks; /**< contains the pointers to the user-provided callbacks to be used to process requests */
 /***********************************************************************************************************
  * REQUESTS PROCESSING (CALLED BY THE I/O SCHEDULERS THROUGH THE AGIOS THREAD)	   *
  ***********************************************************************************************************/
@@ -136,4 +137,29 @@ short int process_requests(struct request_t *head_req, struct client *clnt, int 
 
 	PRINT_FUNCTION_EXIT;
 	return update_time;
+}
+/**
+ * Called after processing a request to update some statistics and possibly cleanup a virtual request structure. 
+ * @param req the request that was processed.
+ */
+void generic_post_process(struct request_t *req)
+{
+	req->globalinfo->lastaggregation = req->reqnb; 
+	if (req->reqnb > 1) { //this was an aggregated request
+		stats_aggregation(req->globalinfo);
+		req->reqnb = 1; //we need to set it like this otherwise the request_cleanup function will try to free the sub-requests, but they were inserted in the dispatch queue and we will only free them after the release
+		request_cleanup(req);
+	}
+}
+/**
+ * This function is called by the release function, when the library user signaled it finished processing a request. In the case of a virtual request, its requests will be signaled separately, so here we are sure to receive a single request.
+ * @param req the request that has been released by the user.
+ */
+void generic_cleanup(struct request_t *req)
+{
+	//update the processed requests counter
+	req->globalinfo->stats.processedreq_nb++;
+	//update the data counter
+	req->globalinfo->stats.processed_req_size += req->io_data.len;
+	request_cleanup(req); //remove from the list and free the memory
 }
