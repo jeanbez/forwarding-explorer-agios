@@ -1,191 +1,78 @@
-/* File:	agios_config.c
- * Created: 	2012 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It obtains configuration parameters from the configuration files and 
- *		provides them to all other modules
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+/*! \file agios_config.c
+ * /brief Configuration parameters, default values and a function to read them from a configuration file (with libconfig).
  */
-
 #include <libconfig.h>
 #include <string.h>
 #include <assert.h>
+#include <stdbool.h>
 
 #include "agios_config.h"
-#include "iosched.h"
 #include "common_functions.h"
-#include "DYN_TREE.h"
-#include "request_cache.h"
-#include "proc.h"
-#include "consumer.h"
-#include "req_hashtable.h"
-#include "trace.h"
-#include "performance.h"
+#include "iosched.h"
 
-//-------------------------------------------------------------------------------------------------------
-//LIBRARY OPTIONS
-//-------------------------------------------------------------------------------------------------------
-//since these variables are not static, I try to always include "agios" in their name to avoid future problems
-short int config_trace_agios=0;
-short int config_trace_agios_predict=0;
-short int config_trace_agios_full=0;
-short int config_predict_agios_read_traces = 0;
-short int config_predict_agios_request_aggregation = 0;
-char *config_trace_agios_file_prefix=NULL;
-char *config_trace_agios_file_sufix=NULL;
-char *config_simple_trace_agios_file_prefix=NULL;
-int config_agios_default_algorithm = SJF_SCHEDULER;
-int config_predict_agios_time_error = 10;
-int config_predict_agios_recalculate_alpha_period = -1;
-short int config_agios_write_simplified_traces=0;
-char *config_agios_access_times_file=NULL;
-long int config_agios_select_algorithm_period=-1;
-int config_agios_select_algorithm_min_reqnumber=1;
-int config_agios_starting_algorithm = SJF_SCHEDULER;
-int config_agios_min_ab_probability = 3;
-long int config_agios_validity_window = 360000000000L;
-int config_agios_performance_window = 10;
-int config_agios_performance_values = 5;
-int config_agios_proc_algs = 1000;
+//TODO adjust example agios_config.conf
+int32_t config_agios_default_algorithm = SJF_SCHEDULER;	/**< scheduling algorithm to be used (the identifier of the scheduling algorithm) */
+int32_t config_agios_max_trace_buffer_size = 1*1024*1024; /**< in bytes. A buffer is used to keep trace messages before going to the file, to avoid small writes to the disk and decrease tracing overhead. This parameter gives the size allocated for the buffer. */
+int32_t config_agios_performance_window = 10; //TODO
+int32_t config_agios_performance_values = 5; //TODO
+int64_t config_agios_select_algorithm_period=-1;	/**< if the scheduling algorithm is dynamic (meaning it will actually select other scheduling algorithms during the execution, this parameter defines the periodicity to change the scheduling algorithm during the execution. */
+int32_t config_agios_select_algorithm_min_reqnumber=1;	/**< if the scheduling algorithm is dynamic (meaning it will actually select other scheduling algorithms during the execution, this parameter defines how many requests have to be treated during a period before a new scheduling algorithm can be selected. */
+int32_t config_agios_starting_algorithm = SJF_SCHEDULER; /**< if the scheduling algorithm is dynamic (meaning it will actually select other scheduling algorithms during the execution, this is the scheduling algorithm that will be used whenever a decision cannot be made (possibly because there is not enough information */
+int32_t config_aioli_quantum = 8192;			/**< in bytes, how much of a queue can be processed before going to the next one (used by aIOLi) */
+int32_t config_mlf_quantum = 8192;			/**< similar to config_aioli_quantum */ //TODO
+int64_t config_sw_size = 1000000000L;	//TODO
+bool config_trace_agios=false;				/**< will agios create a trace file will all requests arrivals? */
+char *config_trace_agios_file_prefix=NULL; 		/**< if creating trace files, they will be named config_trace_agios_file_prefix.*.config_trace_agios_file_sufix. The value in the middle of prefix and sufix is a counter, the library will check for existing files so they are not overwritten. */
+char *config_trace_agios_file_sufix=NULL;		/**< @see config_trace_agios_file_prefix */
+int64_t config_twins_window=1000000L; 		/**< The amount of time TWINS will stay in one queue before moving on to the next one (in nanoseconds). The default is 1ms */
+int32_t config_waiting_time = 900000;			/**< when there are no requests, the scheduler sleep using this as a timeout. It is also used by aIOLi to wait if it thinks better aggregations are possible */
 
-int config_waiting_time = 900000;
-int config_aioli_quantum = 8192;
-int config_mlf_quantum = 8192;
-long int config_tw_size = 1000000000L;
-long int config_twins_window=250000000L; //250ms
-
-int config_minimum_pattern_size = 5;
-int config_maximum_pattern_difference = 10;
-int config_pattern_matching_threshold=75; 
-char *config_pattern_filename=NULL;
-short int config_static_pattern_matching=0;
-
-
-void config_set_trace_predict(short int value)
-{
-	config_trace_agios_predict = value;
-	if((config_trace_agios_predict) && (!config_trace_agios))
-		config_trace_agios_predict=0;
-}
-void config_set_trace_full(short int value)
-{
-	config_trace_agios_full = value;
-	if((config_trace_agios_full) && (!config_trace_agios))
-		config_trace_agios_full = 0;
-}
-
+/**
+ * used to clean all memory allocated for the configuration parameters (at the end of the execution).
+ */
 void config_agios_cleanup(void)
 {
 	if(config_trace_agios_file_prefix)
 		free(config_trace_agios_file_prefix);
 	if(config_trace_agios_file_sufix)
 		free(config_trace_agios_file_sufix);
-	if(config_simple_trace_agios_file_prefix)
-		free(config_simple_trace_agios_file_prefix);
-	if(config_agios_access_times_file)
-		free(config_agios_access_times_file);
-	if(config_pattern_filename)
-		free(config_pattern_filename);
 }
-
-//-------------------------------------------------------------------------------------------------------
-//USER INFO
-//-------------------------------------------------------------------------------------------------------
-int config_agios_stripe_size = 32*1024;
-int config_agios_max_trace_buffer_size = 1*1024*1024;
-
-//-------------------------------------------------------------------------------------------------------
-//SPREAD CONFIGURATION PARAMETERS TO OTHER MODULES
-//----------------------------------------------------------------------------------------------------------
-/*returns 0 in case of success*/
-//this function uses libconfig to parse the configuration file config_file. 
-//If config_file is NULL, will read DEFAULT_CONFIGFILE instead
-//If the file does not exist, it will use default values.
-short int read_configuration_file(char *config_file)
+/**
+ * function used to read the configuration parameters from a configuration file. It uses libconfig to do so. 
+ * @param config_file the name (with path) of the configuration file. If NULL is provided, then the function will read from DEFAULT_CONFIGFILE instead. If the default file does not exist, the default values will be used.
+ * @return true or false for success.
+ */
+bool read_configuration_file(char *config_file)
 {
-#ifndef AGIOS_KERNEL_MODULE 
-	int ret;
-	const char *ret_str;
-	config_t agios_config;
+	int32_t ret; /**< used to capture return values from libconfig */
+	const char *ret_str; /**< used to capture return values from libconfig */
+	config_t agios_config; /**< used to interact with libconfig */
 
-	config_init(&agios_config);
-
-	/*read configuration file*/
-	if((!config_file) || (strlen(config_file) < 1))
-		ret = config_read_file(&agios_config, DEFAULT_CONFIGFILE);
-	else
-		ret = config_read_file(&agios_config, config_file);
-	if(ret != CONFIG_TRUE)
-	{
+	//create a configuration with libconfig
+	config_init(&agios_config); 
+	//read it from a file
+	if ((!config_file) || (strlen(config_file) < 1)) ret = config_read_file(&agios_config, DEFAULT_CONFIGFILE);
+	else ret = config_read_file(&agios_config, config_file);
+ 	//check if it was possible to read from a file
+	if (ret != CONFIG_TRUE) { //it failed
 		agios_just_print("Error reading agios config file\n%s", config_error_text(&agios_config));
-		//no need to be an error, we'll just run with default values
-		config_agios_access_times_file = malloc(sizeof(char)*(strlen(DEFAULT_ACCESSTIMESFILE)+1));
-		if(!config_agios_access_times_file)
-			return -ENOMEM;
-		strcpy(config_agios_access_times_file, DEFAULT_ACCESSTIMESFILE);	
-		return 0; 
-	}
-	/*read configuration*/
+		//we'll just run with default values
+		return true; 
+	} //end if reading from input file failed
+	//if we are here we successfully read configuration parameters from the file, so we have to obtain then from libconfig and store in out variables
 	/*1. library options*/
 	config_lookup_bool(&agios_config, "library_options.trace", &ret);
-	config_trace_agios = ret;
-	config_lookup_bool(&agios_config, "library_options.trace_predict", &ret);
-	config_set_trace_predict(ret);
-	config_lookup_bool(&agios_config, "library_options.trace_full", &ret);
-	config_set_trace_full(ret);
-	config_lookup_bool(&agios_config, "library_options.predict_read_traces", &ret);
-	config_predict_agios_read_traces = ret;
-
-	config_lookup_bool(&agios_config, "library_options.predict_request_aggregation", &ret);
-	config_predict_agios_request_aggregation = ret;
-	if((config_predict_agios_request_aggregation) && (!config_predict_agios_read_traces))
-	{
-		agios_print("Configuration error! Cannot predict request aggregation if we cannot read information from traces. Disabling it.");
-		config_predict_agios_request_aggregation = 0;
-	}
-
+	config_trace_agios = convert_inttobool(ret);
 	config_lookup_string(&agios_config, "library_options.trace_file_prefix", &ret_str);
 	config_trace_agios_file_prefix = malloc(sizeof(char)*(strlen(ret_str)+1));
-	if(!config_trace_agios_file_prefix)
-		return -ENOMEM;
+	if (!config_trace_agios_file_prefix) return false;
 	strcpy(config_trace_agios_file_prefix, ret_str);
-	
 	config_lookup_string(&agios_config, "library_options.trace_file_sufix", &ret_str);
 	config_trace_agios_file_sufix = malloc(sizeof(char)*(strlen(ret_str)+1));
-	if(!config_trace_agios_file_sufix)
-		return -ENOMEM;
+	if (!config_trace_agios_file_sufix) return false;
 	strcpy(config_trace_agios_file_sufix, ret_str);
-
-	config_lookup_string(&agios_config, "library_options.simple_trace_prefix", &ret_str);
-	config_simple_trace_agios_file_prefix = malloc(sizeof(char)*(strlen(ret_str)+1));
-	if(!config_simple_trace_agios_file_prefix)
-		return -ENOMEM;
-	strcpy(config_simple_trace_agios_file_prefix, ret_str);
-
 	config_lookup_string(&agios_config, "library_options.default_algorithm", &ret_str);
 	config_agios_default_algorithm = get_algorithm_from_string(ret_str);
-	config_lookup_int(&agios_config, "library_options.prediction_time_error", &config_predict_agios_time_error);
-	config_lookup_int(&agios_config, "library_options.prediction_recalculate_alpha_period", &config_predict_agios_recalculate_alpha_period);
-	config_lookup_int(&agios_config, "library_options.predict_write_simplified_traces", &ret);
-	config_agios_write_simplified_traces = ret;
-
-	config_lookup_string(&agios_config, "library_options.access_times_func_file", &ret_str);
-	config_agios_access_times_file = (char *)malloc(sizeof(char)*(strlen(ret_str)+1));
-	if(!config_agios_access_times_file)
-		return -ENOMEM;
-	strcpy(config_agios_access_times_file, ret_str);
-
 	config_lookup_int(&agios_config, "library_options.waiting_time", &ret);
 	config_waiting_time = ret;
 	config_lookup_int(&agios_config, "library_options.aioli_quantum", &ret);
@@ -195,115 +82,55 @@ short int read_configuration_file(char *config_file)
 	config_lookup_int(&agios_config, "library_options.select_algorithm_period", &ret);
 	config_agios_select_algorithm_period = ret*1000000L; //convert it to ns
 	config_lookup_int(&agios_config, "library_options.select_algorithm_min_reqnumber", &config_agios_select_algorithm_min_reqnumber);
-	
 	config_lookup_string(&agios_config, "library_options.starting_algorithm", &ret_str);
 	config_agios_starting_algorithm = get_algorithm_from_string(ret_str);
+#if 0 //TODO test if the starting algorithm is a dynamic one
 	if((config_agios_starting_algorithm == DYN_TREE_SCHEDULER) || (config_agios_starting_algorithm == ARMED_BANDIT_SCHEDULER))
 	{
 		config_agios_starting_algorithm = SJF_SCHEDULER;
 		agios_print("Configuration error! Starting algorithm cannot be a dynamic one. Using SJF instead");
 	}
-	
-	config_lookup_int(&agios_config, "library_options.min_ab_probability", &config_agios_min_ab_probability);
-	config_lookup_int(&agios_config, "library_options.validity_window", &ret);
-	config_agios_validity_window = ret*1000000L; //convert it to ns
+#endif
 	config_lookup_int(&agios_config, "library_options.performance_window", &config_agios_performance_window);
 	config_lookup_int(&agios_config, "library_options.performance_values", &config_agios_performance_values);
-	config_lookup_int(&agios_config, "library_options.proc_algs", &config_agios_proc_algs);
-	config_lookup_bool(&agios_config, "library_options.enable_TW", &ret);
-	if(ret)
-		enable_TW();
-	config_lookup_int(&agios_config, "library_options.time_window_size", &ret);
-	config_tw_size = ret*1000000L; //convert to ns
-	assert(config_tw_size >= 0);
+	config_lookup_bool(&agios_config, "library_options.enable_SW", &ret);
+	if (ret) enable_SW();
+	config_lookup_int(&agios_config, "library_options.SW_window", &ret);
+	config_sw_size = ret*1000000L; //convert to ns
+	assert(config_sw_size >= 0);
 	config_lookup_int(&agios_config, "library_options.twins_window", &ret);
 	config_twins_window = ret*1000L; //convert us to ns
-
-	config_lookup_int(&agios_config, "library_options.minimum_pattern_size", &ret);
-	config_minimum_pattern_size = ret;
-	config_lookup_int(&agios_config, "library_options.maximum_pattern_difference", &config_maximum_pattern_difference);
-	config_lookup_int(&agios_config, "library_options.pattern_matching_threshold", &config_pattern_matching_threshold);
-
-	config_lookup_string(&agios_config, "library_options.pattern_matching_filename", &ret_str);	
-	config_pattern_filename = (char *)malloc(sizeof(char)*(strlen(ret_str)+1));
-	if(!config_pattern_filename)
-		return -ENOMEM;
-	else
-		strcpy(config_pattern_filename, ret_str);	
-
-	config_lookup_bool(&agios_config, "library_options.pattern_matching_static_algorithm", &ret);
-	config_static_pattern_matching = ret;
-
-	/*2. user info*/
-	config_lookup_int(&agios_config, "user_info.stripe_size", &config_agios_stripe_size);
-	config_lookup_int(&agios_config, "user_info.max_trace_buffer_size", &ret);
+	assert(config_twins_window >= 0);
+	config_lookup_int(&agios_config, "library_options.max_trace_buffer_size", &ret);
 	config_agios_max_trace_buffer_size = ret*1024; //it comes in KB, we store in bytes
+	//cleanup the libconfig structure
 	config_destroy(&agios_config);
-#else
-	//TODO make these options kernel friendly. For now, we cannot use them in the kernel module version
-	config_trace_agios = 0; 
-	config_set_trace_predict(0); 
-	config_set_trace_full(0); 
-	config_set_predict_read_traces(0);
-
-#endif
-
 	config_print();
-
-	return 0;
-}
-
-void config_print_yes_or_no(short int flag)
-{
-	if(flag)
-		agios_just_print("YES\n");
-	else
-		agios_just_print("NO\n");
-}
-void config_print_flag(short int flag, char *message)
+	return true;
+} 
+/**
+ * receives a flag and a message to be printed with it. It will print the message and then yes or no depending on the flag value.
+ * @param flag true or false to print yes or no
+ * @param the message that will be printed BEFORE the flag value
+ */
+void print_flag(bool flag, char *message)
 {
 	agios_just_print("%s", message);
-	config_print_yes_or_no(flag);
+	if (flag) agios_just_print("YES\n");
+	else agios_just_print("NO\n");
 }
-
+/**
+ * function called during the initialization to print configuration parameters that will be used by AGIOS.
+ */
 void config_print(void)
 {
 	config_print_flag(config_trace_agios, "Will AGIOS generate trace files? ");
-	if(config_trace_agios)
-	{
+	if (config_trace_agios) {
 		agios_just_print("\tTrace files are named %s.*.%s\n", config_trace_agios_file_prefix, config_trace_agios_file_sufix);
-		agios_just_print("\tSimplified trace files are named %s.*.%s\n", config_simple_trace_agios_file_prefix, config_trace_agios_file_sufix);
-		config_print_flag(config_trace_agios_predict, "\tTracing the Prediction Module's activities (for debug purposes)? ");
-		config_print_flag(config_trace_agios_full, "\tComplete tracing (for debug purposes)? ");
 		agios_just_print("\tTrace file buffer has size %d bytes\n", config_agios_max_trace_buffer_size);
-	}
+	} //end if tracing
 	agios_just_print("Default scheduling algorithm: %s\n", get_algorithm_name_from_index(config_agios_default_algorithm)); 
-	if(config_agios_default_algorithm == DYN_TREE_SCHEDULER)
-	{	
-		agios_just_print("AGIOS will select the best scheduling algorithm for the situation\n");
-		if(config_agios_select_algorithm_period >= 0)
-			agios_just_print("The scheduling algorithm selection will be redone every %ld nanoseconds, as long as %d requests were processed in this period. We will start with %s\n", 
-config_agios_select_algorithm_period, config_agios_select_algorithm_min_reqnumber, get_algorithm_name_from_index(config_agios_starting_algorithm));
-		else
-			agios_just_print("The scheduling algorithm selection will be done only at the beginning of the execution!\n");
-	}
-	config_print_flag(config_predict_agios_read_traces, "Will the Prediction Module read information from trace files? ");
-	if(config_predict_agios_read_traces)
-	{
-		config_print_flag(config_predict_agios_request_aggregation, "\tWill the Prediction Module use this information to predict request aggregations? ");
-		if(config_predict_agios_request_aggregation)
-		{
-			agios_just_print("\t\tWill the Prediction Module re-consider its predicted aggregations? ");
-			if(config_predict_agios_recalculate_alpha_period == -1)
-				agios_just_print("NO\n");
-			else
-				agios_just_print("Every %d processed requests\n", config_predict_agios_recalculate_alpha_period);
-		}
-		agios_just_print("\tPredicted requests will be considered the same if their arrival times' difference is within %d\n", config_predict_agios_time_error);
-		config_print_flag(config_agios_write_simplified_traces, "\tWill the Prediction Module create simplified traces with the obtained information? ");
-	}
-	agios_just_print("File with access time functions: %s\n", config_agios_access_times_file);
-	agios_just_print("AGIOS thinks its user has stripe size of %d\n", config_agios_stripe_size);	
+	/* \todo list all configuration parameters */
 }
 
 

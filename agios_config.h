@@ -1,65 +1,30 @@
-#ifndef _AGIOS_CONFIG_H_
-#define _AGIOS_CONFIG_H_
+/*! \file agios_config.h
+    \brief Headers (and extern declarations) of AGIOS configuration parameters.
 
-#include "iosched.h"
+    Configuration parameters are provided in a configuration file (its name is given by the user in the agios_init function), and read using the libconfig library.
+*/
+#pragma once
 
-//if not provided a filename, we'll try to read from this one
-#define DEFAULT_CONFIGFILE	"/etc/agios.conf"
-#define DEFAULT_ACCESSTIMESFILE "/etc/access_times.func"
+#define DEFAULT_CONFIGFILE	"/etc/agios.conf" /**< If a filename is not provided in agios_init, we'll try to read from this one */
 
-short int read_configuration_file(char *config_file);
-
-//library options
-// 1. trace
-extern short int config_trace_agios;
-extern short int config_trace_agios_predict;
-extern short int config_trace_agios_full;
-extern char *config_trace_agios_file_prefix;
-extern char *config_trace_agios_file_sufix;
-extern char *config_simple_trace_agios_file_prefix;
-// 2. prediction module
-extern short int config_predict_agios_read_traces;
-extern short int config_predict_agios_request_aggregation;
-extern int config_predict_agios_time_error;
-extern int config_predict_agios_recalculate_alpha_period;
-extern short int config_agios_write_simplified_traces;
-// 3. scheduling
-extern int config_agios_default_algorithm;
-extern long int config_agios_select_algorithm_period;
-extern int config_agios_select_algorithm_min_reqnumber;
-extern int config_agios_starting_algorithm;
-extern int config_waiting_time;
-extern int config_aioli_quantum;
-extern int config_mlf_quantum;
-extern long int config_tw_size;
-extern long int config_twins_window;
-// 4. access times estimation
-extern char *config_agios_access_times_file;
-// 5. ARMED BANDIT
-extern int config_agios_min_ab_probability;
-extern long int config_agios_validity_window;
-extern int config_agios_performance_window;
-// 6. performance module
-extern int config_agios_performance_values;
-// 7. proc module (writing stats file)
-extern int config_agios_proc_algs;
-// 8. DTW
-extern int config_minimum_pattern_size;
-extern int config_maximum_pattern_difference;
-extern int config_pattern_matching_threshold; 
-extern char *config_pattern_filename;
-extern short int config_static_pattern_matching;
-
-//user info
-extern int config_agios_stripe_size;
-extern int config_agios_max_trace_buffer_size;
- 
-
-//to spread configuration parameters to all modules
-void config_gossip_algorithm_parameters(int alg, struct io_scheduler_instance_t *scheduler);
-
-void config_print(void);
-
+bool read_configuration_file(char *config_file);
 void config_agios_cleanup(void);
 
-#endif
+//about tracing
+extern bool config_trace_agios;
+extern char *config_trace_agios_file_prefix;
+extern char *config_trace_agios_file_sufix;
+extern int32_t config_agios_max_trace_buffer_size;
+//about scheduling
+extern int32_t config_agios_default_algorithm;
+extern int64_t config_agios_select_algorithm_period;
+extern int32_t config_agios_select_algorithm_min_reqnumber;
+extern int32_t config_agios_starting_algorithm;
+extern int32_t config_waiting_time;
+extern int32_t config_aioli_quantum;
+extern int32_t config_mlf_quantum;
+extern int64_t config_sw_size;
+extern int64_t config_twins_window;
+//performance module //TODO
+extern int32_t config_agios_performance_window;
+extern int32_t config_agios_performance_values;
