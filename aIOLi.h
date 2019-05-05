@@ -3,5 +3,5 @@
  */
 #pragma once
 
-#define MAX_AGGREG_SIZE   16
-void aIOLi(void);
+
+int64_t aIOLi(void);

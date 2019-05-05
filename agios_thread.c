@@ -67,6 +67,7 @@ void * agios_thread(void *arg)
 			 * We use a timeout to avoid a situation where we missed the signal and will sleep forever, and
                          * also because we have to check once in a while to see if we should end the execution.
 			 */
+			/*! \todo we might want to sleep for other reasons (like when the scheduling algorithms ask for it) */
 			if (current_timeout > 0) {
 				/*fill the timeout structure*/
 				timeout_tspec.tv_sec =  current_timeout / 1000000000L;

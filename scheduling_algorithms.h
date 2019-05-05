@@ -4,6 +4,8 @@
 
 #pragma once
 
+#define MAX_AGGREG_SIZE   16 /**< how many requests can be aggregated into a single virtual request (used by many schedulers). */
+
 //identifiers of the scheduling algorithms
 #define MLF_SCHEDULER 0
 #define TOAGG_SCHEDULER 1

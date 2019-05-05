@@ -1,202 +1,138 @@
-/* File:	MLF.c
- * Created: 	2015 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It provides the MLF scheduling algorithm
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+/*! \file MLF.c
+    \brief Implementation of the MLF scheduling algorithm.
  */
 
-#ifndef AGIOS_KERNEL_MODULE
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
 #include <limits.h>
 #include <string.h>
-#else
-#include <linux/delay.h>
-#include <linux/sched.h>
-#include <linux/time.h>
-#include <linux/slab.h>
-#endif
 
+static int MLF_current_hash=0;  /**< position of the hashtable we are accessing. Used so we do a round robin on the hashtable even across different calls to MLF(). */
+static int *MLF_lock_tries=NULL; /**< counter of how many times we tried without success to acquire the lock of a hashtable line. */
 
-#include "agios.h"
-#include "MLF.h"
-#include "request_cache.h"
-#include "consumer.h"
-#include "common_functions.h"
-#include "req_hashtable.h"
-#include "estimate_access_times.h"
-#include "iosched.h"
-#include "hash.h"
-#include "agios_request.h"
-#include "agios_config.h"
-
-
-static int MLF_current_hash=0; 
-static int *MLF_lock_tries=NULL;
-
-
-//returns 0 on success
-int MLF_init()
+/**
+ * initalizes the scheduler.
+ * @return true or false for success.
+ */
+bool MLF_init(void)
 {
-	int i;
-
-	PRINT_FUNCTION_NAME;
-
-	generic_init();
-	MLF_lock_tries = agios_alloc(sizeof(int)*(AGIOS_HASH_ENTRIES+1));
-	if(!MLF_lock_tries)
-	{
+	MLF_lock_tries = malloc(sizeof(int)*(AGIOS_HASH_ENTRIES+1));
+	if (!MLF_lock_tries) {
 		agios_print("AGIOS: cannot allocate memory for MLF structures\n");
-		return -ENOMEM;
+		return false;
 	}
-	for(i=0; i< AGIOS_HASH_ENTRIES; i++)
-		MLF_lock_tries[i]=0;
-	
-	return 0;
+	for (int32_t i=0; i< AGIOS_HASH_ENTRIES; i++) MLF_lock_tries[i]=0;
+	return true;
 }
-
+/**
+ * called to stop MLF.
+ */
 void MLF_exit()
 {
-	PRINT_FUNCTION_NAME;
-	agios_free(MLF_lock_tries);
+	if (MLF_lock_tries) free(MLF_lock_tries);
 }
-
-/*selects a request from a queue (and applies MLF on this queue)*/
+/**
+ * Selects a request to be processed from a queue (and updates the schedule factor for all requests in this queue.
+ * @param reqlist the queue of requests.
+ * @return a pointer to the request to be processed.
+ */
 struct request_t *applyMLFonlist(struct related_list_t *reqlist)
 {
-	int found=0;
-	struct request_t *req, *selectedreq=NULL;
+	bool found=false;
+	struct request_t *req; /**< used to iterate over all requests in the queue. */
+	struct request_t *selectedreq=NULL; /**< will receive the selected request. */
 
-	agios_list_for_each_entry(req, &(reqlist->list), related)
-	{
+	agios_list_for_each_entry (req, &(reqlist->list), related) { //go through all requests in this queue
 		/*first, increment the sched_factor. This must be done to ALL requests, every time*/
 		increment_sched_factor(req);
-		if(!found)
-		{
+		if (!found) { //we select the first request that can be selected
 			/*see if the request's quantum is large enough to allow its execution*/
-			if((req->sched_factor*config_mlf_quantum) >= req->io_data.len)
-			{
+			if ((req->sched_factor*config_mlf_quantum) >= req->len) {
 				selectedreq = req; 
-				found = 1; /*we select the first possible request because we want to process them by offset order, and the list is ordered by offset. However, we do not stop the for loop here because we still have to increment the sched_factor of all requests (which is equivalent to increase their quanta)*/
+				found = true; /*we select the first possible request because we want to process them by offset order, and the list is ordered by offset. However, we do not stop the for loop here because we still have to increment the sched_factor of all requests (which is equivalent to increase their quanta)*/
 			}
-		}
+		} //end if not found
 	}
-	
 	return selectedreq;
 }
-
-/*selects a request from the queues associated with the file req_file*/
+/**
+ * selects a request to be processed for a file.
+ * @param req_file the file to be accessed.
+ * @return a pointer to the selected request. 
+ */
 struct request_t *MLF_select_request(struct request_file_t *req_file)
 {
-	struct request_t *req=NULL;
+	struct request_t *req=NULL; /**< will receive the request to be processed. */
 
-	if(!agios_list_empty(&req_file->related_reads.list))
-	{
+	if (!agios_list_empty(&req_file->related_reads.list)) { //if we have read requests
 		req = applyMLFonlist(&(req_file->related_reads)); 
 	}
-	if((!req) && (!agios_list_empty(&req_file->related_writes.list)))
-	{
+	if ((!req) && (!agios_list_empty(&req_file->related_writes.list))) { //if we have not selected a read request already, and we have write requests
 		req = applyMLFonlist(&(req_file->related_writes));
 	}
-	if(req)
-		req = checkSelection(req, req_file);
+	if (req && (!check_selection(req, req_file))) return NULL; //before proceeding with this request, check if we should wait
 	return req;
-	//TODO consistency?
 }
-
-/*main function for the MLF scheduler. Selects requests, processes and then cleans up them. Returns only after consuming all requests*/
-void MLF(void *clnt)
+/**
+ * main function for the MLF scheduler. Selects requests, processes and then cleans up them.
+ * @return a waiting time for the agios_thead to sleep in case there are no requests.
+ */ 
+int64_t MLF(void)
 {	
-	struct request_t *req;
-	struct agios_list_head *reqfile_l;
-	struct request_file_t *req_file;
-	int smaller_waiting_time=INT_MAX;	
-	struct request_file_t *swt_file=NULL;
-	int starting_hash = MLF_current_hash;
-	int processed_requests = 0;
-	short int update_time=0;
-
-	PRINT_FUNCTION_NAME;
+	struct request_t *req; /**< this will receive the request selected to be processed. */
+	struct agios_list_head *reqfile_l; /**< a line of the hashtable */
+	struct request_file_t *req_file; /**< used to iterate over all files in a line of the hashtable */
+	int64_t shortest_waiting_time=INT_MAX; /**< will be adapted to the shortest waiting time among all files that are currently waiting. In case we cannot process requests because all of the files are waiting, we will use this to wait the shortest amount of time possible. */
+	int32_t starting_hash = MLF_current_hash; /**< from what hash position we are starting to round robin in the hashtable. */
+	bool processed_requests = false; /**< could we process any requests while going through the whole hashtable? */
+	bool mlf_stop=false; /**< flag that will be set by the process_request function, to let us know we should stop and give control back to the agios_thread */
+	int32_t waiting_time = config_waiting_time; /**< the waiting time we will return if we leave for not having requests to process (or if all files are waiting, in that case this will receive shortest_waiting_time). */
 
 	/*search through all the files for requests to process*/
-	while((current_reqnb > 0) && (update_time == 0)) //attention: it could be outdated info (current_reqnb) since we are not using the mutex
-	{
-		/*try to lock the line of the hashtable*/
+	while ((current_reqnb > 0) && (!mlf_stop)) {
+		/*try to lock the line of the hashtable. If we can't get it, we will move on to the next line. If a line has been tried without success MAX_MLF_LOCK_TRIES times, we will perform a regular lock to wait until it is available. The idea is to decrease the cost of waiting for locks but without starving queues. */
 		reqfile_l = hashtable_trylock(MLF_current_hash);
-		if(!reqfile_l) /*could not get the lock*/
-		{
-			if(MLF_lock_tries[MLF_current_hash] >= MAX_MLF_LOCK_TRIES)
+		if (!reqfile_l) { /*could not get the lock*/
+			if (MLF_lock_tries[MLF_current_hash] >= MAX_MLF_LOCK_TRIES) {
 				/*we already tried the max number of times, now we will wait until the lock is free*/
 				reqfile_l = hashtable_lock(MLF_current_hash);
-			else 
-				MLF_lock_tries[MLF_current_hash]++;
+			} else MLF_lock_tries[MLF_current_hash]++;
 		}
-			
-			
-		if(reqfile_l) //if we got the lock
-		{
+		if (reqfile_l) { //if we got the lock. This is NOT an else because we may have modified reqfile_l inside the previous if.
 			MLF_lock_tries[MLF_current_hash]=0;
-
-			if(hashlist_reqcounter[MLF_current_hash] > 0) //see if we have requests for this line of the hashtable
-			{
-		                agios_list_for_each_entry(req_file, reqfile_l, hashlist)
-				{
-					/*do a MLF step to this file, potentially selecting a request to be processed*/
-					/*but before we need to see if we are waiting new requests to this file*/
-					if(req_file->waiting_time > 0)
-					{
-						update_waiting_time_counters(req_file, &smaller_waiting_time, &swt_file );
-					}
-
+			if (hashlist_reqcounter[MLF_current_hash] > 0) { //see if we have requests for this line of the hashtable
+		                agios_list_for_each_entry (req_file, reqfile_l, hashlist) { //go through all files in this line of the hashtable
+					/*do a MLF step to this file, potentially selecting a request to be processed, but before we need to see if we are waiting new requests to this file*/
+					if (req_file->waiting_time > 0) update_waiting_time_counters(req_file, &shortest_waiting_time);
 					req = MLF_select_request(req_file);
-					if((req) && (req_file->waiting_time <= 0))
-					{
+					if ((req) && (req_file->waiting_time <= 0)) { //if we could select a request to this file and we are not waiting on it
 						/*removes the request from the hastable*/
 						__hashtable_del_req(req);
 						/*sends it back to the file system*/
-						update_time = process_requests(req, (struct client *)clnt, MLF_current_hash);
-						processed_requests++;
+						mlf_stop = process_requests(req, MLF_current_hash);
+						processed_requests=true;
 						/*cleanup step*/
 						waiting_algorithms_postprocess(req);
-						if(update_time)
-							break; //get out of the agios_list_for_each_entry loop
-					}
-				}
+						if (mlf_stop) break; //get out of the agios_list_for_each_entry loop
+					} //end if we could select a request and it is ready to be processed
+				} //end for all files in the hashtable line
 			}
 			hashtable_unlock(MLF_current_hash);
-		}	
-		if(update_time == 0) //if update time is 1, we've left the loop without going through all reqfiles, we should not increase the current hash yet
-		{
+		} //end if we got the lock	
+		//now we'll move on to the next line of the hashtable
+		if (!mlf_stop) { //if update time is 1, we've left the loop without going through all reqfiles, we should not increase the current hash yet
 			MLF_current_hash++;
-			if(MLF_current_hash >= AGIOS_HASH_ENTRIES)
-				MLF_current_hash = 0;
-			if(MLF_current_hash == starting_hash) /*it means we already went through all the file structures*/
-			{
-				if((processed_requests == 0) && (swt_file))
-				{
-					/*if we can not process because every file is waiting for something, we have no choice but to sleep a little (the other choice would be to continue active waiting...)*/
-					debug("could not avoid it, will have to wait %u", smaller_waiting_time);
-					agios_wait(smaller_waiting_time, swt_file->file_id);	
-					swt_file->waiting_time = 0;
-					swt_file = NULL;
-					smaller_waiting_time = INT_MAX;
-				}	
-				processed_requests=0; /*restart the counting*/
-			} 
-		}
-	}
+			if (MLF_current_hash >= AGIOS_HASH_ENTRIES) MLF_current_hash = 0;
+			if (MLF_current_hash == starting_hash) { /*it means we already went through all the file structures*/
+				if (!processed_requests) { //and we could not process anything even after going through ALL files
+					waiting_time = shortest_waiting_time;
+					break; //get out of the while
+				}
+				processed_requests=false; /*restart the counting*/
+			}
+		} //end if we were not notified to stop
+	}//end while
+	if (mlf_stop) return 0;
+	else return waiting_time;
 }

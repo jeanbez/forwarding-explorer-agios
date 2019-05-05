@@ -1,10 +1,10 @@
-#ifndef _MLF_H_
-#define _MLF_H_
+/*! \file MLF.c
+    \brief Implementation of the MLF scheduling algorithm.
+ */
+#pragma once
 
-#define MAX_MLF_LOCK_TRIES	2
-#define MAX_AGGREG_SIZE_MLF   200
+#define MAX_MLF_LOCK_TRIES	2 /**< How many times we will try to acquire a lock without waiting for it. @see MLF() */
 
-int MLF_init();
+bool MLF_init();
 void MLF_exit();
-void MLF(void *clnt);
-#endif
+int64_t MLF(void);
