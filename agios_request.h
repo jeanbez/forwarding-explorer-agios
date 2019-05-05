@@ -19,18 +19,12 @@ struct related_list_statistics_t  {
 	int64_t processed_bandwidth; /**< average bytes per ns */
 	int64_t releasedreq_nb; /**< number of released requests */
 	//statistics on request size
-	int64_t total_req_size; /**< total amount of requested data. This value is NOT the same as processed_req_size, since this one is updated when adding a request, and the other is updated in the release function. This means the average request size among received requests is obtained by total_req_size / receivedreq_nb, and the average request size among processed requests is obtained by processed_req_size / processedreq_nb */
-	int64_t min_req_size; /**< largest request size */
-	int64_t max_req_size; /**< smallest request size */
-	//statistics on time between requests
-	int64_t total_request_time; //TODO update arrival rate calculation
-	int64_t max_request_time; //TODO
-	int64_t min_request_time; //TODO
-	long double avg_distance; /**< average offset difference between consecutive requests */
-	int64_t avg_distance_count; //TODO
+	int64_t avg_req_size; /**< iteratively calculated average request size (among received requests). */ 
+	int64_t avg_time_between_requests; /**< iteratively calculated time between requests' arrival times. */
+	int64_t avg_distance; /**< iteratively calculated average offset difference between consecutive requests */
 	//number of performed aggregations and of aggregated requests
-	int64_t 	aggs_no;	//TODO 
-	int64_t 	sum_of_agg_reqs;  //TODO
+	int64_t 	aggs_no;	/**< number of performed aggregations */ 
+	int64_t 	avg_agg_size;  /**< iteratively calculated average aggregation size (in number of requests) */
 };
 	
 

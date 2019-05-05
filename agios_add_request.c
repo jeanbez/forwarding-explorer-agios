@@ -28,14 +28,10 @@ void request_file_init_related_statistics(struct related_list_statistics_t *stat
 	stats->receivedreq_nb=0;
 	stats->processed_req_size=0;
 	stats->processed_bandwidth=-1;
-	stats->total_req_size = 0;
-	stats->min_req_size = LONG_MAX;
-	stats->max_req_size=0;
-	stats->max_request_time = 0;
-	stats->total_request_time = 0;
-	stats->min_request_time = LONG_MAX;
+	stats->releasedreq_nb=0;
+	stats->avg_req_size = -1;
+	stats->avg_time_between_requests = -1;
 	stats->avg_distance = -1;
-	stats->avg_distance_count = 1;
 	stats->aggs_no = 0;
 	stats->sum_of_agg_reqs = 0;
 }
