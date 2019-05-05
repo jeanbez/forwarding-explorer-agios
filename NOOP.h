@@ -1,6 +1,6 @@
-#ifndef _NOOP_H_
-#define _NOOP_H_
-#include "agios.h"
-void set_noop_previous_needs_hashtable(short int value);
-void NOOP(void *clnt);
-#endif
+/*! \file NOOP.c
+    \brief Implementation of the NOOP scheduling algorithm.
+ */
+#pragma once
+
+int64_t NOOP(void);

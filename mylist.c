@@ -1,30 +1,7 @@
-/* File:	mylist.c
- * Created: 	2012 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		Copy of the list implementation from the Linux kernel
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ /*! \file mylist.c
+     \brief Copy of the list implementation from the Linux kernel. Used to create and manipulate double-linked lists.
  */
-
-#ifndef AGIOS_KERNEL_MODULE
 #include <stdlib.h>
-#endif
-#include "mylist.h"
-#include "common_functions.h"
 
 void init_agios_list_head(struct agios_list_head *list)
 {
@@ -40,12 +17,10 @@ void __agios_list_add(struct agios_list_head *new, struct agios_list_head *prev,
 }
 void agios_list_add(struct agios_list_head *new, struct agios_list_head *head)
 {
-
         __agios_list_add(new, head, head->next);
 }
 void agios_list_add_tail(struct agios_list_head *new, struct agios_list_head *head)
 {
-
 	__agios_list_add(new, head->prev, head);
 }
 void __agios_list_del(struct agios_list_head * prev, struct agios_list_head * next)
@@ -55,7 +30,6 @@ void __agios_list_del(struct agios_list_head * prev, struct agios_list_head * ne
 }
 void agios_list_del(struct agios_list_head *entry)
 {
-
         __agios_list_del(entry->prev, entry->next);
         entry->next = entry;
         entry->prev = entry;
@@ -69,7 +43,7 @@ void agios_list_del_init(struct agios_list_head *entry)
         __agios_list_del_entry(entry);
         init_agios_list_head(entry);
 }
-int agios_list_empty(const struct agios_list_head *head)
+bool agios_list_empty(const struct agios_list_head *head)
 {
         return head->next == head;
 }

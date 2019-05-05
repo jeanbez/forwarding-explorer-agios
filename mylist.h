@@ -1,6 +1,9 @@
-#ifndef MYLIST_H
-#define MYLIST_H
+/*! \file mylist.c
+     \brief Copy of the list implementation from the Linux kernel. Used to create and manipulate double-linked lists.
+ */
+#pragma once
 
+#include <stdbool.h>
 
 struct agios_list_head
 {
@@ -27,23 +30,12 @@ struct agios_list_head
               pos = agios_list_entry(pos->member.next, typeof(*pos), member))
 
 void init_agios_list_head(struct agios_list_head *list);
-
 void __agios_list_add(struct agios_list_head *new, struct agios_list_head *prev, struct agios_list_head *next);
 void __agios_list_del(struct agios_list_head * prev, struct agios_list_head * next);
 //insert new after head
 void agios_list_add(struct agios_list_head *new, struct agios_list_head *head);
-
 //insert new before head
 void agios_list_add_tail(struct agios_list_head *new, struct agios_list_head *head);
-
-
-
-
 void agios_list_del(struct agios_list_head *entry);
-
-
 void agios_list_del_init(struct agios_list_head *entry);
-
-int agios_list_empty(const struct agios_list_head *head);
-
-#endif
+bool agios_list_empty(const struct agios_list_head *head);
