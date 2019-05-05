@@ -27,7 +27,7 @@ void request_file_init_related_statistics(struct related_list_statistics_t *stat
 	stats->processedreq_nb=0;
 	stats->receivedreq_nb=0;
 	stats->processed_req_size=0;
-	stats->processed_req_time=0;
+	stats->processed_bandwidth=-1;
 	stats->total_req_size = 0;
 	stats->min_req_size = LONG_MAX;
 	stats->max_req_size=0;

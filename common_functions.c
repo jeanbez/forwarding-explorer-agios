@@ -87,4 +87,16 @@ double get_ns2s(int64_t t1)
 	ret = ret / 1000.0;
 	return ret / 1000.0;
 }
+/** 
+ * update a iterativelly calculated average
+ * @param avg the current average value. 
+ * @param value is the new observed value that needs to be integrated into the average.
+ * @param count the index of the current update (it will be 1 the first time, always updated before calling this).
+ * @return the new average value. */
+int64_t update_iterative_average(int64_t avg, int64_t value, int64_t count)
+{
+	assert(count > 0);
+	if (count == 1) return value; //this is the first value, we don't have an average yet.
+	else return avg + ((new - avg)/count);
+}
 

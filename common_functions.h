@@ -32,5 +32,6 @@ int64_t get_timespec2long(struct timespec t);
 void get_long2timespec(int64_t t, struct timespec *ret);
 int64_t get_nanoelapsed_long(int64_t t1);
 double get_ns2s(int64_t t1);
+int64_t update_iterative_average(int64_t avg, int64_t value, int64_t count);
 
 

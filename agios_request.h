@@ -16,7 +16,8 @@ struct related_list_statistics_t  {
 	int64_t processedreq_nb; /**< number of processed requests */
 	int64_t receivedreq_nb; /**< number of received requests */
 	int64_t processed_req_size; /**< total amount of served data */
-	int64_t processed_req_time; /**< time it took to serve the amount of data */  //TODO update bandwidth calculation
+	int64_t processed_bandwidth; /**< average bytes per ns */
+	int64_t releasedreq_nb; /**< number of released requests */
 	//statistics on request size
 	int64_t total_req_size; /**< total amount of requested data. This value is NOT the same as processed_req_size, since this one is updated when adding a request, and the other is updated in the release function. This means the average request size among received requests is obtained by total_req_size / receivedreq_nb, and the average request size among processed requests is obtained by processed_req_size / processedreq_nb */
 	int64_t min_req_size; /**< largest request size */
