@@ -143,6 +143,7 @@ void hashtable_add_req(struct request_t *req, long hash_val, struct request_file
 	if(!req_file) //if a given file was given, we are migrating from timeline to hashtable. In this case, no need to create new request_file_t structures or to update any statistics
 	{
 		req_file = find_req_file(hash_list, req->file_id, req->state);
+		//TODO deal req_file NULL error
 	
 		/*if it is the first request to this file (first actual request, anyway, it could have predicted requests only), we have to store the arrival time*/
 		if(req->state != RS_PREDICTED)
@@ -277,3 +278,61 @@ void hashtable_unlock(int index)
 	agios_mutex_unlock(&hashlist_locks[index]);
 }
 
+void print_hashtable_line(int32_t i)
+{
+	struct agios_list_head *hash_list;
+	struct request_file_t *req_file;
+	struct request_t *req;
+
+	hash_list = &hashlist[i];
+	if(!agios_list_empty(hash_list))
+		debug("[%d]", i);
+	agios_list_for_each_entry(req_file, hash_list, hashlist)
+	{
+		debug("\t%s", req_file->file_id);
+		if(!(agios_list_empty(&req_file->related_reads.list) && agios_list_empty(&req_file->related_reads.dispatch)))
+		{
+			debug("\t\tread");
+			agios_list_for_each_entry(req, &req_file->related_reads.list, related)
+				print_request(req);
+			debug("\t\tdispatch read");
+			agios_list_for_each_entry(req, &req_file->related_reads.dispatch, related)
+				print_request(req);
+		}
+		if(!(agios_list_empty(&req_file->related_writes.list) && agios_list_empty(&req_file->related_writes.dispatch)))
+		{
+			debug("\t\twrite");
+			agios_list_for_each_entry(req, &req_file->related_writes.list, related)
+				print_request(req);
+			debug("\t\tdispatch writes");
+			agios_list_for_each_entry(req, &req_file->related_writes.dispatch, related)
+				print_request(req);
+
+		}
+	}
+
+}
+
+//debug functions, clean after
+void print_hashtable(void)
+{
+	int32_t i;
+
+	debug("Current hashtable status:");
+	for(i=0; i< AGIOS_HASH_ENTRIES; i++) //go through the whole hashtable, one position at a time
+	{
+		print_hashtable_line(i);
+	}
+	PRINT_FUNCTION_EXIT;
+}
+void print_timeline(void)
+{
+	struct request_t *req;
+
+	debug("Current timeline status:");
+	debug("Requests:");
+	agios_list_for_each_entry(req, &timeline, related)
+	{
+		print_request(req);
+	}
+}

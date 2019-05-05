@@ -95,6 +95,7 @@ void __timeline_add_req(struct request_t *req, long hash_val, struct request_fil
 
 		/*find the file and update its informations if needed*/
 		req_file = find_req_file(&hashlist[hash_val], req->file_id, req->state); //we store file information in the hashtable 
+		//TODO deal req_file NULL error
 		if(req_file->first_request_time == 0)
 			req_file->first_request_time = req->jiffies_64;
 		if(req->type == RT_READ)
