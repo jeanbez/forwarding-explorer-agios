@@ -1,0 +1,60 @@
+/*! \file waiting_common.c
+    \brief Functions used by aIOLi and MLF.
+
+    aIOLi and MLF are the scheduling algorithms that try to predict shift phenomena and better aggregations, and then impose waiting times on files to improve the access pattern. Here we have some functions common to both.
+ */
+#include "waiting_common.h"
+
+/**
+ * function used by AIOLI and MLF when we find a file that is currently waiting. Since we try not to wait (when waiting on one file, we go on processing requests to other files), every time we try to get requests from a file we need to update its waiting time to see if it is still waiting or not. 
+ * @param req_file the pointer to the structure containing information about a file that is waiting
+ * @param shortest_waiting_time is updated in this function and kept by the caller to find the shortest waiting time among all waiting files.
+ */
+void update_waiting_time_counters(struct request_file_t *req_file, 
+					int *shortest_waiting_time)
+{
+	int64_t elapsed = get_nanoelapsed(req_file->waiting_start); /**< for how long has it been waiting? */
+	if (req_file->waiting_time > elapsed) { //we have not waited enough
+		req_file->waiting_time = req_file->waiting_time - elapsed; //update waiting time
+		if (req_file->waiting_time < *shortest_waiting_time) *shortest_waiting_time = req_file->waiting_time;
+	} else req_file->waiting_time=0; //we are done waiting for this file
+}
+/**
+ * function used to check if a selected request can proceed or if we should impose waiting time for its file.
+ * @param req the selected request to be processed.
+ * @param req_file the file for this request.
+ * @return true or false to proceed with this request
+ */ 
+bool check_selection(struct request_t *req, 
+			struct request_file_t *req_file)
+{
+	/*waiting times are cause by 2 phenomena:*/
+	/*1. shift phenomenon. One of the processes issuing requests to this queue is a little delayed, causing a contiguous request to arrive shortly after the other ones*/
+	if (req->globalinfo->predictedoff != 0) {
+		if (req->offset > req->globalinfo->predictedoff) { //we detected a shift, so we will impose a waiting time for this file
+			req_file->waiting_time = config_waiting_time;
+		}
+		/*set to 0 to avoid starvation*/
+		req->globalinfo->predictedoff = 0;
+	} 
+	/*2. better aggregation. If we just performed a larger aggregation on this queue, we believe we could do it again*/
+	else if ((req->offset > req->globalinfo->lastfinaloff) && (req->globalinfo->lastaggregation > req->reqnb)) {
+		req_file->waiting_time = config_waiting_time;
+		/*set to zero to avoid starvation*/
+		req->globalinfo->lastaggregation = 0;
+	}
+	if(req_file->waiting_time) { //we decided not to proceed with this request and to make this file wait
+		agios_gettime(&req_file->waiting_start);
+		return false;
+	}
+	return true;
+}
+/**
+ * this function is used by MLF and by AIOLI. These two schedulers use a sched_factor that increases as request stays in the scheduler queues.
+ * @param the request to be updated.
+ */
+void increment_sched_factor(struct request_t *req)
+{
+	if(req->sched_factor == 0) req->sched_factor = 1;
+	else req->sched_factor = req->sched_factor << 1;
+}

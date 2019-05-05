@@ -1,12 +1,12 @@
 #ifndef IOSCHED_H
 #define IOSCHED_H
 
+struct agios_client {
+	void * process_request(int64_t req_id);
+	void * process_requests(int64_t *reqs, int32_t reqnb);
+};
+extern struct agios_client user_callbacks;	
 
-#ifdef AGIOS_KERNEL_MODULE
-#include <linux/time.h>
-#endif
-#include "agios.h"
-#include "mylist.h"
 
 
 #define MLF_SCHEDULER 0

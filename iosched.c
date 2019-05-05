@@ -63,6 +63,8 @@
 #include "PATTERN_MATCHING.h"
 
 
+struct user_callbacks; //TODO
+
 /**********************************************************************************************************************/
 /*	FOR ALGORITHMS WITH THE SYNCHRONOUS APPROACH	*/
 /**********************************************************************************************************************/
@@ -93,12 +95,6 @@ void iosched_wait_synchronous(void)
 		pthread_mutex_unlock(&request_processed_mutex);	
 	}
 }
-/**********************************************************************************************************************/
-/*	STATISTICS	*/
-/**********************************************************************************************************************/
-/*for calculating alpha during execution, which represents the ability to overlap waiting time with processing other requests*/
-long int time_spent_waiting=0;
-long int waiting_time_overlapped=0;
 
 /**********************************************************************************************************************/
 /*	GENERIC HELPING FUNCTIONS USED BY MULTIPLE I/O SCHEDULING ALGORITHMS	*/
@@ -142,63 +138,7 @@ void waiting_algorithms_postprocess(struct request_t *req)
 	generic_post_process(req);
 }
 
-//this function is used by MLF and by AIOLI. These two schedulers use a sched_factor that increases as request stays in the scheduler queues.
-void increment_sched_factor(struct request_t *req)
-{
-	if(req->sched_factor == 0)
-		req->sched_factor = 1;
-	else
-		req->sched_factor = req->sched_factor << 1;
-}
 
-/*used by MLF and AIOLI. After selecting a virtual request for processing, checks if it should be processed right away or if it's better to wait for a while*/
-struct request_t *checkSelection(struct request_t *req, struct request_file_t *req_file)
-{
-	struct request_t *retrn = req;
-
-
-	/*waiting times are cause by 3 phenomena:*/
-	/*1. shift phenomenon. One of the processes issuing requests to this queue is a little delayed, causing a contiguous request to arrive shortly after the other ones*/
-	if(req->globalinfo->predictedoff != 0)
-	{
-		if(req->io_data.offset > req->globalinfo->predictedoff)
-		{
-			req_file->waiting_time = config_waiting_time;
-			stats_shift_phenomenon(req->globalinfo);
-			if(config_trace_agios)
-			 	agios_trace_shift(config_waiting_time, req->file_id);	
-		}
-		/*set to 0 to avoid starvation*/
-		req->globalinfo->predictedoff = 0;
-	} 
-
-	/*2. better aggregation. If we just performed a larger aggregation on this queue, we believe we could do it again*/
-	else if((req->io_data.offset > req->globalinfo->lastfinaloff) && (req->globalinfo->lastaggregation > req->reqnb))
-	{
-		/*set to zero to avoid starvation*/
-		req->globalinfo->lastaggregation = 0;
-		req_file->waiting_time = config_waiting_time;
-		stats_better_aggregation(req->globalinfo);
-		if(config_trace_agios)
-			agios_trace_better(req->file_id);
-	}
-	/*3. we predicted that a better aggregation could be done to this request*/
-	else if((config_predict_agios_request_aggregation) && ((req_file->waiting_time = agios_predict_should_we_wait(req)) > 0))
-	{
-		stats_predicted_better_aggregation(req->globalinfo);
-		if(config_trace_agios)
-			agios_trace_predicted_better_aggregation(req_file->waiting_time, req->file_id);
-	} 
-
-
-	if(req_file->waiting_time)
-	{
-		retrn=NULL; /*we are no longer going to process the selected request, because we decided to wait*/
-		agios_gettime(&req_file->waiting_start);
-		time_spent_waiting += req_file->waiting_time;
-	}
-	return retrn;
-}
 
 /*sleeps for timeout ns*/
 void agios_wait(int timeout, char *file)
@@ -227,34 +167,6 @@ void agios_wait(int timeout, char *file)
 #endif
 }
 
-//used by AIOLI and MLF, the algorithms which employ waiting times. Since we try not to wait (when waiting on one file, we go on processing requests to other files), every time we try to get requests from a file we need to update its waiting time to see if it is still waiting or not
-void update_waiting_time_counters(struct request_file_t *req_file, int *smaller_waiting_time, struct request_file_t **swt_file )
-{
-	long int elapsed;
-
-	elapsed = get_nanoelapsed(req_file->waiting_start);
-	if(req_file->waiting_time > elapsed)
-	{
-		req_file->waiting_time = req_file->waiting_time - elapsed;
-		waiting_time_overlapped += elapsed;
-		if(req_file->waiting_time < *smaller_waiting_time)
-		{
-			*smaller_waiting_time = req_file->waiting_time;
-			*swt_file=req_file;
-		}
-	}
-	else
-	{
-		waiting_time_overlapped+= req_file->waiting_time;
-		req_file->waiting_time=0;
-	}
-	
-}
-
-//used by AIOLI and MLF to init the waiting time statistics
-void generic_init()
-{ //I've removed the initialization of the waiting time statistics from here because we don't want them to be reseted every time we change the scehduling algorithm
-}
 
 
 /**********************************************************************************************************************/

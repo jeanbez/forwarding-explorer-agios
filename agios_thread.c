@@ -75,7 +75,7 @@ void * agios_thread(void *arg)
 				pthread_cond_timedwait(&g_request_added_cond, &g_request_added_mutex, &timeout_tspec);
 				pthread_mutex_unlock(&g_request_added_mutex);
 			}
-			current_timeout = contig_waiting_time; //the timeout is only changed temporarily (to a single call of cond_timedwait) */
+			current_timeout = config_waiting_time; //the timeout is only changed temporarily (to a single call of cond_timedwait) */
 		}
 		//we got past the above loop, so we could have requests to process, or reached the timeout of sleeping, or got a signal to finish the execution
 		//check if we should finish the execution

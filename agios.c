@@ -34,8 +34,8 @@ void cleanup_agios(void)
  * TODO link with @see to configuration parameters
  * @return true of false for success.
  */
-bool agios_init(void * process_request(void * req_id), 
-		void * process_requests(void **reqs, int32_t reqnb), 
+bool agios_init(void * process_request(int64_t req_id), 
+		void * process_requests(int64_t *reqs, int32_t reqnb), 
 		char *config_file, 
 		int32_t max_queue_id)
 {
