@@ -1,3 +1,6 @@
+/*! \file process_request.h
+    \brief Implementation of the processing of requests, when they are sent back to the user through the callback functions.
+ */
 #pragma once
 
 struct agios_client {
@@ -6,4 +9,5 @@ struct agios_client {
 };
 
 extern struct agios_client user_callbacks;	
-short int process_requests(struct request_t *head_req, struct client *clnt, int hash); //returns a flag pointing if some refresh period has expired (scheduling algorithm should exit so we can check it and perform the necessary actions)
+
+bool process_requests(struct request_t *head_req, int32_t hash);

@@ -217,3 +217,16 @@ void enable_SW(void)
 {
 	io_schedulers[SW_SCHEDULER].can_be_dynamically_selected = true;
 }
+/**
+ * Called after processing a request to update some statistics and possibly cleanup a virtual request structure. 
+ * @param req the request that was processed.
+ */
+void generic_post_process(struct request_t *req)
+{
+	req->globalinfo->lastaggregation = req->reqnb; 
+	if (req->reqnb > 1) { //this was an aggregated request
+		stats_aggregation(req->globalinfo);
+		req->reqnb = 1; //we need to set it like this otherwise the request_cleanup function will try to free the sub-requests, but they were inserted in the dispatch queue and we will only free them after the release
+		request_cleanup(req);
+	}
+}

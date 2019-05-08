@@ -108,3 +108,15 @@ bool agios_release_request(char *file_id,
 
 	return ret;
 }
+/**
+ * This function is called by the release function, when the library user signaled it finished processing a request. In the case of a virtual request, its requests will be signaled separately, so here we are sure to receive a single request.
+ * @param req the request that has been released by the user.
+ */
+void generic_cleanup(struct request_t *req)
+{
+	//update the processed requests counter
+	req->globalinfo->stats.processedreq_nb++;
+	//update the data counter
+	req->globalinfo->stats.processed_req_size += req->io_data.len;
+	request_cleanup(req); //remove from the list and free the memory
+}

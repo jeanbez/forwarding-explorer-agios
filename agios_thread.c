@@ -33,6 +33,19 @@ void stop_the_agios_thread(void)
 	//we signal the agios thread so it will wake up if it is sleeping
 	signal_new_req_to_agios_thread();
 }
+/**
+ * used to test if it is time to update the scheduling algorithm.
+ * @return true or false.
+ */
+bool is_time_to_change_scheduler(void)
+{
+	if ((g_dynamic_scheduler->is_dynamic) && 
+		(config_agios_select_algorithm_period >= 0) &&
+		(agios_processed_reqnb >= config_agios_select_algorithm_min_reqnumber)) { 
+		if (get_nanoelapsed(g_last_algorithm_update) >= config_agios_select_algorithm_period) return true;
+	} 
+	return false;
+} 
 /** 
  * the main function executed by the agios thread, which is responsible for processing requests that have been added to AGIOS.
  */
@@ -83,8 +96,7 @@ void * agios_thread(void *arg)
 		if (!g_agios_thread_stop) {
 			//check if it is time to change the scheduling algorithm
 			if (g_dynamic_scheduler->is_dynamic) {
-				remaining_time = get_nanoelapsed(g_last_algorithm_update) - config_agios_select_algorithm_period;
-				if (remaining_time <= 0) { //it is time to select!
+				if (is_time_to_change_scheduler()) { //it is time to select!
 					//make a decision on the next scheduling algorithm
 					next_alg = d_dynamic_scheduler->select_algorithm();
 					//change it
@@ -98,6 +110,7 @@ void * agios_thread(void *arg)
 					debug("We've changed the scheduling algorithm to %s", current_scheduler->name);
 					if (config_agios_select_algorithm_period < config_waiting_time) current_timeout = config_agios_select_algorithm_period;
 				} else { //it is NOT time to select
+					remaining_time = config_agios_select_algoritm_period - get_nanoelapsed(g_last_algorithm_update);
 					if (remaining_time < current_timeout) current_timeout = remaining_time;
 				}
 			} //end scheduler is dynamic
