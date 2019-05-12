@@ -1,296 +1,217 @@
-/* File:	req_timeline.c
- * Created: 	September 2015 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- * Collaborators:
- * 		Jean Luca Bez <jlbez (at) inf.ufrgs.br>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It implements the timeline data structure used by some schedulers to keep requests
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+/*! \file req_timeline.c
+    \brief Implementation of the timeline, used as request queue to some scheduling algorithms.
+
+    There is a timeline (queue) of requests, protected with a single mutex. The insertion order in this queue is usually FIFO, but may differ depending on the used scheduling algorithm. If a max_queue_id was provided to agios_init, the initialization function will also allocate the multi_timeline, a list of max_queue_id+1 request queues, which is used by some scheduling algorithms (for now just TWINS) and is also protected by the same timeline_mutex.
  */
 #include <stdlib.h>
-#include "agios.h"
-#include "agios_request.h"
-#include "req_timeline.h"
-#include "mylist.h"
-#include "common_functions.h"
-#include "request_cache.h"
-#include "iosched.h"
-#include "req_hashtable.h"
-#include "hash.h"
-#include "agios_config.h"
 
+AGIOS_LIST_HEAD(timeline); /**< the request queue. */ 
+struct agios_list_head *multi_timeline; /**< multiple request queues, indexed by the queue_id provided by the user with each request to agios_add_request. This structure is used by TWINS. */
+int32_t multi_timeline_size=0; /**< number of queues in multi_timeline. */
+static pthread_mutex_t timeline_mutex = PTHREAD_MUTEX_INITIALIZER; /**< a lock to access all timeline structures. */
 
-AGIOS_LIST_HEAD(timeline); //a linked list of requests
-struct agios_list_head *app_timeline;
-int app_timeline_size=0;
-//a lock to access all timeline structures
-#ifdef AGIOS_KERNEL_MODULE
-static DEFINE_MUTEX(timeline_mutex);
-#else
-static pthread_mutex_t timeline_mutex = PTHREAD_MUTEX_INITIALIZER;
-#endif
-
-/*
- * Function locks timeline.
- * Used by I/O scheduler before iterating the list.
- *
- * Locking:
- *	Must NOT be holding timeline_mutex.
- *	Must call timeline_unlock later.
- */ 
+/**
+ * called to acquire the timeline lock. It will wait for the lock.
+ * @return a pointer to the timeline.
+ */
 struct agios_list_head *timeline_lock(void)
 {
 	agios_mutex_lock(&timeline_mutex);
 	return &timeline;
 }
-/*
- * Function unlocks timeline.
- * Used by I/O scheduler after iterating through the list.
- *
- * Locking:
- *	Must be holding timeline_mutex.
- */ 
+/**
+ * called to unlock the timeline mutex. 
+ */
 void timeline_unlock(void)
 {
 	agios_mutex_unlock(&timeline_mutex);
 }
-
-
-/*
- * adds a request to the timeline. The ordering will depend on the scheduling policy
- * Must have timeline_mutex
+/**
+ * function used by timeline_add_request to add a request to the timeline. This is a separated function because when migrating to or from SW or TWINS we need to completely reorder the timeline, so we'll add requests to a temporary timeline in the process. 
+ * @see reorder_timeline
+ * @param req @see timeline_add_req
+ * @param hash @see timeline_add_req
+ * @param given_req_file @see timeline_add_req
+ * @param this_timeline a link to the timeline where we should add the request.
+ * @return true or false for success.
  */
-
-void timeline_add_req(struct request_t *req, long hash, struct request_file_t *given_req_file)
+bool __timeline_add_req(struct request_t *req, 
+			int32_t hash, 
+			struct request_file_t *given_req_file, 
+			struct agios_list_head *this_timeline)
 {
-	__timeline_add_req(req, hash, given_req_file, &timeline);
-}
+	struct request_file_t *req_file = given_req_file; /**< used to find the structure holding information about the file being accessed. */
+	struct request_t *tmp; /**< used to iterate over the timeline to find the insertion place for the request (depending on the scheduling algorithm being used). */
+	bool aggregated=false; /**< did we aggregate the request into another virtual request? (used by some scheduling algorithms) */
+	int32_t sw_priority; /**< a value that will define the position in the timeline when using the SW scheduling algorithm. */
+	struct agios_list_head *insertion_place; /**< the insertion place of the new request in the queue. */
 
-void __timeline_add_req(struct request_t *req, long hash_val, struct request_file_t *given_req_file, struct agios_list_head *this_timeline)
-{
-	struct request_file_t *req_file = given_req_file;
-	struct request_t *tmp;
-	int aggregated=0;
-	int tw_priority;
-	struct agios_list_head *insertion_place;
-
-	if(!req_file) //if a req_file structure has been given, we are actually migrating from hashtable to timeline and will copy the request_file_t structures, so no need to create new. Also the request pointers are already set, and we don't need to use locks here
-	{
-		PRINT_FUNCTION_NAME;
-		VERIFY_REQUEST(req);
-
-		debug("adding request %ld %ld to file %s, app_id %u", req->io_data.offset, req->io_data.len, req->file_id, req->tw_app_id);	
-
+	if (!req_file) { //if a req_file structure has been given, we are actually migrating from hashtable to timeline and will copy the request_file_t structures, so no need to create new. Also the request pointers are already set, and we don't need to use locks here
+		debug("adding request %ld %ld to file %s, app_id %u", req->offset, req->len, req->file_id, req->queue_id);	
 		/*find the file and update its informations if needed*/
-		req_file = find_req_file(&hashlist[hash_val], req->file_id, req->state); //we store file information in the hashtable 
-		//TODO deal req_file NULL error
-		if(req_file->first_request_time == 0)
-			req_file->first_request_time = req->jiffies_64;
-		if(req->type == RT_READ)
-			req->globalinfo = &req_file->related_reads;
-		else
-			req->globalinfo = &req_file->related_writes;
-
-		if(current_alg == NOOP_SCHEDULER) //we don't really include requests when using the NOOP scheduler, we just go through this function because we want request_file_t  structures for statistics
-			return;  
-
+		req_file = find_req_file(&hashlist[hash], req->file_id, req->state); //we store file information in the hashtable 
+		if (!req_file) return false;
+		if (req_file->first_request_time == 0) req_file->first_request_time = req->arrival_time;
+		if (req->type == RT_READ) req->globalinfo = &req_file->related_reads;
+		else req->globalinfo = &req_file->related_writes;
+		if (current_alg == NOOP_SCHEDULER) return; //we don't really include requests when using the NOOP scheduler, we just go through this function because we want request_file_t  structures for statistics
 	}
-
-	
-	//the time window scheduling algorithm separates requests into windows
-	if (current_alg == TIME_WINDOW_SCHEDULER) 
-	{
+	//the SW scheduling algorithm separates requests into windows
+	if (current_alg == SW_SCHEDULER) {
 		// Calculate the request priority
-		tw_priority = ((req->jiffies_64 / config_tw_size) * 32768) + req->tw_app_id; //32768 here is the maximum value app_id can assume  
-
+		sw_priority = ((req->arrival_time / config_sw_size) * 32768) + req->queue_id; //we assume 32768 here is the maximum value app_id could ever assume (not max_queue_id, but the maximum max_queue_id the user could ever give us). This is an ugly hardcoded value.
 		// Find the position to insert the request
-		agios_list_for_each_entry(tmp, this_timeline, related)
-		{
-			if (tmp->tw_priority > tw_priority) {
+		agios_list_for_each_entry (tmp, this_timeline, related) { //go through all requests in the queue
+			if (tmp->sw_priority > sw_priority) {
 				agios_list_add(&req->related, tmp->related.prev);
-				
-				return;
+				return true;
 			}
 		}
-
-		// If it was not inserted, insert the request in the proper position
+		// If it was not inserted in the middle of the queue, insert the request in the proper position (the end of the queue)
 		agios_list_add_tail(&req->related, this_timeline);
-
-		return;
+		return true;
 	} 
-	if(current_alg == TWINS_SCHEDULER)
-	{
-		agios_list_add_tail(&req->related, &(app_timeline[req->tw_app_id]));
-		return;
+	if (current_alg == TWINS_SCHEDULER) {
+		agios_list_add_tail(&req->related, &(multi_timeline[req->queue_id]));
+		return true;
 	}
-
 	//the TO-agg scheduling algorithm searches the queue for contiguous requests. If it finds any, then aggregate them.	
-	if((current_alg == TIMEORDER_SCHEDULER) && (current_scheduler->max_aggreg_size > 1))
-	{	
-		agios_list_for_each_entry(tmp, this_timeline, related)
-		{
-			if(tmp->globalinfo == req->globalinfo) //same type and to the same file
-			{
-				if(tmp->reqnb < current_scheduler->max_aggreg_size) 
-				{
-					if(CHECK_AGGREGATE(req,tmp) || CHECK_AGGREGATE(tmp, req)) //contiguous
-					{
+	if ((current_alg == TOAGG_SCHEDULER) && (current_scheduler->max_aggreg_size > 1)) {	
+		agios_list_for_each_entry (tmp, this_timeline, related) { //go through all requests in the queue
+			if (tmp->globalinfo == req->globalinfo) { //same type and to the same file
+				if (tmp->reqnb < current_scheduler->max_aggreg_size) { //if the virtual request can hold another one
+					if (CHECK_AGGREGATE(req,tmp) || CHECK_AGGREGATE(tmp, req)) { //and they are contiguous
 						include_in_aggregation(req, &tmp);
-						aggregated=1;
-						break;	
+						return true;
 					}
 				} 
 			}
-		} 
+		} //end loop going over all requests 
 	}
-
-	if(!aggregated)
-	{
-		if((!given_req_file) || (current_alg == NOOP_SCHEDULER))  //if no request_file_t structure was given, this is a regular new request, so we add it to timeline (unless we are using NOOP which does not include requests in timeline)
-		{
-			debug("request is not aggregated, inserting in the timeline");
-			agios_list_add_tail(&req->related, this_timeline); 
-		}
-		else //we are rebuilding this queue from the hashtable, so we need to make sure requests are ordered by time (and we are not using the time window algorithm, otherwise it would have called return already (see above)
-		{
-			debug("request not aggregated and we are reordering the timeline, so looking for its place");
-			insertion_place = this_timeline;
-			if(!agios_list_empty(this_timeline))
-			{
-				agios_list_for_each_entry(tmp, this_timeline, related)
-				{
-					if(tmp->timestamp > req->timestamp)
-					{
-						insertion_place = &(tmp->related);
-						break;	
-					}
+	//if we are here it means the request still has to be inserted in the queue
+	if ((!given_req_file) || (current_alg == NOOP_SCHEDULER))  { //if no request_file_t structure was given, this is a regular new request, so we simply add it to the end of the timeline. If we are here and are using NOOP, it means we are migrating between data structures (because otherwise we would have left the function earlier), and in that case we don't do much regarding ordering because we are going to schedule these requests as soon as possible and we don't care (NOOP does not usually have a queue, this is a special case). */
+		debug("request is not aggregated, inserting in the timeline");
+		agios_list_add_tail(&req->related, this_timeline); 
+	}
+	else { //we are rebuilding this queue from the hashtable, so we need to make sure requests are ordered by time (and we are not using the time window algorithm, otherwise it would have called return already (see above)
+		debug("request not aggregated and we are reordering the timeline, so looking for its place");
+		insertion_place = this_timeline;
+		if (!agios_list_empty(this_timeline)) {
+			agios_list_for_each_entry (tmp, this_timeline, related) {
+				if (tmp->timestamp > req->timestamp) {
+					insertion_place = &(tmp->related);
+					break;	
 				}
 			}
-			agios_list_add(&req->related, insertion_place->prev);
 		}
+		agios_list_add(&req->related, insertion_place->prev);
 	}
-
+	return true;
 }
-
-/* this function is called when migrating between two scheduling algorithms when both use timeline and one of them is the TIME_WINDOW or TWINS. In this case, it is necessary to redo the timeline so requests will be processed in the new relevant order */
-void reorder_timeline()
+/**
+ * function called to add a request to the timeline. The caller must hold the timeline mutex before this call. 
+ * @param req the new request being added.
+ * @param hash the line of the hashtable containing information about the file being accessed.
+ * @param given_req_file the information about the file being accessed or NULL if unknown. It is important to notice that: when called by agios_add_request, given_req_file will be NULL. It will only have a different value when this function is being used to migrate between data structures.
+ * @return true or false for success.
+ */
+void timeline_add_req(struct request_t *req, int32_t hash, struct request_file_t *given_req_file)
 {
-	struct agios_list_head *new_timeline;
-	struct request_t *req, *aux_req=NULL;
-	long hash;
+	return __timeline_add_req(req, hash, given_req_file, &timeline);
+}
+/** 
+ * This function is called when migrating between two scheduling algorithms when both use timeline and one of them is the TIME_WINDOW or TWINS. In this case, it is necessary to redo the timeline so requests will be processed in the new relevant order.
+ */
+void reorder_timeline(void)
+{
+	struct agios_list_head *new_timeline; /**< a temporary timeline used while we are migrating. */
+	struct request_t *req; /**< used to iterate over all requests of the queue. */
+ 	struct request_t *aux_req=NULL;  /**< used to avoid moving a request before moving the iterator to the next one, otherwise the loop breaks. */
+	int32_t hash; /**< line of the hashtable where information about a file is. */
 
 	//initialize new timeline structure
-	new_timeline = (struct agios_list_head *)agios_alloc(sizeof(struct agios_list_head));
+	new_timeline = (struct agios_list_head *)malloc(sizeof(struct agios_list_head));
 	new_timeline->prev = new_timeline;
 	new_timeline->next = new_timeline;
-
 	//get all requests from the previous timeline and include in the new one
-	agios_list_for_each_entry(req, &timeline, related)
-	{
-		if(aux_req)
-		{
-			hash = AGIOS_HASH_STR(aux_req->file_id) % AGIOS_HASH_ENTRIES;
+	agios_list_for_each_entry (req, &timeline, related) {
+		if (aux_req) {
+			hash = get_hashtable_position(aux_req->file_id);
 			agios_list_del(&aux_req->related);
 			__timeline_add_req(aux_req, hash, aux_req->globalinfo->req_file, new_timeline);	
 		}
 		aux_req = req;
 	}	
-	if(aux_req)
-	{
-		hash = AGIOS_HASH_STR(aux_req->file_id) % AGIOS_HASH_ENTRIES;
+	if (aux_req) {
+		hash = get_hashtable_position(aux_req->file_id);
 		agios_list_del(&aux_req->related);
 		__timeline_add_req(aux_req, hash, aux_req->globalinfo->req_file, new_timeline);	
 	}
-
-	//redefine the pointers
+	//redefine the pointers and replace the old timeline by the new one
 	new_timeline->prev->next = &timeline;
 	new_timeline->next->prev = &timeline;
 	timeline.next = new_timeline->next;
 	timeline.prev = new_timeline->prev;
 	free(new_timeline);
 }
-
-/*
- * Returns the oldest request and REMOVES it from timeline list.
- *
- * Returns:
- *	oldest request or NULL
- *
- * Locking: 
- *	Must have timeline_mutex
+/**
+ * removes the first request from the queue and also calculates its hash. The caller must hold the timeline lock before calling this.
+ * @param hash the value that will be updated in this function to hold the line of the hashtable with information about the file that is accessed by the returned request.
+ * @return the first request from the queue, removed from it, NULL if the queue is empty. 
  */
-struct request_t *timeline_oldest_req(long *hash)
+struct request_t *timeline_oldest_req(int32_t *hash)
 {
-	struct request_t *tmp;
+	struct request_t *tmp; /**< the request that will be returned. */
 
-	//PRINT_FUNCTION_NAME;
-	
-	if (agios_list_empty(&timeline)) {
-		return NULL;
-	}
-
+	if (agios_list_empty(&timeline)) return NULL;
 	tmp = agios_list_entry(timeline.next, struct request_t, related);
 	agios_list_del(&tmp->related);
-	*hash = AGIOS_HASH_STR(tmp->file_id) % AGIOS_HASH_ENTRIES;
-
+	*hash = get_hashtable_position(tmp->file_id);
 	return tmp;
 }
-
-//initializes data structures
-//max_app_id is only relevant for TWINS. Pass 0 otherwise to prevent unnecessary memory allocation
-//returns 0 on success
-int timeline_init(int max_app_id)
+/**
+ * Initializes data structures used for the timeline, the multi_timeline and the lock. 
+ * @param max_queue_id the number of queues in multi_timeline. It is only relevant for TWINS. Pass 0 otherwise to prevent unnecessary memory allocation.
+ * @return true or false for success. 
+ */
+bool timeline_init(int32_t max_queue_id)
 {
-	int i;
 	init_agios_list_head(&timeline);
-	if(max_app_id > 0)
-	{
-		app_timeline = (struct agios_list_head *) malloc(sizeof(struct agios_list_head)*(max_app_id+1));
-		app_timeline_size = max_app_id+1;
-		if(!app_timeline)
-		{
+	if (max_queue_id > 0) {
+		multi_timeline = (struct agios_list_head *) malloc(sizeof(struct agios_list_head)*(max_queue_id+1));
+		multi_timeline_size = max_queue_id+1;
+		if (!multi_timeline) {
 			agios_print("PANIC! No memory to allocate the app timeline for TWINS");
-			return -ENOMEM;
+			return false;
 		}
-		for(i=0; i< app_timeline_size; i++)
-		{
-			init_agios_list_head(&(app_timeline[i]));
+		for (int32_t i=0; i< multi_timeline_size; i++) {
+			init_agios_list_head(&(multi_timeline[i]));
 		}
 	}
-	return 0;
+	return true;
 }
-void timeline_cleanup()
+/**
+ * called at the end of the execution to free allocated data structures.
+ */
+void timeline_cleanup(void)
 {
-	int i;
 	list_of_requests_cleanup(&timeline);
-	if(app_timeline_size > 0)
-	{
-		for(i=0; i< app_timeline_size; i++)
-			list_of_requests_cleanup(&app_timeline[i]);
-		free(app_timeline);
+	if (multi_timeline_size > 0) {
+		for(int32_t i=0; i< multi_timeline_size; i++)
+			list_of_requests_cleanup(&multi_timeline[i]);
+		free(multi_timeline);
 	}
 }
+/**
+ * prints all requests in the timeline, used for debug.
+ */
 void print_timeline(void)
 {
 #if AGIOS_DEBUG
 	struct request_t *req;
-
 	debug("Current timeline status:");
 	debug("Requests:");
-	agios_list_for_each_entry(req, &timeline, related)
-	{
+	agios_list_for_each_entry (req, &timeline, related) {
 		print_request(req);
 	}
 #endif
