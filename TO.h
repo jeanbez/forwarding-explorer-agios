@@ -1,6 +1,6 @@
-#ifndef _TO_H_
-#define _TO_H_
+/*! \file TO.h
+    \brief Implementation of the timeorder and timeorder with aggregations scheduling algorithms. Their processing phases is the same, the only difference is in the requests insertion in the queue.
+ */
+#pragma once
 
-void timeorder(void *clnt);
-void simple_timeorder(void *clnt);
-#endif
+int64_t timeorder(void);

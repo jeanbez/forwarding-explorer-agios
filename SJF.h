@@ -1,8 +1,6 @@
-#ifndef _SJF_H_
-#define _SJF_H_
+/*! \file SJF.c
+    \brief Implementation of the SJF scheduling algorithm.
+ */
+#pragma once
 
-#include "agios_request.h"
-
-void SJF_postprocess(struct request_t *req);
-void SJF(void *clnt);
-#endif
+int64_t SJF(void);

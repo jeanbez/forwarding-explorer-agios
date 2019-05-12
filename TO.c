@@ -1,76 +1,31 @@
-/* File:	TO.c
- * Created: 	2015 
- * License:	GPL version 3
- * Author:
- *		Francieli Zanon Boito <francielizanon (at) gmail.com>
- *
- * Description:
- *		This file is part of the AGIOS I/O Scheduling tool.
- *		It provides the timeorder and timeorder with aggregation scheduling algorithms 
- *		Further information is available at http://inf.ufrgs.br/~fzboito/agios.html
- *
- * Contributors:
- *		Federal University of Rio Grande do Sul (UFRGS)
- *		INRIA France
- *
- *		inspired in Adrien Lebre's aIOLi framework implementation
- *	
- *		This program is distributed in the hope that it will be useful,
- * 		but WITHOUT ANY WARRANTY; without even the implied warranty of
- * 		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+/*! \file TO.c
+    \brief Implementation of the timeorder and timeorder with aggregations scheduling algorithms. Their processing phases is the same, the only difference is in the requests insertion in the queue.
  */
-
-#ifndef AGIOS_KERNEL_MODULE
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
 #include <limits.h>
 #include <string.h>
-#else
-#include <linux/delay.h>
-#include <linux/sched.h>
-#include <linux/time.h>
-#include <linux/slab.h>
-#endif
 
-
-#include "agios.h"
-#include "TO.h"
-#include "req_timeline.h"
-#include "request_cache.h"
-#include "consumer.h"
-#include "iosched.h"
-#include "common_functions.h"
-#include "agios_request.h"
-
-//simple timeorder: requests are processed in the order they were received (it is the same as the timeorder with aggregation, the only difference between them is in the add_request part
-void timeorder(void *clnt)
+/**
+ * repeatedly process the first request of the timeline, until process_requests notify us to stop.
+ * @return config_waiting_time
+ */
+int64_t timeorder(void)
 {
-	struct request_t *req;	
-	short int update_time = 0;
-	long hash;
+	struct request_t *req;	/**< the request we will process. */
+	bool TO_stop = false; /**< is it time to stop and go back to the agios thread to do a periodic event? */
+	int32_t hash; /**< the hashtable line which contains information about the request we will process. */
 
-	PRINT_FUNCTION_NAME;
-	
-	while((current_reqnb > 0) && (update_time == 0))
-	{
+	while ((current_reqnb > 0) && (TO_stop == false)) {
 		timeline_lock();
 		req = timeline_oldest_req(&hash);
-		if(req)
-		{
-			update_time = process_requests(req, (struct client *)clnt, hash); //we give -1 as the hash so the process_requests function will realize we are taking requests from the timeline, not from the hashtable	
-			generic_post_process(req);
-		}
-		else
-			debug("PANIC! We believe there are %d requests in timeline, but we cannot get one", get_current_reqnb());
+		assert(req); //sanity check
+		TO_stop = process_requests(req, hash); 
+		generic_post_process(req);
 		timeline_unlock();
 	}
-	PRINT_FUNCTION_EXIT;
-}
-
-void simple_timeorder(void *clnt)
-{
-	timeorder(clnt); //the difference between them is in the inclusion of requests, the processing is the same
+	return config_waiting_time;
 }
 
 
