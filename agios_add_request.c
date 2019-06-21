@@ -1,7 +1,9 @@
 /*! \file agios_add_request.c
     \brief Implementation of the agios_add_request function, used by the user to add requests to AGIOS.
 
-    TODO details
+    The request will be added to queues and statistics will be kept. The data structure used to keep the requests is either a timeline or the hashtable, depending on the currently used scheduling algorithm. 
+    @see req_hashtable.c
+    @see req_timeline.c
 */  
 #include <stdbool.h>
  
@@ -314,7 +316,6 @@ struct request_t * request_constructor(char *file_id,
 	g_last_timestamp++;
 	new->timestamp = g_last_timestamp;
 	init_agios_list_head(&new->related);
-	new->already_waited=0; //TODO see if it is useful
 	return new;
 }
 /** 

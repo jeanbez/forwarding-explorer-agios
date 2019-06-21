@@ -1,10 +1,8 @@
 /*! \file agios.h
-    \brief TODO 
+    \brief Interface from users to the AGIOS library. 
 
-    TODO a detailed description
+    Users start using the library by calling agios_init providing the callbacks to be used to process requests and the path to a configuration file. Then new requests are added to the library with agios_add_request. When the scheduling policy being applied decides it is time to process a request, AGIOS will call the callback functions provided by the user to agios_init. Later the user has to be sure to call agios_release_request to let AGIOS know the request has been processed, or call agios_cancel_request earlier to cancel that request. Before ending, the user must call agios_exit to cleanup all allocated memory.
 */
-
-
 #pragma once 
 
 #include <pthread.h>
@@ -13,21 +11,15 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/*
- * Request type.
+/** \enum 
+ *  \brief The type of the request to be provided to agios_add_request.
  */
 enum {
 	RT_READ = 0,
 	RT_WRITE = 1,
 };
-//TODO see how to document enum
-//TODO could type be a bool?
-
-//TODO ORANGEFS_AGIOS (use int64_t instead of void *)
-
-bool agios_init(void * process_request(void * req_id), 
-		void * process_requests(void **reqs, int32_t reqnb), 
+bool agios_init(void * process_request(int64_t * req_id), 
+		void * process_requests(int64_t **reqs, int32_t reqnb), 
 		char *config_file, 
 		int32_t max_queue_id);
 void agios_exit(void);
@@ -45,7 +37,6 @@ bool agios_cancel_request(char *file_id,
 				int32_t type, 
 				int64_t len, 
 				int64_t offset);
-
 #ifdef __cplusplus
 }
 #endif

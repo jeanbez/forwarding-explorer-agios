@@ -1,7 +1,7 @@
 /*! \file agios.c
     \brief Implementation of the agios_init and agios_exit functions, used to start and end the library.
 
-    To use AGIOS, the user needs to call agios_init and ensure it returned sucess. Then requests are given to AGIOS with agios_add_request. When the scheduler decides it is time to process a request, it will use the callback functions provided to agios_init.
+    Users start using the library by calling agios_init providing the callbacks to be used to process requests and the path to a configuration file. Then new requests are added to the library with agios_add_request. When the scheduling policy being applied decides it is time to process a request, AGIOS will call the callback functions provided by the user to agios_init. Later the user has to be sure to call agios_release_request to let AGIOS know the request has been processed, or call agios_cancel_request earlier to cancel that request. Before ending, the user must call agios_exit to cleanup all allocated memory.
 */
 #include <stdbool.h>
 #include <stdtypes.h>
@@ -31,7 +31,7 @@ void cleanup_agios(void)
  * @param process_requests the callback function from the user code used by AGIOS to process a list of requests. (optional)
  * @param config_file the path to a configuration file. If NULL, the DEFAULT_CONFIGFILE will be read instead. If the default configuration file does not exist, it will use default values.
  * @param max_queue_id for schedulers that use multiple queues, one per server/application (TWINS and SW), define the number of queues to be used. If it is not relevant to the used scheduler, it is better to provide 0. With each request being added, a value between 0 and max_queue_id-1 is to be provided.
- * TODO link with @see to configuration parameters
+ * @see agios_config.c
  * @return true of false for success.
  */
 bool agios_init(void * process_request(int64_t req_id), 

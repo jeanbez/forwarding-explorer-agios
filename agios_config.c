@@ -10,17 +10,15 @@
 #include "common_functions.h"
 #include "iosched.h"
 
-//TODO adjust example agios_config.conf
 int32_t config_agios_default_algorithm = SJF_SCHEDULER;	/**< scheduling algorithm to be used (the identifier of the scheduling algorithm) */
 int32_t config_agios_max_trace_buffer_size = 1*1024*1024; /**< in bytes. A buffer is used to keep trace messages before going to the file, to avoid small writes to the disk and decrease tracing overhead. This parameter gives the size allocated for the buffer. */
-int32_t config_agios_performance_window = 10; //TODO
-int32_t config_agios_performance_values = 5; //TODO
+int32_t config_agios_performance_values = 5; /**< for how many of the last scheduling algorithm selections should we keepperformance metrics. */
 int64_t config_agios_select_algorithm_period=-1;	/**< if the scheduling algorithm is dynamic (meaning it will actually select other scheduling algorithms during the execution, this parameter defines the periodicity to change the scheduling algorithm during the execution. */
 int32_t config_agios_select_algorithm_min_reqnumber=1;	/**< if the scheduling algorithm is dynamic (meaning it will actually select other scheduling algorithms during the execution, this parameter defines how many requests have to be treated during a period before a new scheduling algorithm can be selected. */
 int32_t config_agios_starting_algorithm = SJF_SCHEDULER; /**< if the scheduling algorithm is dynamic (meaning it will actually select other scheduling algorithms during the execution, this is the scheduling algorithm that will be used whenever a decision cannot be made (possibly because there is not enough information */
 int32_t config_aioli_quantum = 8192;			/**< in bytes, how much of a queue can be processed before going to the next one (used by aIOLi) */
-int32_t config_mlf_quantum = 8192;			/**< similar to config_aioli_quantum */ //TODO
-int64_t config_sw_size = 1000000000L;	//TODO
+int32_t config_mlf_quantum = 8192;			/**< similar to config_aioli_quantum */ 
+int64_t config_sw_size = 1000000000L;			/**< the window size used for the SW scheduling algorithm */
 bool config_trace_agios=false;				/**< will agios create a trace file will all requests arrivals? */
 char *config_trace_agios_file_prefix=NULL; 		/**< if creating trace files, they will be named config_trace_agios_file_prefix.*.config_trace_agios_file_sufix. The value in the middle of prefix and sufix is a counter, the library will check for existing files so they are not overwritten. */
 char *config_trace_agios_file_sufix=NULL;		/**< @see config_trace_agios_file_prefix */
@@ -84,14 +82,13 @@ bool read_configuration_file(char *config_file)
 	config_lookup_int(&agios_config, "library_options.select_algorithm_min_reqnumber", &config_agios_select_algorithm_min_reqnumber);
 	config_lookup_string(&agios_config, "library_options.starting_algorithm", &ret_str);
 	config_agios_starting_algorithm = get_algorithm_from_string(ret_str);
-#if 0 //TODO test if the starting algorithm is a dynamic one
+#if 0 //test if the starting algorithm is a dynamic one
 	if((config_agios_starting_algorithm == DYN_TREE_SCHEDULER) || (config_agios_starting_algorithm == ARMED_BANDIT_SCHEDULER))
 	{
 		config_agios_starting_algorithm = SJF_SCHEDULER;
 		agios_print("Configuration error! Starting algorithm cannot be a dynamic one. Using SJF instead");
 	}
 #endif
-	config_lookup_int(&agios_config, "library_options.performance_window", &config_agios_performance_window);
 	config_lookup_int(&agios_config, "library_options.performance_values", &config_agios_performance_values);
 	config_lookup_bool(&agios_config, "library_options.enable_SW", &ret);
 	if (ret) enable_SW();

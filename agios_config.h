@@ -9,7 +9,6 @@
 
 bool read_configuration_file(char *config_file);
 void config_agios_cleanup(void);
-
 //about tracing
 extern bool config_trace_agios;
 extern char *config_trace_agios_file_prefix;
@@ -25,6 +24,5 @@ extern int32_t config_aioli_quantum;
 extern int32_t config_mlf_quantum;
 extern int64_t config_sw_size;
 extern int64_t config_twins_window;
-//performance module //TODO
-extern int32_t config_agios_performance_window;
+//performance module 
 extern int32_t config_agios_performance_values;
