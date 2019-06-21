@@ -1,5 +1,5 @@
 /*! \file agios_counters.c
-    /brief Provides functions to manipulate the request and file counters.
+    \brief Provides functions to manipulate the request and file counters.
 
     These counters are kept updated during the execution, and protected with a mutex.
 */

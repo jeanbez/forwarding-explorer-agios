@@ -1,8 +1,9 @@
+/*! \file TWINS.c
+    \brief Headers for the implementation of the TWINS scheduling algorithm
 
-#ifndef _TWINS_H_
-#define _TWINS_H_
+ */
+#pragma once
 
-int TWINS_init();
+bool TWINS_init();
+int64_t TWINS(void);
 void TWINS_exit();
-void TWINS(void *clnt);
-#endif

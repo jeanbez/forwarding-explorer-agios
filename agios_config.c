@@ -1,5 +1,5 @@
 /*! \file agios_config.c
- * /brief Configuration parameters, default values and a function to read them from a configuration file (with libconfig).
+    \brief Configuration parameters, default values and a function to read them from a configuration file (with libconfig).
  */
 #include <libconfig.h>
 #include <string.h>
