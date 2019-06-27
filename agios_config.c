@@ -121,13 +121,16 @@ void print_flag(bool flag, char *message)
  */
 void config_print(void)
 {
+	agios_just_print("Scheduling algorithm: %s\n", get_algorithm_name_from_index(config_agios_default_algorithm)); 
+	agios_just_print("If the scheduling algorithm is dynamic, we will start with %s and keep statistics about the last %d used algorithms.\n", get_algorithm_name_from_index(contig_agios_starting_algorithm), config_agios_performance_values);
+	agios_just_print("Also, if the scheduling algorithm is dynamic, we will change the used scheduler every %ld ns, as long as %d requests were processed.\n",config_agios_select_algorithm_period, config_agios_select_algorithm_min_reqnumber);
+	agios_just_print("If aIOLi is used, its quantum is %d.\n If MLF is used, its quanutm is %d.\n If SW is used, its window size is %ld.\n If TWINS is used, its window duration is %ld.\n", config_aioli_quantum, config_mlf_quantum, config_sw_size, config_twins_window);
+	agios_just_print("The default waiting time for the AGIOS thread is %d\n", config_waiting_time);
 	config_print_flag(config_trace_agios, "Will AGIOS generate trace files? ");
 	if (config_trace_agios) {
 		agios_just_print("\tTrace files are named %s.*.%s\n", config_trace_agios_file_prefix, config_trace_agios_file_sufix);
 		agios_just_print("\tTrace file buffer has size %d bytes\n", config_agios_max_trace_buffer_size);
 	} //end if tracing
-	agios_just_print("Default scheduling algorithm: %s\n", get_algorithm_name_from_index(config_agios_default_algorithm)); 
-	/* \todo list all configuration parameters */
 }
 
 
