@@ -18,8 +18,8 @@ enum {
 	RT_READ = 0,
 	RT_WRITE = 1,
 };
-bool agios_init(void * process_request(int64_t * req_id), 
-		void * process_requests(int64_t **reqs, int32_t reqnb), 
+bool agios_init(void * process_request_user(int64_t req_id), 
+		void * process_requests_user(int64_t *reqs, int32_t reqnb), 
 		char *config_file, 
 		int32_t max_queue_id);
 void agios_exit(void);

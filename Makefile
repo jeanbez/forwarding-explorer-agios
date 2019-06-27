@@ -1,8 +1,60 @@
 ccflags-y += -DAGIOS_DEBUG=1
 
-FILES=mylist.c hash.c proc.c request_cache.c consumer.c iosched.c agios.c predict.c trace.c estimate_access_times.c common_functions.c agios_config.c access_pattern_detection_tree.c scheduling_algorithm_selection_tree.c TO.c AIOLI.c MLF.c SJF.c SRTF.c NOOP.c TW.c req_hashtable.c req_timeline.c DYN_TREE.c ARMED_BANDIT.c performance.c TWINS.c performance_table.c cancel_request.c DTW.c PATTERN_MATCHING.c pattern_tracker.c 
-OBJS=mylist.o hash.o proc.o request_cache.o consumer.o iosched.o agios.o predict.o trace.o estimate_access_times.o common_functions.o agios_config.o access_pattern_detection_tree.o scheduling_algorithm_selection_tree.o TO.o AIOLI.o MLF.o SJF.o SRTF.o NOOP.o TW.o req_hashtable.o req_timeline.o DYN_TREE.o ARMED_BANDIT.o performance.o TWINS.o performance_table.o cancel_request.o DTW.o PATTERN_MATCHING.o pattern_tracker.o 
-#/usr/local/lib/libconfig.so
+FILES=agios.c \
+      agios_add_request.c \
+      agios_cancel_request.c \
+      agios_config.c \
+      agios_counters.c \
+      agios_release_request.c \
+      agios_request.c \
+      agios_thread.c \
+      aIOLi.c \
+      common_functions.c \
+      data_structures.c \
+      hash.c \
+      MLF.c \
+      mylist.c \
+      NOOP.c \
+      performance.c \
+      process_request.c \
+      req_hashtable.c \
+      req_timeline.c \
+      scheduling_algorithms.c \
+      SJF.c \
+      statistics.c \
+      SW.c \
+      TO.c \
+      trace.c \
+      TWINS.c \
+      waiting_common.c
+
+OBJS=agios.o \
+      agios_add_request.o \
+      agios_cancel_request.o \
+      agios_config.o \
+      agios_counters.o \
+      agios_release_request.o \
+      agios_request.o \
+      agios_thread.o \
+      aIOLi.o \
+      common_functions.o \
+      data_structures.o \
+      hash.o \
+      MLF.o \
+      mylist.o \
+      NOOP.o \
+      performance.o \
+      process_request.o \
+      req_hashtable.o \
+      req_timeline.o \
+      scheduling_algorithms.o \
+      SJF.o \
+      statistics.o \
+      SW.o \
+      TO.o \
+      trace.o \
+      TWINS.o \
+      waiting_common.o
 
 library: ${OBJS} 
 	gcc -shared -o libagios.so.1 ${OBJS}

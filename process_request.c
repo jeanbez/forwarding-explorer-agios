@@ -57,7 +57,7 @@ bool process_requests(struct request_t *head_req, int32_t hash)
 	//get the timestamp for now
 	agios_gettime(&now);
 	this_time = get_timespec2long(now);
-	if ((user_callbacks->process_requests) && (head_req->reqnb > 1)) { //if the user has a function capable of processing a list of requests at once and this is an aggregated request
+	if ((user_callbacks->process_requests_cb) && (head_req->reqnb > 1)) { //if the user has a function capable of processing a list of requests at once and this is an aggregated request
 		//make a list of requests to be given to the callback function
 		//we give to the user an array with the requests' data (the field used by the user, provided in agios_add_request)
 		int64_t *reqs = (int64_t *)malloc(sizeof(int64_t)*(head_req->reqnb)); /**< list of requests to be given to the callback function. */
@@ -80,24 +80,24 @@ bool process_requests(struct request_t *head_req, int32_t hash)
 			reqs_index++;
 		}
 		//process
-		clnt->process_requests(reqs, head_req->reqnb);
+		user_callbacks.process_requests_cb(reqs, head_req->reqnb);
 		//we no longer need this array
 		free(reqs);
 	} else if (head_req->reqnb == 1) {  //this is not a virtual request, just a singleo one
 		put_this_request_in_dispatch(head_req, this_time, &head_req->globalinfo->dispatch);
-		clnt->process_request(head_req->user_id);
+		user_callbacks.process_request_cb(head_req->user_id);
 	} else { //this is a virtual request but the user does not have a callback for a list of requests
 		agios_list_for_each_entry (req, &head_req->reqs_list, related) { //go through all sub-requests	
 			if (aux_req) {
 				put_this_request_in_dispatch(aux_req, this_time, &head_req->globalinfo->dispatch);
-				clnt->process_request(aux_req->data);
+				user_callbacks.process_request_cb(aux_req->data);
 			}
 			aux_req = req;
 		}
 		if(aux_req)
 		{
 			put_this_request_in_dispatch(aux_req, this_time, &head_req->globalinfo->dispatch);
-			clnt->process_request(aux_req->data);
+			user_callbacks.process_request_cb(aux_req->data);
 		}
 	} //end virtual request but no list callback
 	//update requests and files counters

@@ -6,8 +6,8 @@
 #include "agios_counters.h"
 
 int32_t current_reqnb; /**< Number of queued requests */
-int32_t current_reqfilenb; /**< Number of files with queued requests */
-static pthread_mutex_t current_reqnb_lock = PTHREAD_MUTEX_INITIALIZER; /**< Used to protect the request and file counters current_reqnb and current_reqfilenb */
+int32_t current_filenb; /**< Number of files with queued requests */
+static pthread_mutex_t current_reqnb_lock = PTHREAD_MUTEX_INITIALIZER; /**< Used to protect the request and file counters current_reqnb and current_filenb */
 
 /**
  * function used to safely read the content of current_reqnb (using the mutex).
@@ -53,21 +53,21 @@ void dec_many_current_reqnb(int32_t hash, int32_t value)
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
 /**
- * function used to safely increment the current_reqfilenb counter (using the mutex).
+ * function used to safely increment the current_filenb counter (using the mutex).
  */
-void inc_current_reqfilenb(void)
+void inc_current_filenb(void)
 {
 	pthread_mutex_lock(&current_reqnb_lock);
-	current_reqfilenb++;
+	current_filenb++;
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
 /**
- * function used to safely decrement the current_reqfilenb counter (using the mutex).
+ * function used to safely decrement the current_filenb counter (using the mutex).
  */
-void dec_current_reqfilenb(void)
+void dec_current_filenb(void)
 {
 	pthread_mutex_lock(&current_reqnb_lock);
-	current_reqfilenb--;
+	current_filenb--;
 	pthread_mutex_unlock(&current_reqnb_lock);
 }
 

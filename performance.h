@@ -3,6 +3,9 @@
  */
 #pragma once
 
+#include "agios_request.h"
+#include "mylist.h"
+
 extern int64_t agios_processed_reqnb; 
 
 struct performance_entry_t //information about one time period, corresponding to one scheduling algorithm selection

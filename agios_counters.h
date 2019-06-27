@@ -6,13 +6,15 @@
 
 #pragma once
 
+#include <pthread.h>
+#include <stdint.h>
+
 extern int current_reqnb;
-extern int current_reqfilenb;
-extern pthread_mutex_t current_reqnb_lock;
+extern int current_filenb;
 
 int32_t get_current_reqnb(void); 
 void inc_current_reqnb(void);
 void dec_current_reqnb(int32_t hash);
 void dec_many_current_reqnb(int32_t hash, int32_t value);
-void inc_current_reqfilenb(void);
-void dec_current_reqfilenb(void);
+void inc_current_filenb(void);
+void dec_current_filenb(void);

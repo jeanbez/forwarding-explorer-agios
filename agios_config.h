@@ -5,10 +5,12 @@
 */
 #pragma once
 
+#include <stdint.h>
+
 #define DEFAULT_CONFIGFILE	"/etc/agios.conf" /**< If a filename is not provided in agios_init, we'll try to read from this one */
 
 bool read_configuration_file(char *config_file);
-void config_agios_cleanup(void);
+void cleanup_config_parameters(void);
 //about tracing
 extern bool config_trace_agios;
 extern char *config_trace_agios_file_prefix;

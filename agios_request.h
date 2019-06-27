@@ -5,8 +5,10 @@
 #pragma once
 
 #include <pthread.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
+
+#include "mylist.h"
 
 struct request_t;
 /*! \struct queue_statistics_t 
@@ -34,7 +36,7 @@ struct queue_statistics_t  {
 struct queue_t {
 	struct agios_list_head list ; /**< the queue of requests */
 	struct agios_list_head dispatch; /**< contains requests which were already scheduled, but not released yet */
-	struct request_file_t *req_file; /**< a pointer to the struct with information about this file */
+	struct file_t *req_file; /**< a pointer to the struct with information about this file */
 	//fields used by aIOLi (and also some of them are used by MLF)
 	int64_t laststartoff ; /**< used by aIOLi for shift phenomenon detection */
 	int64_t lastfinaloff ; /**< used by aIOLi for shift phenomenon detection */
@@ -50,16 +52,16 @@ struct queue_t {
 	struct timespec last_req_time; /**< timestamp of the last time we received a request for this one, used to keep statistics on time between requests */
 	int64_t last_received_finaloffset; /**< offset+len of the last request received to this queue, used to keep statistics on offset distance between consecutive requests */
 };
-/*! \struct request_file_t
+/*! \struct file_t
     \brief Holds information about one file that has received requests in this library
 
-    The request_file_t structure is identified by the file_id and added to the hashtable. It holds two queues, one for reads and another for writes.
+    The file_t structure is identified by the file_id and added to the hashtable. It holds two queues, one for reads and another for writes.
     @see queue_t
  */
-struct request_file_t {
+struct file_t {
 	char *file_id; /**< the file handle */
-	struct queue_t related_reads; /**< read queue */
-	struct queue_t related_writes; /**< write queue */
+	struct queue_t read_queue; /**< read queue */
+	struct queue_t write_queue; /**< write queue */
 	int64_t timeline_reqnb; /**< counter for knowing how many requests in the timeline are accessing this file */
 	struct agios_list_head hashlist; /**< to insert this structure in a list (hashtable position or timeline_files) */ 
 	//used by aIOLi and SJF to handle waiting times (they apply to the whole file, not only the queue)

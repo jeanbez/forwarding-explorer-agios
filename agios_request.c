@@ -30,8 +30,8 @@ void request_cleanup(struct request_t *aux_req)
 		list_of_requests_cleanup(&aux_req->reqs_list);
 	}
 	//free the memory
-	if (aux_req->file_id) agios_free(aux_req->file_id);
-	agios_free(aux_req);
+	if (aux_req->file_id) free(aux_req->file_id);
+	free(aux_req);
 }
 /**
  * free all requests from a list of requests.

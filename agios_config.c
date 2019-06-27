@@ -1,14 +1,11 @@
 /*! \file agios_config.c
     \brief Configuration parameters, default values and a function to read them from a configuration file (with libconfig).
  */
-#include <libconfig.h>
-#include <string.h>
 #include <assert.h>
+#include <libconfig.h>
 #include <stdbool.h>
+#include <string.h>
 
-#include "agios_config.h"
-#include "common_functions.h"
-#include "iosched.h"
 
 int32_t config_agios_default_algorithm = SJF_SCHEDULER;	/**< scheduling algorithm to be used (the identifier of the scheduling algorithm) */
 int32_t config_agios_max_trace_buffer_size = 1*1024*1024; /**< in bytes. A buffer is used to keep trace messages before going to the file, to avoid small writes to the disk and decrease tracing overhead. This parameter gives the size allocated for the buffer. */
@@ -28,7 +25,7 @@ int32_t config_waiting_time = 900000;			/**< when there are no requests, the sch
 /**
  * used to clean all memory allocated for the configuration parameters (at the end of the execution).
  */
-void config_agios_cleanup(void)
+void cleanup_config_parameters(void)
 {
 	if(config_trace_agios_file_prefix)
 		free(config_trace_agios_file_prefix);

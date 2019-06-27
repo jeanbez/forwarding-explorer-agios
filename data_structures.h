@@ -9,3 +9,4 @@ void lock_all_data_structures();
 void unlock_all_data_structures();
 bool allocate_data_structures(int32_t max_app_id);
 void cleanup_data_structures(void);
+bool acquire_adequate_lock(int32_t hash);

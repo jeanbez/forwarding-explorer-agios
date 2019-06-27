@@ -3,6 +3,8 @@
 
     ALL requests added with agios_add_request must be either notified with agios_release_request (after being processed) or cancelled with agios_cancel_request, otherwise information about them will continue to exist in memory.
  */
+#include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
 /** 
@@ -26,20 +28,11 @@ bool agios_cancel_request(char *file_id,
 	struct request_t *req; /**< used to iterate over the queue */
 	struct request_t *aux_req; /**< used to iterate over the requests inside a virtual request */
 	bool found=false;
-	bool previous_needs_hashtable;
+	bool using_hashtable;
 
 	PRINT_FUNCTION_NAME;
 	//first acquire lock, we need to be careful because the data structure might me migrated while we are trying to do that
-	while (1) {	
-		previous_needs_hashtable = current_scheduler->needs_hashtable;
-		if (previous_needs_hashtable) hashtable_lock(hash);
-		else timeline_lock();
-		if (previous_needs_hashtable != current_scheduler->needs_hashtable) { //acquiring the lock means a memory wall, so we are sure to get the latest version of current_scheduler
-			//the other thread has migrated scheduling algorithms (and data structure) while we were waiting for the lock (so the lock is no longer the adequate one)
-			if (previous_needs_hashtable) hashtable_unlock(hash);
-			else timeline_unlock();
-		} else break;
-	} //end while
+	using_hashtable = acquire_adequate_lock(hash);
 	//now we have the appropriated lock
 	list = &hashlist[hash];
 	//find the structure for this file 
@@ -51,13 +44,13 @@ bool agios_cancel_request(char *file_id,
 	}
 	if (!found) { //that makes no sense, we are trying to cancel a request which was never added!!!
 		debug("PANIC! We cannot find the file structure for this request %s", file_id);
-		if (previous_needs_hashtable) hashtable_unlock(hash);
+		if (using_hashtable) hashtable_unlock(hash);
 		else timeline_unlock();
 		return false;
 	}
 	debug("REMOVING a request from file %s:", req_file->file_id );
 	//get the relevant queue
-	if (previous_needs_hashtable) {
+	if (using_hashtable) {
 		if (type == RT_WRITE) list = &req_file->related_writes.list;
 		else list = &req_file->related_reads.list;
 	} else list = &timeline;
@@ -139,7 +132,7 @@ bool agios_cancel_request(char *file_id,
 	} //end going over all requests in the queue
 	if (!found) debug("PANIC! Could not find the request %ld %ld to file %s\n", offset, len, file_id);
 	//release data structure lock
-	if (previous_needs_hashtable) hashtable_unlock(hash);
+	if (using_hashtable) hashtable_unlock(hash);
 	else timeline_unlock();
 	return true;
 }

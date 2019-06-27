@@ -33,8 +33,8 @@ void put_this_request_in_timeline(struct request_t *req,
 		//this is a virtual request, we need to break it into parts
 		put_all_requests_in_timeline(&req->reqs_list, req_file, hash);
 		//the parts were added to the timeline, the "super-request" has to be freed
-		if (req->file_id) agios_free(req->file_id);
-		agios_free(req);
+		if (req->file_id) free(req->file_id);
+		free(req);
 	}
 	else timeline_add_req(req, hash, req_file); //put in timeline
 
@@ -72,8 +72,8 @@ void put_req_in_hashtable(struct request_t *req)
 	if ((req->reqnb > 1) && (current_scheduler->max_aggreg_size <= 1)) {
 		put_all_requests_in_hashtable(&req->reqs_list);
 		//free the virtual request (which used to have many sub-requests but that is now empty)
-		if (req->file_id) agios_free(req->file_id);
-		agios_free(req);
+		if (req->file_id) free(req->file_id);
+		free(req);
 	} else hashtable_add_req(req, hash, req->globalinfo->req_file);
 }
 /**
@@ -141,13 +141,13 @@ void unlock_all_data_structures(void)
 
 /**
  * This function allocates AGIOS data structures and initializes related locks.
- * @param max_app_id is the value provided to agios_init to indicate what is the maximum identifier expected to be provided to agios_add_request.
+ * @param max_queue_id is the value provided to agios_init to indicate what is the maximum identifier expected to be provided to agios_add_request.
  * @return true or false for success.
  */
-bool allocate_data_structures(int32_t max_app_id)
+bool allocate_data_structures(int32_t max_queue_id)
 {
 	reset_global_stats(); //puts all statistics to zero 
-	if (!timeline_init(max_app_id)) return false; //initializes the timeline
+	if (!timeline_init(max_queue_id)) return false; //initializes the timeline
 	if (!hashtable_init()) return false; 
 	//put request and file counters to 0
 	current_reqnb = 0;
@@ -155,6 +155,30 @@ bool allocate_data_structures(int32_t max_app_id)
 	//block all data structures so the user cannot start adding requests while we are not ready (we need to select a scheduling algorithm first)
 	lock_all_data_structures();
 	return true;
+}
+/** 
+ * function called to acquire the lock for the data structure currently in use. It is either the hashtable or the timeline depending on the scheduling algorithm being used. The catch is that we will call lock, but while we are waiting the scheduler in use may have changed, so we need to be sure we are holding the adequate lock before adding a request (or looking for it to cancel or release). If we don't, then the request is being added to a ghost data structure (they both exist even when not in use), from where it will never be recoved to be processed. The caller has to check the return value to be sure to unlock the right data structure after using it.
+ * @param hash the line of the hashtable containing information about the file being accessed.
+ * @return true if the request is to be added to the hashtable, false for the timeline. 
+ */
+bool acquire_adequate_lock(int32_t hash)
+{
+	bool previous_needs_hashtable;  /**< Used to control the used data structure in the case it is being changed while this function is running */
+
+	while (true) { //we'll break out of this loop when we are sure to have acquired the lock for the right data structure
+		//check if the current scheduler uses the hashtable or not and then acquire the right lock
+		previous_needs_hashtable = current_scheduler->needs_hashtable;
+		if (previous_needs_hashtable) hashtable_lock(hash);
+		else timeline_lock();
+		//the problem is that the scheduling algorithm could have changed while we were waiting to acquire the lock, and then it is possible we have the wrong lock. 
+		if (previous_needs_hashtable != current_scheduler->needs_hashtable) {
+			//the other thread has migrated scheduling algorithms (and data structure) while we were waiting for the lock (so the lock is no longer the adequate one)
+			if (previous_needs_hashtable) hashtable_unlock(hash);
+			else timeline_unlock();
+		}
+		else break; //everything is fine, we got the right lock (and now that we have it, other threads cannot change the scheduling algorithm
+	} 
+	return previous_needs_hashtable;
 }
 /**
  * Function called to cleanup data structures used by AGIOS to keep requests (at the end of its execution).

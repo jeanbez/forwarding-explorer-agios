@@ -26,24 +26,15 @@ bool agios_release_request(char *file_id,
 	struct request_t *req; /**< used to iterate through all requests to the file. */
 	bool found=false; /**< did we find this request in the dispatch queues? */ 
 	int64_t elapsed_time; /**< how long has it been since this request was issued? */
-	bool previous_needs_hashtable; /**< used to ensure we acquire the right lock. */
+	bool using_hashtable; /**< used to ensure we acquire the right lock. */
 	struct performance_entry_t *entry; /**< used to access performance information about the right scheduling algorithm */
 	int64_t this_bandwidth; /**< the bandwidth measured in the access by this request */
 
 	PRINT_FUNCTION_NAME;
 
-	//first acquire lock. That is a bit complicated because the other thread might be migrating scheduling algorithms (and consequently data structures) while we are doing this. @see agios_add_request for an explanation.
-	while (true) {	
-		previous_needs_hashtable = current_scheduler->needs_hashtable;
-		if (previous_needs_hashtable) hashtable_lock(hash_val);
-		else timeline_lock();
-		if (previous_needs_hashtable != current_scheduler->needs_hashtable) {
-			//the other thread has migrated scheduling algorithms (and data structure) while we were waiting for the lock (so the lock is no longer the adequate one)
-			if (previous_needs_hashtable) hashtable_unlock(hash_val);
-			else timeline_unlock();
-		} else break;
-	}
-	//now we are sure to hash the lock
+	//first acquire lock. That is a bit complicated because the other thread might be migrating scheduling algorithms (and consequently data structures) while we are doing this. 
+	using_hashtable = acquire_adequate_lock(hash);
+	//now we are sure to have the lock
 	list = &hashlist[hash_val];
 	//find the structure for this file 
 	agios_list_for_each_entry (req_file, list, hashlist) {
@@ -103,7 +94,7 @@ bool agios_release_request(char *file_id,
 		}
 	} //end if we found the req_file
 	//release data structure lock
-	if (current_scheduler->needs_hashtable) hashtable_unlock(hash_val);
+	if (using_hashtable) hashtable_unlock(hash_val);
 	else timeline_unlock();
 
 	return ret;

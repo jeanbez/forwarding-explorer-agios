@@ -137,4 +137,3 @@ void stats_aggregation(struct related_list_t *related)
 		if (related->best_agg < related->lastaggregation) related->best_agg = related->lastaggregation;
 	}
 }
-

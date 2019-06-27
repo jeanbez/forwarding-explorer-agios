@@ -4,9 +4,16 @@
     Users start using the library by calling agios_init providing the callbacks to be used to process requests and the path to a configuration file. Then new requests are added to the library with agios_add_request. When the scheduling policy being applied decides it is time to process a request, AGIOS will call the callback functions provided by the user to agios_init. Later the user has to be sure to call agios_release_request to let AGIOS know the request has been processed, or call agios_cancel_request earlier to cancel that request. Before ending, the user must call agios_exit to cleanup all allocated memory.
 */
 #include <stdbool.h>
-#include <stdtypes.h>
 
 #include "agios.h"
+#include "agios_config.h"
+#include "agios_thread.h"
+#include "common_functions.h"
+#include "data_structures.h"
+#include "performance.h"
+#include "process_request.h"
+#include "scheduling_algorithms.h"
+#include "trace.h"
 
 static pthread_t g_agios_thread; /**< AGIOS thread that will run the AGIOS_thread function.  */
 
@@ -18,7 +25,6 @@ void cleanup_agios(void)
 	cleanup_config_parameters();
 	cleanup_performance_module();
 	cleanup_data_structures();
-	cleanup_statistics_module();
 	if (config_trace_agios) {
 		close_agios_trace();
 		cleanup_agios_trace();
@@ -34,21 +40,20 @@ void cleanup_agios(void)
  * @see agios_config.c
  * @return true of false for success.
  */
-bool agios_init(void * process_request(int64_t req_id), 
-		void * process_requests(int64_t *reqs, int32_t reqnb), 
+bool agios_init(void * process_request_user(int64_t req_id), 
+		void * process_requests_user(int64_t *reqs, int32_t reqnb), 
 		char *config_file, 
 		int32_t max_queue_id)
 {
 	//check if a callback was provided 
-	if (!process_request) {
+	if (!process_request_user) {
 		agios_print("Incorrect parameters to agios_init\n");
 		return false; //we don't use the goto cleanup_on_error because we have nothing to clean up
 	}
-	user_callbacks.process_request = process_request;
-	user_callbacks.process_requests = process_requests;
+	user_callbacks.process_request_cb = process_request_user;
+	user_callbacks.process_requests_cb = process_requests_user;
 	if (!read_configuration_file(config_file)) goto cleanup_on_error; 
-	if (!allocate_data_structures(max_app_id)) goto cleanup_on_error;
-	if (!init_statistics_module()) goto cleanup_on_error;
+	if (!allocate_data_structures(max_queue_id)) goto cleanup_on_error;
 	//if we are going to generate traces, init the tracing module
 	if (config_trace_agios) {
 		if (!init_trace_module()) goto cleanup_on_error;

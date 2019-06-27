@@ -6,10 +6,16 @@
     @see req_timeline.c
 */  
 #include <stdbool.h>
- 
-#include "agios.h"
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "agios_request.h"
-#include "pattern_tracker.h"
+#include "common_functions.h"
+#include "hash.h"
+#include "mylist.h"
+//#include "pattern_tracker.h"
+#include "scheduling_algorithms.h"
 
 /**
  * says if two requests to the same file are contiguous or not.
@@ -21,10 +27,10 @@
 static int32_t g_last_timestamp=0; /**< We increase this number at every new request, just so each one of them has an unique identifier. */
 
 /**
- * initializes the related_list_statistics_t structure from a queue.
+ * initializes the queue_statistics_t structure from a queue.
  * @param stats the structured to be initialized.
  */
-void request_file_init_related_statistics(struct related_list_statistics_t *stats)
+void init_queue_statistics(struct queue_statistics_t *stats)
 {
 	stats->processedreq_nb=0;
 	stats->receivedreq_nb=0;
@@ -35,52 +41,96 @@ void request_file_init_related_statistics(struct related_list_statistics_t *stat
 	stats->avg_time_between_requests = -1;
 	stats->avg_distance = -1;
 	stats->aggs_no = 0;
-	stats->sum_of_agg_reqs = 0;
 }
 /** 
- * initializes a queue (struct related_list_t).
- * @param related_list the queue.
+ * initializes a queue (struct queue_t).
+ * @param queue the queue.
  * @param the file for which this queue is.
  */
-void request_file_init_related_list(struct related_list_t *related_list, 
-					struct request_file_t *req_file)
+void init_queue(struct queue_t *queue, 
+					struct file_t *req_file)
 {
-	init_agios_list_head(&related_list->list);
-	init_agios_list_head(&related_list->dispatch);
-	related_list->req_file = req_file;
-	related_list->laststartoff = 0;
-	related_list->lastfinaloff = 0;
-	related_list->predictedoff = 0;
-	related_list->nextquantum = 0;
-	related_list->current_size = 0;
-	related_list->lastaggregation = 0;
-	related_list->best_agg = 0;
-	related_list->last_received_finaloffset = 0;
-	related_list->shift_phenomena = 0;
-	related_list->better_aggregation = 0;
-	related_list->predicted_better_aggregation = 0;
-	request_file_init_related_statistics(&related_list->stats);
+	init_agios_list_head(&queue->list);
+	init_agios_list_head(&queue->dispatch);
+	queue->req_file = req_file;
+	queue->laststartoff = 0;
+	queue->lastfinaloff = 0;
+	queue->predictedoff = 0;
+	queue->nextquantum = 0;
+	queue->current_size = 0;
+	queue->lastaggregation = 0;
+	queue->best_agg = 0;
+	queue->last_received_finaloffset = 0;
+	queue->shift_phenomena = 0;
+	queue->better_aggregation = 0;
+	init_queue_statistics(&queue->stats);
 }
 /** 
- * Initializes a request_file_t structure about a file.
+ * Initializes a file_t structure about a file.
  * @param req_file the structure to be initialized.
  * @param file_id the file handle.
  * @return true or false for success
  */
-bool request_file_init(struct request_file_t *req_file, 
+bool file_init(struct file_t *req_file, 
 			char *file_id)
 {
 	req_file->file_id = malloc(sizeof(char)*(strlen(file_id)+2));
 	if (!req_file->file_id) return false;
 	strcpy(req_file->file_id, file_id);
 	req_file->first_request_time=0;
-	req_file->first_request_predicted_time=-1;
 	req_file->waiting_time = 0;
-	req_file->wrote_simplified_trace=0;
 	req_file->timeline_reqnb=0;
-	request_file_init_related_list(&req_file->related_reads, req_file);
-	request_file_init_related_list(&req_file->related_writes, req_file);
+	init_queue(&req_file->read_queue, req_file);
+	init_queue(&req_file->write_queue, req_file);
 	return true;
+}
+/**
+ * Function to allocate and fill a new request struct, used by agios_add_request.
+ * @param file_id the handle of the file.
+ * @param type is RT_READ or RT_WRITE.
+ * @param offset the position of the file being accessed.
+ * @param len the size of the request.
+ * @param identifier a 64-bit value that makes sense for the user to uniquely identify this request.
+ * @param arrival_time the timestamp for the arrival of this request.
+ * @param the identifier of the application or server for this request, only relevant for TWINS and SW. @see agios_add_request
+ * @see agios_request.h
+ * @return the newly allocated and filled request structure, NULL if it failed.
+ */
+struct request_t * request_constructor(char *file_id, 
+					int32_t type, 
+					int64_t offset, 
+					int64_t len, 
+					int64_t identifier,  
+					int64_t arrival_time, 
+					int32_t queue_id)
+{
+	struct request_t *new; /**< The new request structure that will be returned */
+
+	//allocate memory
+	new = malloc(sizeof(struct request_t));
+	if (!new) return NULL;
+	new->file_id = malloc(sizeof(char)*(strlen(file_id)+1));
+	if (!new->file_id) {
+		free(new);
+		return NULL;
+	}
+	//copy the file handle
+	strcpy(new->file_id, file_id);
+	//fill the structure
+	new->queue_id = queue_id;
+	new->type = type;
+	new->user_id = identifier;
+	new->offset = offset;
+	new->len = len;
+	new->sched_factor = 0;
+	new->arrival_time = arrival_time;
+	new->reqnb = 1;
+	init_agios_list_head(&new->reqs_list);
+	new->agg_head=NULL;
+	g_last_timestamp++;
+	new->timestamp = g_last_timestamp;
+	init_agios_list_head(&new->related);
+	return new;
 }
 /**
  * Create a virtual request from a "single request". For that, we need to create a new request_t structure to keep the virtual request, add it to the queue in place of aggregation_head, and include aggregation_head in its internal list.
@@ -170,7 +220,7 @@ void join_aggregations(struct request_t **head, struct request_t **tail)
 			agios_list_del(&aux_req->related);
 			include_in_aggregation(aux_req, head);
 		}
-		agios_free(*tail);	/*we dont need this empty virtual request anymore*/
+		free(*tail);	/*we dont need this empty virtual request anymore*/
 		*tail = NULL;
 	} //end tail is a virtual request 
 }
@@ -218,31 +268,48 @@ int32_t insert_aggregations(struct request_t *req,
 	} //end check aggregation with the next one
 	return aggregated;
 }
-/** 
- * goes through a list of request_file_t structures searching for the given file_id. If such structure does not exist in the list, creates a new one and includes it. The caller MUST hold relevant lock (timeline or hashtable entry).
- * @param hash_list the list of request_file_t structures where we will look.
+/**
+ * Allocates and initializes a new file_t structure about a file.
  * @param file_id the file handle.
- * @return a pointer to the found or newly allocated struct request_file_t of file_id. NULL in case of error.
+ * @return the newly allocated and initialized structure, or NULL in case of error.
  */
-struct request_file_t *find_req_file(struct agios_list_head *hash_list, 
+struct file_t * file_constructor(char *file_id)
+{
+	struct file_t *req_file;
+
+	req_file = malloc(sizeof(struct file_t));
+	if (!req_file) return NULL;
+	if (!file_init(req_file, file_id)) { //we enter the if if we had problems filling the structure, in that case cleanup
+		free(req_file);
+		return NULL;
+	}
+	return req_file;
+}
+/** 
+ * goes through a list of file_t structures searching for the given file_id. If such structure does not exist in the list, creates a new one and includes it. The caller MUST hold relevant lock (timeline or hashtable entry).
+ * @param hash_list the list of file_t structures where we will look.
+ * @param file_id the file handle.
+ * @return a pointer to the found or newly allocated struct file_t of file_id. NULL in case of error.
+ */
+struct file_t *find_req_file(struct agios_list_head *hash_list, 
 					char *file_id)
 {
-	struct request_file_t *req_file; /**< pointer that will be returned with the relevant file information. */
-	bool found_reqfile= false; /**< as the name suggests. */
+	struct file_t *req_file; /**< pointer that will be returned with the relevant file information. */
+	bool found_file= false; /**< as the name suggests. */
 	bool found_higher_handle = false; /**< in case we stop iterating over the list because files have higher handles (since the list is ordered by file handle) */
 
 	agios_list_for_each_entry (req_file, hash_list, hashlist) { //look for it in the list
 		if (strcmp(req_file->file_id, file_id) >= 0) {
-			if (strcmp(req_file->file_id, file_id) == 0) found_reqfile=true;
+			if (strcmp(req_file->file_id, file_id) == 0) found_file=true;
 			else found_higher_handle = true;
 			break; //since the list is ordered by file handle, we don't need to go through all files
 		}
 	} //end for all files in the list
-	if (!found_reqfile) { //if we did not find it, make a new one
-		struct agios_list_head *insertion_place; /**< used to know where to insert the newly allocated request_file_t. */
+	if (!found_file) { //if we did not find it, make a new one
+		struct agios_list_head *insertion_place; /**< used to know where to insert the newly allocated file_t. */
 		if (found_higher_handle) insertion_place = &(req_file->hashlist);
 		else insertion_place = hash_list;
-		req_file = request_file_constructor(file_id);
+		req_file = file_constructor(file_id);
 		if (!req_file) {
 			agios_print("PANIC! AGIOS could not allocate memory!\n");
 			return NULL;
@@ -250,73 +317,8 @@ struct request_file_t *find_req_file(struct agios_list_head *hash_list,
 		agios_list_add_tail(&req_file->hashlist, insertion_place);
 	} //end if we did not find the structure
 	//update the file counter (that keeps track of how many files are being accessed right now
-	if (req_file->timeline_reqnb == 0) inc_current_reqfilenb();
+	if (req_file->timeline_reqnb == 0) inc_current_filenb();
 	return req_file;
-}
-/**
- * Allocates and initializes a new request_file_t structure about a file.
- * @param file_id the file handle.
- * @return the newly allocated and initialized structure, or NULL in case of error.
- */
-struct request_file_t * request_file_constructor(char *file_id)
-{
-	struct request_file_t *req_file;
-
-	req_file = malloc(sizeof(struct request_file_t));
-	if (!req_file) return NULL;
-	if (!request_file_init(req_file, file_id)) { //we enter the if if we had problems filling the structure, in that case cleanup
-		free(req_file);
-		return NULL;
-	}
-	return req_file;
-}
-/**
- * Function to allocate and fill a new request struct, used by agios_add_request.
- * @param file_id the handle of the file.
- * @param type is RT_READ or RT_WRITE.
- * @param offset the position of the file being accessed.
- * @param len the size of the request.
- * @param identifier a 64-bit value that makes sense for the user to uniquely identify this request.
- * @param arrival_time the timestamp for the arrival of this request.
- * @param the identifier of the application or server for this request, only relevant for TWINS and SW. @see agios_add_request
- * @see agios_request.h
- * @return the newly allocated and filled request structure, NULL if it failed.
- */
-struct request_t * request_constructor(char *file_id, 
-					int32_t type, 
-					int64_t offset, 
-					int64_t len, 
-					int64_t identifier,  
-					int64_t arrival_time, 
-					int32_t queue_id)
-{
-	struct request_t *new; /**< The new request structure that will be returned */
-
-	//allocate memory
-	new = malloc(sizeof(struct request_t));
-	if (!new) return NULL;
-	new->file_id = malloc(sizeof(char)*(strlen(file_id)+1));
-	if (!new->file_id) {
-		free(new);
-		return NULL;
-	}
-	//copy the file handle
-	strcpy(new->file_id, file_id);
-	//fill the structure
-	new->queue_id = queue_id;
-	new->type = type;
-	new->user_id = identifier;
-	new->offset = offset;
-	new->len = len;
-	new->sched_factor = 0;
-	new->arrival_time = arrival_time;
-	new->reqnb = 1;
-	init_agios_list_head(&new->reqs_list);
-	new->agg_head=NULL;
-	g_last_timestamp++;
-	new->timestamp = g_last_timestamp;
-	init_agios_list_head(&new->related);
-	return new;
 }
 /** 
  * function called by the user to add a request to AGIOS.
@@ -339,28 +341,16 @@ bool agios_add_request(char *file_id,
 	struct timespec arrival_time; /**< Filled with the time of arrival for this request */
 	int64_t timestamp; /**< It will receive a representation of arrival_time. */
 	int32_t hash = get_hashtable_position(file_id); /**< The position of the hashtable where information about this file is, calculated from the file handle. */ 
-	bool previous_needs_hashtable; /**< Used to control the used data structure in the case it is being changed while this function is running */
+	bool using_hashtable; /**< Used to control the used data structure in the case it is being changed while this function is running */
 
 	//build the request_t structure and fill it for the new request, also add it to the current pattern in case we are using the pattern matching mechanism
 	agios_gettime(&(arrival_time));
 	timestamp = get_timespec2long(arrival_time);
-	add_request_to_pattern(timestamp, offset, len, type, file_id); 
-	req = request_constructor(file_id, type, offset, len, data, timestamp, queue_id);
+//	add_request_to_pattern(timestamp, offset, len, type, file_id); 
+	req = request_constructor(file_id, type, offset, len, identifier, timestamp, queue_id);
 	if (!req) return false;
 	//acquire the lock for the right data structure (it depends on the current scheduling algorithm being used)
-	while (true) { //we'll break out of this loop when we are sure to have acquired the lock for the right data structure
-		//check if the current scheduler uses the hashtable or not and then acquire the right lock
-		previous_needs_hashtable = current_scheduler->needs_hashtable;
-		if (previous_needs_hashtable) hashtable_lock(hash);
-		else timeline_lock();
-		//the problem is that the scheduling algorithm could have changed while we were waiting to acquire the lock, and then it is possible we have the wrong lock. 
-		if (previous_needs_hashtable != current_scheduler->needs_hashtable) {
-			//the other thread has migrated scheduling algorithms (and data structure) while we were waiting for the lock (so the lock is no longer the adequate one)
-			if (previous_needs_hashtable) hashtable_unlock(hash);
-			else timeline_unlock();
-		}
-		else break; //everything is fine, we got the right lock (and now that we have it, other threads cannot change the scheduling algorithm
-	} 
+	using_hashtable = acquire_adequate_lock(hash);
 	//add the request to the right data structure
 	if (current_scheduler->needs_hashtable) hashtable_add_req(req,hash,NULL);
 	else timeline_add_req(req, hash, NULL);
@@ -369,7 +359,7 @@ bool agios_add_request(char *file_id,
 	req->globalinfo->current_size += req->len;
 	req->globalinfo->req_file->timeline_reqnb++;
 	statistics_new_req(req);  
-	debug("current status: there are %d requests in the scheduler to %d files",current_reqnb, current_reqfilenb);
+	debug("current status: there are %d requests in the scheduler to %d files",current_reqnb, current_filenb);
 	//trace this request arrival
 	if (config_trace_agios) agios_trace_add_request(req);  
 	//increase the number of current requests on the scheduler
@@ -384,7 +374,7 @@ bool agios_add_request(char *file_id,
 		generic_post_process(req);
 	}
 	//free the lock and leave
-	if (previous_needs_hashtable) hashtable_unlock(hash);
+	if (using_hashtable) hashtable_unlock(hash);
 	else timeline_unlock();
 	return true;
 }
