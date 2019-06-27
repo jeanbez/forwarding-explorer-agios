@@ -20,7 +20,7 @@
 struct io_scheduler_instance_t {
 	bool (*init)(void); /**< called to initialize the scheduler. MUST return true or false for success. This function is not mandatory, can be NULL. */ 
 	void (*exit)(void); /**< called to end a scheduler. MUST return true or false for success. This function is not mandatory, can be NULL. */
-	int64_t (*schedule)(void); /**< called to schedule some requests. You MUST NOT use waiting inside the schedule function. Instead, a waiting time is returned by this function to the agios_thread, which will wait if there aren't new requests. The reason to going back to agios_thread is that it will test if it is time to periodic events. This function is mandatory, except for dynamic schedulers, which can provide NULL. */
+	int64_t (*schedule)(void); /**< called to schedule some requests. This function MUST NOT sleep. Instead, a waiting time can be provided to the caller. That waiting time will be respected EVEN IF there are queued requests, so it is to be used wisely. This function is mandatory, except for dynamic schedulers, which can provide NULL. */
 	int32_t (*select_algorithm)(void); /**< Normal scheduling algorithms must provide NULL, this function is only provided by dynamic schedulers. It returns the next algorithm to be used. */
 	bool needs_hashtable; /**< Does this scheduler uses the hashtable to hold the requests? If not, then timeline is used. */
 	int32_t max_aggreg_size; /**< Maximum number of requests to be aggregated at once. */

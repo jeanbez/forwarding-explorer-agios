@@ -9,7 +9,7 @@
 
 /**
  * repeatedly process the first request of the timeline, until process_requests notify us to stop.
- * @return config_waiting_time
+ * @return 0 (because we will never decide to sleep) 
  */
 int64_t timeorder(void)
 {
@@ -25,7 +25,7 @@ int64_t timeorder(void)
 		generic_post_process(req);
 		timeline_unlock();
 	}
-	return config_waiting_time;
+	return 0;
 }
 
 

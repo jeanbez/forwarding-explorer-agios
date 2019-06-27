@@ -30,7 +30,7 @@ void TWINS_exit()
 }
 /**
  * main function for the TWINS scheduler. It is called by the AGIOS thread to schedule some requests. It will continue to consume requests until there are no more requests or if notified by the process_requests function.
- * @return time until the end of the current window
+ * @return if we are returning because we were asked to stop, 0, otherwise we return the time until the end of the current window
  */
 int64_t TWINS(void)
 {
@@ -67,9 +67,11 @@ int64_t TWINS(void)
 			TWINS_stop = process_requests(req, (struct client *)clnt, hash);
 		} else { //if there are no requests for this queue, we return control to the AGIOS thread and it will sleep a little 
 			timeline_unlock();
-			break; 
+			break; //get out of the while 
 		}
 		timeline_unlock();
 	} //end while
-	return (config_twins_window - get_nanoelapsed(g_window_start));
+	//if we are here, we were asked to stop by the process_requests function, or we have no requests to the server currently being accessed
+	if (TWINS_stop) return 0;
+	else return (config_twins_window - get_nanoelapsed(g_window_start));
 }

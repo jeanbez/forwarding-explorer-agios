@@ -46,14 +46,24 @@ bool is_time_to_change_scheduler(void)
 	} 
 	return false;
 } 
+/**
+ * Fills a struct timespec (used by sleeping functions) with a provided value in nanoseconds
+ * @param value_ns the value in nanoseconds
+ * @param str the struct timespec to be filled
+ */
+void fill_struct_timespec(int32_t value_ns, struct timespec *str)
+{
+	str->tv_sec = value_ns / 1000000000;
+	str->tv_nsec = value_ns % 1000000000;
+}
 /** 
  * the main function executed by the agios thread, which is responsible for processing requests that have been added to AGIOS.
  */
 void * agios_thread(void *arg)
 {
-	struct timespec timeout_tspec; /**< Used to set a timeout for pthread_cond_timedwait, so the thread periodically checks if it has to end. */
-	uint32_t current_timeout = config_waiting_time; /**< We have a configuration parameter to define for how long we should sleep when we sleep, but we could decrease this timeout temporarily if we have some periodic thing happening (for instance changing the scheduling algorithm). */
-	int32_t remaining_time; /**< Used to calculate how long until we change the scheduling algorithm again */
+	struct timespec timeout; /**< Used to set a timeout for pthread_cond_timedwait, so the thread periodically checks if it has to end. */
+	int32_t remaining_time = 0; /**< Used to calculate how long until we change the scheduling algorithm again */
+	int32_t scheduler_waiting_time = 0; /**< Used to receive instructions from the scheduling algorithms to sleep for some time before calling them again (even if we have queued requests to be processed) */
 
 	//find out which I/O scheduling algorithm we need to use
 	g_dynamic_scheduler = initialize_scheduler(config_agios_default_algorithm); //if the scheduler has an init function, it will be called
@@ -75,52 +85,51 @@ void * agios_thread(void *arg)
 	
 	//execution loop, it only stops when we close the library
 	do {
-		if (0 == get_current_reqnb()) { //here we use the mutex to access the variable current_reqnb because we don't want to risk getting an outdated value and then sleeping for nothing
-			/* there are no requests to be processed, so we just have to wait until a new request arrives. 
-			 * We use a timeout to avoid a situation where we missed the signal and will sleep forever, and
-                         * also because we have to check once in a while to see if we should end the execution.
-			 */
-			/*! \todo we might want to sleep for other reasons (like when the scheduling algorithms ask for it) */
-			if (current_timeout > 0) {
-				/*fill the timeout structure*/
-				timeout_tspec.tv_sec =  current_timeout / 1000000000L;
-				timeout_tspec.tv_nsec = current_timeout % 1000000000L;
-	 			pthread_mutex_lock(&g_request_added_mutex);
-				pthread_cond_timedwait(&g_request_added_cond, &g_request_added_mutex, &timeout_tspec);
-				pthread_mutex_unlock(&g_request_added_mutex);
+		//check if it is time to change the scheduling algorithm
+		if (g_dynamic_scheduler->is_dynamic) {
+			if (is_time_to_change_scheduler()) { //it is time to select!
+				//make a decision on the next scheduling algorithm
+				next_alg = d_dynamic_scheduler->select_algorithm();
+				//change it
+				debug("HEY IM CHANGING THE SCHEDULING ALGORITHM\n\n\n\n");
+				change_selected_alg(next_alg);
+				statistics_set_new_algorithm(current_alg);
+				performance_set_new_algorithm(current_alg);
+				reset_stats_window(); //reset all stats so they will not affect the next selection
+				unlock_all_data_structures(); //we can allow new requests to be added now
+				agios_gettime(&g_last_algorithm_update); 
+				debug("We've changed the scheduling algorithm to %s", current_scheduler->name);
+				remaining_time = config_agios_select_algorithm_period;
+			} else { //it is NOT time to select
+				remaining_time = config_agios_select_algoritm_period - get_nanoelapsed(g_last_algorithm_update);
+				if (remaining_time < 0) remaining_time = 0;
 			}
-			current_timeout = config_waiting_time; //the timeout is only changed temporarily (to a single call of cond_timedwait) */
+		} //end scheduler is dynamic
+		//if we have queued requests, try to process them
+		if (0 < get_current_reqnb()) { //here we use the mutex to access the variable current_reqnb because we don't want to risk getting an outdated value and then sleeping for nothing
+			scheduler_waiting_time = current_scheduler->schedule(client); //the scheduler may have a reason to ask us for a sleeping time (for instance, TWINS keeps track of time windows) 
+			if (scheduler_waiting_time > 0) { //the scheduling algorithm wants us to sleep for a while, so we'll respect that, and not with a cond_timedwait because this sleep is not to be interrupted by new request arrivals, and is not conditional to not having queued requests (we assume the scheduling algorithm knows what it is doing)
+				fill_struct_timespec(agios_min(scheduler_waiting_time, remaining_time), &timeout); //if we are supposed to change the scheduling algorithm before the end of the waiting time provided by the scheduler, we just wait until then
+				if (TWINS_SCHEDULER != current_alg) {
+					nanosleep(&timeout, NULL);
+				} else { //unless of course we are using TWINS. In that case the sleeping time is NOT to be respected unconditionally, we are sleeping because there are no requests to the server being accessed, but if some new requests arrive they could be to that server, and then we should call TWINS again
+	 				pthread_mutex_lock(&g_request_added_mutex);
+					pthread_cond_timedwait(&g_request_added_cond, &g_request_added_mutex, &timeout);
+					pthread_mutex_unlock(&g_request_added_mutex);
+				} //end if using TWINS
+			} //end if scheduler_waiting_time > 0	
+		} else { //we have no requests, so we sleep for a while (the default waiting time is provided in the configuration parameters), but this sleeping uses a conditional variable because we want to be called up if some new requests arrive (not having requests is the only reason why we are sleeping)
+			 /* We use a timeout to avoid a situation where we missed the signal and will sleep forever, and
+                          * also because we have to check once in a while to see if we should end the execution.
+			  */
+			//we have two possible scenarios here: first, remaining time is 0, that means we are not using a dynamic scheduler OR that we are, it is time to change the scheduling algorithm, but for some reason we are not ready to change it (because we have not processed enough requests in the period). In that case we may sleep at ease (for the usual amount of time) because if there are no queued requests, nothing will change (no requests will be processed so the decision of not changing the scheduling algorithm will not change). Second, if remaining time is greater than 0, that means we are using a dynamic scheduler AND we it is not yet time to change the scheduling algorithm. If that is supposed to happen earlier than our usual waiting time, we wake up earlier to respect that.
+			if (remaining_time > 0) fill_struct_timespec(agios_min(config_waiting_time, remaining_time), &timeout);  
+			else fill_struct_timespec(config_waiting_time, &timeout);
+	 		pthread_mutex_lock(&g_request_added_mutex);
+			pthread_cond_timedwait(&g_request_added_cond, &g_request_added_mutex, &timeout);
+			pthread_mutex_unlock(&g_request_added_mutex);
 		}
-		//we got past the above loop, so we could have requests to process, or reached the timeout of sleeping, or got a signal to finish the execution
-		//check if we should finish the execution
-		if (!g_agios_thread_stop) {
-			//check if it is time to change the scheduling algorithm
-			if (g_dynamic_scheduler->is_dynamic) {
-				if (is_time_to_change_scheduler()) { //it is time to select!
-					//make a decision on the next scheduling algorithm
-					next_alg = d_dynamic_scheduler->select_algorithm();
-					//change it
-					debug("HEY IM CHANGING THE SCHEDULING ALGORITHM\n\n\n\n");
-					change_selected_alg(next_alg);
-					statistics_set_new_algorithm(current_alg);
-					performance_set_new_algorithm(current_alg);
-					reset_stats_window(); //reset all stats so they will not affect the next selection
-					unlock_all_data_structures(); //we can allow new requests to be added now
-					agios_gettime(&g_last_algorithm_update); 
-					debug("We've changed the scheduling algorithm to %s", current_scheduler->name);
-					if (config_agios_select_algorithm_period < config_waiting_time) current_timeout = config_agios_select_algorithm_period;
-				} else { //it is NOT time to select
-					remaining_time = config_agios_select_algoritm_period - get_nanoelapsed(g_last_algorithm_update);
-					if (remaining_time < current_timeout) current_timeout = remaining_time;
-				}
-			} //end scheduler is dynamic
-			//try to process requests
-			remaining_time = current_scheduler->schedule(client); //the scheduler may have a reason to ask us for a shorter timeout (for instance, TWINS keeps track of time windows) 
-			//TODO adapt the scheduling algorithms
-			if (remaining_time < current_timeout) current_timeout = remaining_time;
-		} //end if(!g_agios_thread_stop)
         } while (!g_agios_thread_stop);
 
 	return 0;
 }
-//TODO dont change the scheduling algorithm if we have not processed a certain number of requests (config_min... )

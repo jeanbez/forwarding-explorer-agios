@@ -135,7 +135,7 @@ int32_t adjust_quantum(int32_t used_quantum, int32_t quantum);
 }
 /** 
  * function used to schedule requests. 
- * @return the timeout to be used by the agios thread to sleep. config_waiting_time if we are returning because we ran out of requests, 0 if we are returning because the function used to process requests has notified us we should stop, or another value if we cannot process requests because ALL files are waiting 
+ * @return the timeout to be used by the agios thread to sleep, in case we decide to sleep because ALL files are waiting and thus we have nothing to process (even if there are queued requests) 
  */
 int64_t aIOLi(void)
 {
@@ -147,7 +147,7 @@ int64_t aIOLi(void)
 	bool aioli_stop= false; /**< this flag will be returned by the process_requests function to notify us we should stop scheduling requests because it is time for some periodic event */
 	bool first_req; /**< used to ensure the first request of a selected queue is always processed (otherwise a small quantum will cause problems */
 	int64_t waiting_time; /**< in case all files are currently waiting, for how long we should wait*/
-	int64_t ret = config_waiting_time; /**< the timeout we are returning */
+	int64_t ret = 0; /**< the timeout we are returning */
 
 	//we are not locking the current_reqnb_mutex, so we could be using outdated information. We have chosen to do this for performance reasons
 	while ((current_reqnb > 0) && (!aioli_stop)) {
@@ -194,10 +194,8 @@ int64_t aIOLi(void)
 		} //end if we have a selected queue
 		else if (waiting_time > 0) { //we may have requests, but we cannot process them because all files are waiting, it is better to return
 			ret = waiting_time;
-			break; 
+			break; //get out of the while 
 		}
 	} //end if we have requests
-	//if we are here, we are out of requests, or we were notified we should stop, or we cannot process requests because we are waiting for all files (in that case ret contains the smallest waiting time)
-	if (aioli_stop) return 0; //so the agios_thread will see that it should not sleep and check if it is time to change the scheduling algorithm immediately
-	else return ret;
+	return ret;
 }

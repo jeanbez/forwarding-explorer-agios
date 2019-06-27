@@ -66,7 +66,7 @@ struct related_list_t *SJF_get_shortest_job(int32_t *current_hash)
 }
 /**
  * main function for the SJF scheduler. Selects requests, processes and then cleans up them. Returns only after consuming all requests, or earlier if notified by the process_requests function. 
- * @return config_waiting_time
+ * @return 0 (because we will never decide to sleep)
  */
 int64_t SJF(void)
 {	
@@ -94,6 +94,6 @@ int64_t SJF(void)
 			hashtable_unlock(SJF_current_hash);
 		}
 	}
-	return config_waiting_time;
+	return 0;
 }
 

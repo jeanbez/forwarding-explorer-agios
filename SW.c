@@ -5,7 +5,7 @@
 
 /**
  * main function for the scheduling algorithm, it simply uses the TO implementation because the only difference between them is in the inclusion of requests.
- * @return config_waiting_time
+ * @return 0 (because we will never decide to sleep)
  */
 int64_t SW(void)
 {

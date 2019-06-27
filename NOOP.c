@@ -12,7 +12,7 @@
 
 /** 
  * NOOP schedule function. Usually NOOP means not having a schedule function. However, when we dynamically change from another algorithm to NOOP, we may still have requests on queue. So we just process all of them. 
- * @return when we are notified about stopping because of periodic event, or when we run out of requests, return config_waiting_time
+ * @return 0, because we will never decide to sleep 
  */
 int64_t NOOP(void *clnt)
 {
@@ -35,6 +35,6 @@ int64_t NOOP(void *clnt)
 		}
 		timeline_unlock();	
 	}
-	return config_waiting_time;
+	return 0;
 }
 

@@ -76,7 +76,7 @@ struct request_t *MLF_select_request(struct request_file_t *req_file)
 }
 /**
  * main function for the MLF scheduler. Selects requests, processes and then cleans up them.
- * @return a waiting time for the agios_thead to sleep in case there are no requests.
+ * @return a waiting time for the agios_thead to sleep in case we decide to sleep, 0 otherwise.
  */ 
 int64_t MLF(void)
 {	
@@ -87,7 +87,7 @@ int64_t MLF(void)
 	int32_t starting_hash = MLF_current_hash; /**< from what hash position we are starting to round robin in the hashtable. */
 	bool processed_requests = false; /**< could we process any requests while going through the whole hashtable? */
 	bool mlf_stop=false; /**< flag that will be set by the process_request function, to let us know we should stop and give control back to the agios_thread */
-	int32_t waiting_time = config_waiting_time; /**< the waiting time we will return if we leave for not having requests to process (or if all files are waiting, in that case this will receive shortest_waiting_time). */
+	int32_t waiting_time = 0; /**< the waiting time we will return if we leave for not having requests to process (or if all files are waiting, in that case this will receive shortest_waiting_time). */
 
 	/*search through all the files for requests to process*/
 	while ((current_reqnb > 0) && (!mlf_stop)) {
@@ -121,7 +121,7 @@ int64_t MLF(void)
 			hashtable_unlock(MLF_current_hash);
 		} //end if we got the lock	
 		//now we'll move on to the next line of the hashtable
-		if (!mlf_stop) { //if update time is 1, we've left the loop without going through all reqfiles, we should not increase the current hash yet
+		if (!mlf_stop) { //if mlf_stop is true, we've left the loop without going through all reqfiles, we should not increase the current hash yet
 			MLF_current_hash++;
 			if (MLF_current_hash >= AGIOS_HASH_ENTRIES) MLF_current_hash = 0;
 			if (MLF_current_hash == starting_hash) { /*it means we already went through all the file structures*/
@@ -133,6 +133,5 @@ int64_t MLF(void)
 			}
 		} //end if we were not notified to stop
 	}//end while
-	if (mlf_stop) return 0;
-	else return waiting_time;
+	return waiting_time;
 }
