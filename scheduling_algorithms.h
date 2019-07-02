@@ -39,4 +39,5 @@ char *get_algorithm_name_from_index(int32_t index);
 struct io_scheduler_instance_t *find_io_scheduler(int32_t index);
 struct io_scheduler_instance_t *initialize_scheduler(int32_t index);
 void enable_SW(void);
+void generic_post_process(struct request_t *req);
 

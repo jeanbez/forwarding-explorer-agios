@@ -4,8 +4,12 @@
 #include <assert.h>
 #include <libconfig.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "agios_config.h"
+#include "common_functions.h"
+#include "scheduling_algorithms.h"
 
 int32_t config_agios_default_algorithm = SJF_SCHEDULER;	/**< scheduling algorithm to be used (the identifier of the scheduling algorithm) */
 int32_t config_agios_max_trace_buffer_size = 1*1024*1024; /**< in bytes. A buffer is used to keep trace messages before going to the file, to avoid small writes to the disk and decrease tracing overhead. This parameter gives the size allocated for the buffer. */
@@ -31,6 +35,42 @@ void cleanup_config_parameters(void)
 		free(config_trace_agios_file_prefix);
 	if(config_trace_agios_file_sufix)
 		free(config_trace_agios_file_sufix);
+}
+/**
+ * simple function that receives an int and returns a bool version of it. Used while reading the parameters (because libconfig does not have a bool type).
+ * @param input the input value to be converted
+ * @return true if input != 0, false otherwise.
+ */
+bool convert_inttobool(int32_t input)
+{
+	if (0 == input) return false;
+	else return true;
+}
+/** 
+ * simple function that receives a message and a flag and prints the message, "YES" or "NO" depending on the flag, and then a new line.
+ * @param flag the flag. If it is true we will print "YES", otherwise we'll print "NO"
+ * @param message a string to be printed before the part that depends on the flag.
+ */
+void config_print_flag(bool flag, const char *message)
+{
+	if (flag) agios_just_print("%sYES.\n", message);
+	else agios_just_print("%sNO.\n", message);
+}
+/**
+ * function called during the initialization to print configuration parameters that will be used by AGIOS.
+ */
+void config_print(void)
+{
+	agios_just_print("Scheduling algorithm: %s\n", get_algorithm_name_from_index(config_agios_default_algorithm)); 
+	agios_just_print("If the scheduling algorithm is dynamic, we will start with %s and keep statistics about the last %d used algorithms.\n", get_algorithm_name_from_index(config_agios_starting_algorithm), config_agios_performance_values);
+	agios_just_print("Also, if the scheduling algorithm is dynamic, we will change the used scheduler every %ld ns, as long as %d requests were processed.\n",config_agios_select_algorithm_period, config_agios_select_algorithm_min_reqnumber);
+	agios_just_print("If aIOLi is used, its quantum is %d.\n If MLF is used, its quanutm is %d.\n If SW is used, its window size is %ld.\n If TWINS is used, its window duration is %ld.\n", config_aioli_quantum, config_mlf_quantum, config_sw_size, config_twins_window);
+	agios_just_print("The default waiting time for the AGIOS thread is %d\n", config_waiting_time);
+	config_print_flag(config_trace_agios, "Will AGIOS generate trace files? ");
+	if (config_trace_agios) {
+		agios_just_print("\tTrace files are named %s.*.%s\n", config_trace_agios_file_prefix, config_trace_agios_file_sufix);
+		agios_just_print("\tTrace file buffer has size %d bytes\n", config_agios_max_trace_buffer_size);
+	} //end if tracing
 }
 /**
  * function used to read the configuration parameters from a configuration file. It uses libconfig to do so. 
@@ -112,22 +152,6 @@ void print_flag(bool flag, char *message)
 	agios_just_print("%s", message);
 	if (flag) agios_just_print("YES\n");
 	else agios_just_print("NO\n");
-}
-/**
- * function called during the initialization to print configuration parameters that will be used by AGIOS.
- */
-void config_print(void)
-{
-	agios_just_print("Scheduling algorithm: %s\n", get_algorithm_name_from_index(config_agios_default_algorithm)); 
-	agios_just_print("If the scheduling algorithm is dynamic, we will start with %s and keep statistics about the last %d used algorithms.\n", get_algorithm_name_from_index(contig_agios_starting_algorithm), config_agios_performance_values);
-	agios_just_print("Also, if the scheduling algorithm is dynamic, we will change the used scheduler every %ld ns, as long as %d requests were processed.\n",config_agios_select_algorithm_period, config_agios_select_algorithm_min_reqnumber);
-	agios_just_print("If aIOLi is used, its quantum is %d.\n If MLF is used, its quanutm is %d.\n If SW is used, its window size is %ld.\n If TWINS is used, its window duration is %ld.\n", config_aioli_quantum, config_mlf_quantum, config_sw_size, config_twins_window);
-	agios_just_print("The default waiting time for the AGIOS thread is %d\n", config_waiting_time);
-	config_print_flag(config_trace_agios, "Will AGIOS generate trace files? ");
-	if (config_trace_agios) {
-		agios_just_print("\tTrace files are named %s.*.%s\n", config_trace_agios_file_prefix, config_trace_agios_file_sufix);
-		agios_just_print("\tTrace file buffer has size %d bytes\n", config_agios_max_trace_buffer_size);
-	} //end if tracing
 }
 
 

@@ -6,6 +6,7 @@
 #pragma once 
 
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus

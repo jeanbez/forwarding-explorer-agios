@@ -4,7 +4,7 @@
     The agios thread stays in a loop of calling a scheduler to process new requests and waiting for new requests to arrive.
 */
 #include <stdbool.h>
-#include <stdtypes.h>
+#include <stdint.h>
 #include <pthread.h>
 
 #include "agios_thread.h"

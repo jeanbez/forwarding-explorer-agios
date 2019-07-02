@@ -1,11 +1,28 @@
 /*! \file agios_release_request.c
     \brief Implementation of the agios_release_request function, called by the user after processing a request.
  */
+#include <string.h>
+
 #include "agios.h"
 #include "agios_request.h"
+#include "common_functions.h"
+#include "data_structures.h"
+#include "hash.h"
 #include "mylist.h"
 #include "performance.h"
 
+/**
+ * This function is called by the release function, when the library user signaled it finished processing a request. In the case of a virtual request, its requests will be signaled separately, so here we are sure to receive a single request.
+ * @param req the request that has been released by the user.
+ */
+void generic_cleanup(struct request_t *req)
+{
+	//update the processed requests counter
+	req->globalinfo->stats.processedreq_nb++;
+	//update the data counter
+	req->globalinfo->stats.processed_req_size += req->len;
+	request_cleanup(req); //remove from the list and free the memory
+}
 /** 
  * function called by the user after processing a request. Releases the data structures and keeps track of performance.
  @param file_id the file handle
@@ -15,14 +32,14 @@
  @return true or false for success.
  */
 bool agios_release_request(char *file_id, 
-				int32_t int type, 
+				int32_t type, 
 				int64_t len, int64_t offset)
 {
 	int32_t hash = get_hashtable_position(file_id); /**< the position of the hashtable where we have to look for this request. */
 	bool ret = true; /**< return of the function */
-	struct request_file_t *req_file; /**< used to iterate through the files in a line of the hashtable */
+	struct file_t *req_file; /**< used to iterate through the files in a line of the hashtable */
 	struct agios_list_head *list; /**< used to access a line of the hashtable */
-	struct related_list_t *related; /**< used to point to the queue where we should look (read or write). */
+	struct queue_t *related; /**< used to point to the queue where we should look (read or write). */
 	struct request_t *req; /**< used to iterate through all requests to the file. */
 	bool found=false; /**< did we find this request in the dispatch queues? */ 
 	int64_t elapsed_time; /**< how long has it been since this request was issued? */
@@ -35,7 +52,7 @@ bool agios_release_request(char *file_id,
 	//first acquire lock. That is a bit complicated because the other thread might be migrating scheduling algorithms (and consequently data structures) while we are doing this. 
 	using_hashtable = acquire_adequate_lock(hash);
 	//now we are sure to have the lock
-	list = &hashlist[hash_val];
+	list = &hashlist[hash];
 	//find the structure for this file 
 	agios_list_for_each_entry (req_file, list, hashlist) {
 		if (strcmp(req_file->file_id, file_id) == 0) {
@@ -51,7 +68,7 @@ bool agios_release_request(char *file_id,
 		found = false;
 #ifdef AGIOS_DEBUG
 		debug("Releasing a request from file %s:", req_file->file_id );
-		print_hashtable_line(hash_val);
+		print_hashtable_line(hash);
 #endif
 		//get the relevant list 
 		if (type == RT_WRITE) related = &req_file->related_writes;
@@ -78,7 +95,7 @@ bool agios_release_request(char *file_id,
 			entry = get_request_entry(req); //we use the timestamp from when the request was sent for processing, because we want to relate its performance to the scheduling algorithm who choose to process the request
 			if (entry) { //we need to check because maybe the request took so long to process we don't even have a record for the scheduling algorithm that issued it
 				entry->reqnb++;
-				entry->size += req->io_data.len;
+				entry->size += req->len;
 				entry->bandwidth = update_iterative_average(entry->bandwidth,this_bandwidth, entry->reqnb);
 				if (entry == current_performance_entry) { //if this request was issued by the current scheduling algorithm
 					agios_processed_reqnb++; //we only count it as a new processed request if it was issued by the current scheduling algorithm
@@ -94,20 +111,8 @@ bool agios_release_request(char *file_id,
 		}
 	} //end if we found the req_file
 	//release data structure lock
-	if (using_hashtable) hashtable_unlock(hash_val);
+	if (using_hashtable) hashtable_unlock(hash);
 	else timeline_unlock();
 
 	return ret;
-}
-/**
- * This function is called by the release function, when the library user signaled it finished processing a request. In the case of a virtual request, its requests will be signaled separately, so here we are sure to receive a single request.
- * @param req the request that has been released by the user.
- */
-void generic_cleanup(struct request_t *req)
-{
-	//update the processed requests counter
-	req->globalinfo->stats.processedreq_nb++;
-	//update the data counter
-	req->globalinfo->stats.processed_req_size += req->io_data.len;
-	request_cleanup(req); //remove from the list and free the memory
 }

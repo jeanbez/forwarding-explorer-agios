@@ -1,33 +1,40 @@
 /*! \file aIOLi.c
     \brief Implementation of the aIOLi scheduling algorithm 
  */
+#include <stdbool.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <time.h>
 #include <limits.h>
 #include <string.h>
 
+#include "agios_config.h"
+#include "agios_counters.h"
+#include "agios_request.h"
 #include "aIOLi.h"
+#include "mylist.h"
+#include "process_request.h"
+#include "req_hashtable.h"
+#include "waiting_common.h"
 
 /**
  * this function answers if it is possible to select a request from this queue. It has the secondary effect of increment the schedule factor of all requests in the queue.
- * @param related_list the queue from which we are trying to select requests.
+ * @param queue the queue from which we are trying to select requests.
  * @param selected_queue and selected_timestamp will be updated in this function to contain this queue and the timestamp of the request that would be processed.
  * @return true or false for existing requests to be processed in this queue.
  */
-bool aIOLi_select_from_list(struct related_list_t *related_list, 
-				struct related_list_t **selected_queue, 
+bool aIOLi_select_from_list(struct queue_t *queue, 
+				struct queue_t **selected_queue, 
 				int64_t *selected_timestamp)
 {
 	bool ret = false; /**< did we find a request that could be processed? */
 	struct request_t *req; /**< used to iterate over the requests in this queue */
 
-	agios_list_for_each_entry (req, &related_list->list, related) { //iterate over requests in this queue
+	agios_list_for_each_entry (req, &queue->list, related) { //iterate over requests in this queue
 		increment_sched_factor(req);
-		if (&(req->related) == related_list->list.next) { //we only try to select the first request from the queue (to respect offset order), but we don't break the loop because we want all requests to have their sched_factor incremented.
+		if (&(req->related) == queue->list.next) { //we only try to select the first request from the queue (to respect offset order), but we don't break the loop because we want all requests to have their sched_factor incremented.
 			if (req->len <= req->sched_factor*config_aioli_quantum) { //all requests start by a fixed size quantum (aIOLi_QUANTUM), which is increased every step (by increasing the sched_factor). The request can only be processed when its quantum is large enough to fit its size.
 				ret = true;
-				*selected_queue = related_list;
+				*selected_queue = queue;
 				*selected_timestamp = req->timestamp;
 			} //end if request's schedule factor is large enough	
 		} //end if this is the first request
@@ -40,8 +47,8 @@ bool aIOLi_select_from_list(struct related_list_t *related_list,
  * @param selected_queue and selected_timestamp will be updated here to one of the queues from this file (if possible) 
  * @return true or false for we can process requests to this file.
  */
-bool aIOLi_select_from_file(struct request_file_t *req_file, 
-				struct related_list_t **selected_queue, 
+bool aIOLi_select_from_file(struct file_t *req_file, 
+				struct queue_t **selected_queue, 
 				int64_t *selected_timestamp)
 {
 	bool ret = false;
@@ -57,15 +64,15 @@ bool aIOLi_select_from_file(struct request_file_t *req_file,
  * @param sleeping_time will be modified here to contain for how long we should sleep IN CASE all files are waiting so we have nothing to process. in that case, we return NULL
  * @return a pointer to the selected queue (or NULL if we can't process requests)
  */
-struct related_list_t *aIOLi_select_queue(int32_t *selected_index, int64_t *sleeping_time)
+struct queue_t *aIOLi_select_queue(int32_t *selected_index, int64_t *sleeping_time)
 {
 	struct agios_list_head *reqfile_l; /**< used to iterate over the hashtable */
-	struct request_file_t *req_file; /**< used to iterate over a hashtable line */
+	struct file_t *req_file; /**< used to iterate over a hashtable line */
 	int32_t shortest_waiting_time=INT_MAX;	/**< used to find out for how long we need to wait in case all files are currently waiting (hence we cannot process requests) */
 	int32_t reqnb; /**< used to check how many requests from a queue could be selected */ 
-	struct related_list_t *tmp_selected_queue=NULL; /**< the queue that would be selected to a given file */
+	struct queue_t *tmp_selected_queue=NULL; /**< the queue that would be selected to a given file */
 	int64_t tmp_timestamp; /**< the shortest timestamp from the queue that would be selected to a given file (used to ensure FIFO between different files) */
-	struct related_list_t *selected_queue = NULL; /**< the selected queue, will be returned */
+	struct queue_t *selected_queue = NULL; /**< the selected queue, will be returned */
 	int64_t selected_timestamp=INT_MAX; /**< the earliest timestamp from the selected queue, used to ensure FIFO between different files */
 	int32_t waiting_options=0; /**< how many files we are skipping because they are currently waiting? */
 	struct request_t *req=NULL; /**< used to gather the first request from the selected queue to test if we should make this file wait */ 
@@ -106,7 +113,7 @@ struct related_list_t *aIOLi_select_queue(int32_t *selected_index, int64_t *slee
 		hashtable_unlock(*selected_index);
 	}
 	else if (waiting_options) { // we could not select a queue, because all the files are waiting. So we should wait
-		*sleeping_time = smallest_waiting_time;
+		*sleeping_time = shortest_waiting_time;
 	}
 	return selected_queue;
 }
@@ -139,7 +146,7 @@ int32_t adjust_quantum(int32_t used_quantum, int32_t quantum);
  */
 int64_t aIOLi(void)
 {
-	struct related_list_t *aIOLi_selected_queue=NULL; /**< the queue from each we are taking requests in a given moment */
+	struct queue_t *aIOLi_selected_queue=NULL; /**< the queue from each we are taking requests in a given moment */
 	int32_t selected_hash = 0; /**< the position from the hashtable we are accessing at a given moment */
 	struct request_t *req; /**< the request chosen to be processed at a given moment */
 	int32_t current_quantum = 0; /**< the quantum for the current queue being accessed */

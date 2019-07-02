@@ -3,5 +3,7 @@
 */
 #pragma once
 
+#include <stdint.h>
+
 int32_t get_hashtable_position(const char *file_handle);
 

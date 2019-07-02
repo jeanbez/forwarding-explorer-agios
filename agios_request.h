@@ -95,3 +95,5 @@ struct request_t {
 	struct request_t *agg_head; /**< pointer to the virtual request structure (if this one is part of an aggregation) */
 	struct agios_list_head list;  /**< to be inserted as part of a virtual request */
 };
+
+void request_cleanup(struct request_t *aux_req);

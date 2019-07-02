@@ -7,6 +7,14 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "agios.h"
+#include "common_functions.h"
+#include "data_structures.h"
+#include "hash.h"
+#include "mylist.h"
+#include "req_hashtable.h"
+#include "req_timeline.h"
+
 /** 
  * function used to remove a request from the scheduling queues
  * @param file_id the file handle associated with the request.
@@ -22,7 +30,7 @@ bool agios_cancel_request(char *file_id,
 			int64_t len, 
 			int64_t offset)  
 {
-	struct request_file_t *req_file; /**< used to look for information about the file accessed by the request */
+	struct file_t *req_file; /**< used to look for information about the file accessed by the request */
 	int32_t hash = get_hashtable_position(file_id); /**< the position of the hashtable where information about the file is */ 
 	struct agios_list_head *list; /**< used to iterate over the line of the hashtable, and then over the queue */
 	struct request_t *req; /**< used to iterate over the queue */

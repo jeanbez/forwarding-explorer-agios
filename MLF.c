@@ -1,12 +1,14 @@
 /*! \file MLF.c
     \brief Implementation of the MLF scheduling algorithm.
  */
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <time.h>
 #include <limits.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#include "common_functions.h"
+#include "req_hashtable.h"
 
 static int MLF_current_hash=0;  /**< position of the hashtable we are accessing. Used so we do a round robin on the hashtable even across different calls to MLF(). */
 static int *MLF_lock_tries=NULL; /**< counter of how many times we tried without success to acquire the lock of a hashtable line. */
@@ -37,7 +39,7 @@ void MLF_exit()
  * @param reqlist the queue of requests.
  * @return a pointer to the request to be processed.
  */
-struct request_t *applyMLFonlist(struct related_list_t *reqlist)
+struct request_t *applyMLFonlist(struct queue_t *reqlist)
 {
 	bool found=false;
 	struct request_t *req; /**< used to iterate over all requests in the queue. */

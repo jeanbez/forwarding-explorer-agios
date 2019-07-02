@@ -1,6 +1,8 @@
 /*! \file common_functions.c
     \brief Miscellaneous functions used everywhere in AGIOS source code.
  */
+#include <assert.h>
+
 #include "common_functions.h"
 
 #define TIMESPEC_DIFF(t1, t2)  ((t2.tv_nsec - t1.tv_nsec) + ((t2.tv_sec - t1.tv_sec)*1000000000L)) /**< used to measure the time difference between two struct timespec */
@@ -97,6 +99,6 @@ int64_t update_iterative_average(int64_t avg, int64_t value, int64_t count)
 {
 	assert(count > 0);
 	if (count == 1) return value; //this is the first value, we don't have an average yet.
-	else return avg + ((new - avg)/count);
+	else return avg + ((value - avg)/count);
 }
 

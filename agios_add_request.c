@@ -10,12 +10,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "agios_config.h"
+#include "agios_counters.h"
 #include "agios_request.h"
+#include "agios_thread.h"
 #include "common_functions.h"
+#include "data_structures.h"
 #include "hash.h"
 #include "mylist.h"
 //#include "pattern_tracker.h"
+#include "process_request.h"
+#include "req_hashtable.h"
+#include "req_timeline.h"
 #include "scheduling_algorithms.h"
+#include "statistics.h"
+#include "trace.h"
 
 /**
  * says if two requests to the same file are contiguous or not.
@@ -358,7 +367,7 @@ bool agios_add_request(char *file_id,
 	hashlist_reqcounter[hash]++;
 	req->globalinfo->current_size += req->len;
 	req->globalinfo->req_file->timeline_reqnb++;
-	statistics_new_req(req);  
+	statistics_newreq(req);  
 	debug("current status: there are %d requests in the scheduler to %d files",current_reqnb, current_filenb);
 	//trace this request arrival
 	if (config_trace_agios) agios_trace_add_request(req);  
@@ -370,7 +379,7 @@ bool agios_add_request(char *file_id,
 	} else {
 		//if we are running the NOOP scheduler, we just give it back already
 		debug("NOOP is directly processing this request");
-		process_requests(req, clnt, hash);
+		process_requests(req, hash);
 		generic_post_process(req);
 	}
 	//free the lock and leave

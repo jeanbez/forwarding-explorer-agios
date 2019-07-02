@@ -64,7 +64,8 @@ int64_t TWINS(void)
 			/*send it back to the file system*/
 			//we need the hash for this request's file id so we can update its stats 
 			hash = get_hashtable_position(req->file_id);
-			TWINS_stop = process_requests(req, (struct client *)clnt, hash);
+			TWINS_stop = process_requests(req, hash);
+			generic_post_process(req);
 		} else { //if there are no requests for this queue, we return control to the AGIOS thread and it will sleep a little 
 			timeline_unlock();
 			break; //get out of the while 

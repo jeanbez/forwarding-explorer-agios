@@ -88,7 +88,6 @@ int64_t SJF(void)
 				__hashtable_del_req(req);
 				/*sends it back to the file system*/
 				SJF_stop = process_requests(req, (struct client *)clnt, SJF_current_hash);
-				/*cleanup step*/
 				generic_post_process(req);
 			}
 			hashtable_unlock(SJF_current_hash);

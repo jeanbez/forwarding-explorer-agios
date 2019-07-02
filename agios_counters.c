@@ -4,6 +4,7 @@
     These counters are kept updated during the execution, and protected with a mutex.
 */
 #include "agios_counters.h"
+#include "req_hashtable.h"
 
 int32_t current_reqnb; /**< Number of queued requests */
 int32_t current_filenb; /**< Number of files with queued requests */

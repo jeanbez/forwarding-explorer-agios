@@ -2,6 +2,7 @@
     \brief Implementation of the get_hashtable_position function, used to select a line of the hashtable according to a file handle.
 */
 #include <string.h>
+
 #include "hash.h"
 #include "req_hashtable.h"
 

@@ -15,7 +15,7 @@ bool hashtable_init(void);
 void hashtable_cleanup(void);
 bool hashtable_add_req(struct request_t *req, 
 			int32_t hash_val, 
-			struct request_file_t *given_req_file);
+			struct file_t *given_req_file);
 void hashtable_safely_del_req(struct request_t *req);
 void hashtable_del_req(struct request_t *req);
 struct agios_list_head *hashtable_lock(int32_t index);

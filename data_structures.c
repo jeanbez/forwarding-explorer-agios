@@ -10,11 +10,23 @@
 
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <limits.h>
 
-void put_all_requests_in_timeline(struct agios_list_head *related_list, struct request_file_t *req_file, long hash);
+#include "agios_counters.h"
+#include "agios_request.h"
+#include "common_functions.h"
+#include "hash.h"
+#include "mylist.h"
+#include "req_hashtable.h"
+#include "req_timeline.h"
+#include "scheduling_algorithms.h"
+#include "statistics.h"
+
+void put_all_requests_in_timeline(struct agios_list_head *queue, struct file_t *req_file, long hash);
 void put_all_requests_in_hashtable(struct agios_list_head *list);
 
 /**
@@ -25,7 +37,7 @@ void put_all_requests_in_hashtable(struct agios_list_head *list);
  */
 void put_this_request_in_timeline(struct request_t *req, 
 					int32_t hash, 
-					struct request_file_t *req_file)
+					struct file_t *req_file)
 {
 	//remove from queue
 	agios_list_del(&req->related);
@@ -42,18 +54,18 @@ void put_this_request_in_timeline(struct request_t *req,
 /** 
  * function called to move all requests from a list of requests (either a queue from the hashtable or an aggregated request) to the timeline.
  * @see put_this_request_in_timeline
- * @param related_list the list of requests.
+ * @param queue the list of requests.
  * @param req_file the file from which this list came from.
  * @param hash the line of the hashtable from which this list came from.
  */
-void put_all_requests_in_timeline(struct agios_list_head *related_list, 
-					struct request_file_t *req_file, 
+void put_all_requests_in_timeline(struct agios_list_head *queue, 
+					struct file_t *req_file, 
 					int32_t hash)
 {
 	struct request_t *req; /**< used to iterate over all requests in the list */
 	struct request_t *aux_req=NULL; /**< used so we don't move and free the request before moving the iterator to the next one, otherwise the loop breaks. */
 
-	agios_list_for_each_entry (req, related_list, related) { //go through all requests
+	agios_list_for_each_entry (req, queue, related) { //go through all requests
 		if (aux_req) put_this_request_in_timeline(aux_req, hash, req_file);
 		aux_req = req;
 	}
@@ -98,7 +110,7 @@ void put_all_requests_in_hashtable(struct agios_list_head *list)
 void migrate_from_hashtable_to_timeline()
 {
 	struct agios_list_head *hash_list; /**< used to point to each line of the hashtable */
-	struct request_file_t *req_file; /**< used to iterate over each line of the hashtable */
+	struct file_t *req_file; /**< used to iterate over each line of the hashtable */
 
 	//we will mess with the data structures and don't even use locks, since here we are certain no one else is messing with them
 	for (int32_t i=0; i< AGIOS_HASH_ENTRIES; i++) { //go through the whole hashtable, one position at a time
@@ -151,7 +163,7 @@ bool allocate_data_structures(int32_t max_queue_id)
 	if (!hashtable_init()) return false; 
 	//put request and file counters to 0
 	current_reqnb = 0;
-	current_reqfilenb=0;
+	current_filenb=0;
 	//block all data structures so the user cannot start adding requests while we are not ready (we need to select a scheduling algorithm first)
 	lock_all_data_structures();
 	return true;
