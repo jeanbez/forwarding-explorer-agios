@@ -94,8 +94,9 @@ int64_t MLF(void)
 	int32_t shortest_waiting_time=INT_MAX; /**< will be adapted to the shortest waiting time among all files that are currently waiting. In case we cannot process requests because all of the files are waiting, we will use this to wait the shortest amount of time possible. */
 	int32_t starting_hash = MLF_current_hash; /**< from what hash position we are starting to round robin in the hashtable. */
 	bool processed_requests = false; /**< could we process any requests while going through the whole hashtable? */
-	bool mlf_stop=false; /**< flag that will be set by the process_request function, to let us know we should stop and give control back to the agios_thread */
+	bool mlf_stop=false; /**< flag that will be set by the process_request_step2 function, to let us know we should stop and give control back to the agios_thread */
 	int32_t waiting_time = 0; /**< the waiting time we will return if we leave for not having requests to process (or if all files are waiting, in that case this will receive shortest_waiting_time). */
+	struct processing_info_t *info; /**< the struct with information about requests to be processed, filled by process_requests_step1 and given as parameter to process_requests_step2 */
 
 	/*search through all the files for requests to process*/
 	while ((current_reqnb > 0) && (!mlf_stop)) {
@@ -118,7 +119,9 @@ int64_t MLF(void)
 						/*removes the request from the hastable*/
 						hashtable_del_req(req);
 						/*sends it back to the file system*/
-						mlf_stop = process_requests(req, MLF_current_hash);
+						/* \todo do not hold the lock when calling step2! */
+						info = process_requests_step1(req, MLF_current_hash);
+						mlf_stop = process_requests_step2(info);
 						processed_requests=true;
 						/*cleanup step*/
 						waiting_algorithms_postprocess(req);

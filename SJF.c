@@ -73,7 +73,7 @@ struct queue_t *SJF_get_shortest_job(int32_t *current_hash)
 	}
 }
 /**
- * main function for the SJF scheduler. Selects requests, processes and then cleans up them. Returns only after consuming all requests, or earlier if notified by the process_requests function. 
+ * main function for the SJF scheduler. Selects requests, processes and then cleans up them. Returns only after consuming all requests, or earlier if notified by the process_requests_step2 function. 
  * @return 0 (because we will never decide to sleep)
  */
 int64_t SJF(void)
@@ -81,7 +81,8 @@ int64_t SJF(void)
 	int32_t SJF_current_hash=0; /**< the line of the hashtable we are going to take requests from. */
 	struct queue_t *SJF_current_queue; /**< the queue from which we will take requests. */
 	struct request_t *req; /**< the request we will process. */
-	bool SJF_stop=false; /**< the return of the process_requests function may notify us it is time to stop because of a periodic event. */
+	bool SJF_stop=false; /**< the return of the process_requests_step2 function may notify us it is time to stop because of a periodic event. */
+	struct processing_info_t *info; /**< the struct with information about requests to be processed, filled by process_requests_step1 and given as parameter to process_requests_step2 */
 
 	while ((current_reqnb > 0) && (SJF_stop == false)) {
 		/*1. find the shortest queue*/
@@ -95,10 +96,11 @@ int64_t SJF(void)
 				/*removes the request from the hastable*/
 				hashtable_del_req(req);
 				/*sends it back to the file system*/
-				SJF_stop = process_requests(req, SJF_current_hash);
+				info = process_requests_step1(req, SJF_current_hash);
 				generic_post_process(req);
-			}
-			hashtable_unlock(SJF_current_hash);
+				hashtable_unlock(SJF_current_hash);
+				SJF_stop = process_requests_step2(info);
+			} else hashtable_unlock(SJF_current_hash);
 		}
 	}
 	return 0;

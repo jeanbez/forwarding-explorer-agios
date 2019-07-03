@@ -40,14 +40,15 @@ void TWINS_exit()
 {
 }
 /**
- * main function for the TWINS scheduler. It is called by the AGIOS thread to schedule some requests. It will continue to consume requests until there are no more requests or if notified by the process_requests function.
+ * main function for the TWINS scheduler. It is called by the AGIOS thread to schedule some requests. It will continue to consume requests until there are no more requests or if notified by the process_requests_step2 function.
  * @return if we are returning because we were asked to stop, 0, otherwise we return the time until the end of the current window
  */
 int64_t TWINS(void)
 {
-	bool TWINS_stop=false; /**< the return of the process_requests function may notify us it is time to stop because of a periodic event */
+	bool TWINS_stop=false; /**< the return of the process_requests_step2 function may notify us it is time to stop because of a periodic event */
 	struct request_t *req; /**< used to access requests from the queues */
 	int32_t hash; /**< after selecting a request to be processed, we need to find out its hash to give to the process_requests function */
+	struct processing_info_t *info; /**< the struct with information about requests to be processed, filled by process_requests_step1 and given as parameter to process_requests_step2 */
 	
 	PRINT_FUNCTION_NAME;
 	//we are not locking the current_reqnb_mutex, so we could be using outdated information. We have chosen to do this for performance reasons
@@ -75,13 +76,14 @@ int64_t TWINS(void)
 			/*send it back to the file system*/
 			//we need the hash for this request's file id so we can update its stats 
 			hash = get_hashtable_position(req->file_id);
-			TWINS_stop = process_requests(req, hash);
+			info = process_requests_step1(req, hash);
 			generic_post_process(req);
+			timeline_unlock();
+			TWINS_stop = process_requests_step2(info);
 		} else { //if there are no requests for this queue, we return control to the AGIOS thread and it will sleep a little 
 			timeline_unlock();
 			break; //get out of the while 
 		}
-		timeline_unlock();
 	} //end while
 	//if we are here, we were asked to stop by the process_requests function, or we have no requests to the server currently being accessed
 	if (TWINS_stop) return 0;

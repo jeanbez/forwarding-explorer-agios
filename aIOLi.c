@@ -156,6 +156,7 @@ int64_t aIOLi(void)
 	bool first_req; /**< used to ensure the first request of a selected queue is always processed (otherwise a small quantum will cause problems */
 	int64_t waiting_time; /**< in case all files are currently waiting, for how long we should wait*/
 	int64_t ret = 0; /**< the timeout we are returning */
+	struct processing_info_t *info; /**< the struct with information about requests to be processed, filled by process_requests_step1 and given as parameter to process_requests_step2 */
 
 	//we are not locking the current_reqnb_mutex, so we could be using outdated information. We have chosen to do this for performance reasons
 	while ((current_reqnb > 0) && (!aioli_stop)) {
@@ -177,8 +178,10 @@ int64_t aIOLi(void)
 				used_quantum += req->len;
 				/*removes the request from the hastable*/
 				hashtable_del_req(req);
-				/*sends it back to the file system*/
-				aioli_stop = process_requests(req, selected_hash);
+				/*sends it back to the file system
+				 *TODO should not hold lock for _step2*/
+				info = process_requests_step1(req, selected_hash);
+				aioli_stop = process_requests_step2(info);
 				/*cleanup step*/
 				waiting_algorithms_postprocess(req);
 				//here we used to wait until the request was processed before moving on (as in aioli's original design), but that proved to have very poor performance in modern systems because we want some request parallelism.

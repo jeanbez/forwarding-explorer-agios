@@ -26,6 +26,7 @@ int64_t NOOP(void)
 	struct request_t *req;
 	bool stop_processing=false;
 	int32_t hash;
+	struct processing_info_t *info; /**< the struct with information about requests to be processed, filled by process_requests_step1 and given as parameter to process_requests_step2 */
 
 	while(!stop_processing) 
 	{
@@ -35,10 +36,11 @@ int64_t NOOP(void)
 			//just take one request and process it
 			req = timeline_oldest_req(&hash);
 			debug("NOOP is processing leftover requests %s %ld %ld", req->file_id, req->offset, req->len);
-			stop_processing = process_requests(req, hash);
+			info = process_requests_step1(req, hash);
 			generic_post_process(req);
-		}
-		timeline_unlock();	
+			timeline_unlock();	
+			stop_processing = process_requests_step2(info);
+		} else timeline_unlock();	
 	}
 	return 0;
 }

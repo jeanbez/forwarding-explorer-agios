@@ -371,14 +371,16 @@ bool agios_add_request(char *file_id,
 	// Signalize to the consumer thread that a new request was added. In the case of NOOP scheduler, the agios thread does nothing, we will return the request right away
 	if (current_alg != NOOP_SCHEDULER) {
 		signal_new_req_to_agios_thread(); 
+		if (using_hashtable) hashtable_unlock(hash);
+		else timeline_unlock();
 	} else {
 		//if we are running the NOOP scheduler, we just give it back already
 		debug("NOOP is directly processing this request");
-		process_requests(req, hash);
+		struct processing_info_t *info = process_requests_step1(req, hash);
 		generic_post_process(req);
+		if (using_hashtable) hashtable_unlock(hash);
+		else timeline_unlock();
+		process_requests_step2(info);
 	}
-	//free the lock and leave
-	if (using_hashtable) hashtable_unlock(hash);
-	else timeline_unlock();
 	return true;
 }
