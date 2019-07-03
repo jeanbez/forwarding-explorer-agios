@@ -7,5 +7,6 @@
 
 
 void * agios_thread(void *arg);
-void consumer_signal_new_reqs(void);
 void stop_the_agios_thread(void);
+void signal_new_req_to_agios_thread(void);
+bool is_time_to_change_scheduler(void);

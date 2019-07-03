@@ -14,6 +14,7 @@
 #include "mylist.h"
 #include "process_request.h"
 #include "req_hashtable.h"
+#include "scheduling_algorithms.h"
 #include "waiting_common.h"
 
 /**
@@ -53,10 +54,10 @@ bool aIOLi_select_from_file(struct file_t *req_file,
 {
 	bool ret = false;
 	//we try to select read requests before because they are faster
-	if (!agios_list_empty(&req_file->related_reads.list)) ret = aIOLi_select_from_list(&req_file->related_reads, selected_queue, selected_timestamp);
+	if (!agios_list_empty(&req_file->read_queue.list)) ret = aIOLi_select_from_list(&req_file->read_queue, selected_queue, selected_timestamp);
 	//try to select write requests if we could not select read requests 
-	if ((!ret) && (!agios_list_empty(&req_file->related_writes.list))) ret = aIOLi_select_from_list(&req_file->related_writes, selected_queue, selected_timestamp);
-	return ret
+	if ((!ret) && (!agios_list_empty(&req_file->write_queue.list))) ret = aIOLi_select_from_list(&req_file->write_queue, selected_queue, selected_timestamp);
+	return ret;
 }
 /**
  * function called by the aIOLi schedule function to select one of the queues to process requests from.
@@ -123,7 +124,7 @@ struct queue_t *aIOLi_select_queue(int32_t *selected_index, int64_t *sleeping_ti
  * @param quantum how much was the quantum (in amount of data).
  * @return the next quantum to be used by this queue.
  */
-int32_t adjust_quantum(int32_t used_quantum, int32_t quantum); 
+int32_t adjust_quantum(int32_t used_quantum, int32_t quantum)
 {
 	int32_t used_quantum_rate = (used_quantum*100)/quantum; /**< fraction of the quantum that was used */
 	int32_t requiredqt; /**< how much we believe was needed */
@@ -175,7 +176,7 @@ int64_t aIOLi(void)
 				//if we are here, then we have a request to be processed that fits the quantum
 				used_quantum += req->len;
 				/*removes the request from the hastable*/
-				__hashtable_del_req(req);
+				hashtable_del_req(req);
 				/*sends it back to the file system*/
 				aioli_stop = process_requests(req, selected_hash);
 				/*cleanup step*/

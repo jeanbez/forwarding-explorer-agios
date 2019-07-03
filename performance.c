@@ -1,8 +1,17 @@
 /*! \file performance.c
     \brief The performance module, that keeps track of performance observed with different scheduling algorithms.
  */
+#include <pthread.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "agios_config.h"
+#include "agios_request.h"
+#include "common_functions.h"
+#include "mylist.h"
+#include "performance.h"
+#include "scheduling_algorithms.h"
 
 int64_t agios_processed_reqnb; /**< processed (and released) requests counter (relative to the most recently selected scheduling algorithm only). I've decided not to protect it with a mutex although it is used by two threads. The library's user calls the release function, where this variable is modified. The scheduling thread reads it in the process_requests function. Since it is not critical to have the most recent value there, no mutex. */
 
@@ -39,9 +48,9 @@ int64_t get_current_performance_bandwidth(void)
 {
 	int64_t ret; /**< value that will be returned. */
 
-	agios_mutex_lock(&performance_mutex);
+	pthread_mutex_lock(&performance_mutex);
 	ret = current_performance_entry->bandwidth;
-	agios_mutex_unlock(&performance_mutex);	
+	pthread_mutex_unlock(&performance_mutex);	
 	return ret;
 }
 /**
@@ -65,7 +74,7 @@ bool performance_set_new_algorithm(int32_t alg)
 	new->timestamp = get_timespec2long(now);
 	new->alg = alg;
 	//add it to the performance_info list
-	agios_mutex_lock(&performance_mutex);
+	pthread_mutex_lock(&performance_mutex);
 	agios_list_add_tail(&(new->list), &performance_info);
 	current_performance_entry = new;
 	performance_info_len++;
@@ -77,7 +86,7 @@ bool performance_set_new_algorithm(int32_t alg)
 		free(new);
 		performance_info_len--;
 	}
-	agios_mutex_unlock(&performance_mutex);
+	pthread_mutex_unlock(&performance_mutex);
 	return true;
 }
 /** 
@@ -112,7 +121,11 @@ void print_all_performance_data(void)
 
 	debug("current situation of the performance model:");
 	agios_list_for_each_entry (aux, &performance_info, list) {
-		if (aux->time > 0) debug("%s - %ld bytes in %ld ns = %.6f bytes/s (timestamp %ld)", get_algorithm_name_from_index(aux->alg), aux->size, aux->time, ((double)aux->size)/get_ns2s(aux->time), aux->timestamp);
-		else debug("%s - %ld bytes in %ld ns (timestamp %ld)", get_algorithm_name_from_index(aux->alg), aux->size, aux->time, aux->timestamp);
+		debug("%s - %ld bytes, %ld requests, %ld bytes/ns (timestamp %ld)",
+			get_algorithm_name_from_index(aux->alg),
+			aux->size,
+			aux->reqnb,
+			aux->bandwidth,
+			aux->timestamp);
 	}
 }

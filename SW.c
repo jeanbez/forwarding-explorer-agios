@@ -2,6 +2,9 @@
     \brief Implementation of the SW scheduling algorithm
 
  */
+#include <stdint.h>
+
+#include "TO.h"
 
 /**
  * main function for the scheduling algorithm, it simply uses the TO implementation because the only difference between them is in the inclusion of requests.

@@ -7,8 +7,14 @@
 #include <string.h>
 #include <time.h>
 
+#include "agios_config.h"
+#include "agios_counters.h"
 #include "common_functions.h"
+#include "MLF.h"
+#include "mylist.h"
+#include "process_request.h"
 #include "req_hashtable.h"
+#include "waiting_common.h"
 
 static int MLF_current_hash=0;  /**< position of the hashtable we are accessing. Used so we do a round robin on the hashtable even across different calls to MLF(). */
 static int *MLF_lock_tries=NULL; /**< counter of how many times we tried without success to acquire the lock of a hashtable line. */
@@ -63,15 +69,15 @@ struct request_t *applyMLFonlist(struct queue_t *reqlist)
  * @param req_file the file to be accessed.
  * @return a pointer to the selected request. 
  */
-struct request_t *MLF_select_request(struct request_file_t *req_file)
+struct request_t *MLF_select_request(struct file_t *req_file)
 {
 	struct request_t *req=NULL; /**< will receive the request to be processed. */
 
-	if (!agios_list_empty(&req_file->related_reads.list)) { //if we have read requests
-		req = applyMLFonlist(&(req_file->related_reads)); 
+	if (!agios_list_empty(&req_file->read_queue.list)) { //if we have read requests
+		req = applyMLFonlist(&(req_file->read_queue)); 
 	}
-	if ((!req) && (!agios_list_empty(&req_file->related_writes.list))) { //if we have not selected a read request already, and we have write requests
-		req = applyMLFonlist(&(req_file->related_writes));
+	if ((!req) && (!agios_list_empty(&req_file->write_queue.list))) { //if we have not selected a read request already, and we have write requests
+		req = applyMLFonlist(&(req_file->write_queue));
 	}
 	if (req && (!check_selection(req, req_file))) return NULL; //before proceeding with this request, check if we should wait
 	return req;
@@ -84,8 +90,8 @@ int64_t MLF(void)
 {	
 	struct request_t *req; /**< this will receive the request selected to be processed. */
 	struct agios_list_head *reqfile_l; /**< a line of the hashtable */
-	struct request_file_t *req_file; /**< used to iterate over all files in a line of the hashtable */
-	int64_t shortest_waiting_time=INT_MAX; /**< will be adapted to the shortest waiting time among all files that are currently waiting. In case we cannot process requests because all of the files are waiting, we will use this to wait the shortest amount of time possible. */
+	struct file_t *req_file; /**< used to iterate over all files in a line of the hashtable */
+	int32_t shortest_waiting_time=INT_MAX; /**< will be adapted to the shortest waiting time among all files that are currently waiting. In case we cannot process requests because all of the files are waiting, we will use this to wait the shortest amount of time possible. */
 	int32_t starting_hash = MLF_current_hash; /**< from what hash position we are starting to round robin in the hashtable. */
 	bool processed_requests = false; /**< could we process any requests while going through the whole hashtable? */
 	bool mlf_stop=false; /**< flag that will be set by the process_request function, to let us know we should stop and give control back to the agios_thread */
@@ -110,7 +116,7 @@ int64_t MLF(void)
 					req = MLF_select_request(req_file);
 					if ((req) && (req_file->waiting_time <= 0)) { //if we could select a request to this file and we are not waiting on it
 						/*removes the request from the hastable*/
-						__hashtable_del_req(req);
+						hashtable_del_req(req);
 						/*sends it back to the file system*/
 						mlf_stop = process_requests(req, MLF_current_hash);
 						processed_requests=true;

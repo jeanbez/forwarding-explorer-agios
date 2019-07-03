@@ -2,11 +2,22 @@
     \brief Implements the TWINS scheduling algorithm
 
  */ 
-#include <stdlib.h>
-#include <stdio.h>
-#include <time.h>
 #include <limits.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#include "agios_config.h"
+#include "agios_counters.h"
+#include "common_functions.h"
+#include "hash.h"
+#include "mylist.h"
+#include "process_request.h"
+#include "req_hashtable.h"
+#include "req_timeline.h"
+#include "scheduling_algorithms.h"
 
 static bool g_twins_first_req; /**< used to know when twins is being used for the first time (so we'll reset it) */
 static int g_current_twins_server; /**< the current queue from where we are taking requests */
@@ -52,13 +63,13 @@ int64_t TWINS(void)
 			//we're done with this window, time to move to the next one
 			agios_gettime(&g_window_start);
 			g_current_twins_server++;
-			if (g_current_twins_server >= app_timeline_size) g_current_twins_server = 0; //round robin!
+			if (g_current_twins_server >= multi_timeline_size) g_current_twins_server = 0; //round robin!
 			debug("time is up, moving on to window %d", g_current_twins_server);
 		}
 		//process requests!
-		if (!(agios_list_empty(&(app_timeline[g_current_twins_server])))) { //we can only process requests from the current app_id
+		if (!(agios_list_empty(&(multi_timeline[g_current_twins_server])))) { //we can only process requests from the current app_id
 			//take request from the right queue
-			req = agios_list_entry(app_timeline[g_current_twins_server].next, struct request_t, related);
+			req = agios_list_entry(multi_timeline[g_current_twins_server].next, struct request_t, related);
 			//remove from the queue
 			agios_list_del(&req->related);
 			/*send it back to the file system*/

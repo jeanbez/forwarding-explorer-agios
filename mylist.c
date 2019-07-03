@@ -3,6 +3,8 @@
  */
 #include <stdlib.h>
 
+#include "mylist.h"
+
 void init_agios_list_head(struct agios_list_head *list)
 {
 	list->next = list;

@@ -2,25 +2,30 @@
     \brief Implementation of the NOOP scheduling algorithm.
  */
 
+#include <stdbool.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <time.h>
 #include <limits.h>
 #include <string.h>
 
+#include "agios_request.h"
+#include "common_functions.h"
+#include "mylist.h"
 #include "NOOP.h"
+#include "process_request.h"
+#include "req_timeline.h"
+#include "scheduling_algorithms.h"
 
 /** 
  * NOOP schedule function. Usually NOOP means not having a schedule function. However, when we dynamically change from another algorithm to NOOP, we may still have requests on queue. So we just process all of them. 
  * @return 0, because we will never decide to sleep 
  */
-int64_t NOOP(void *clnt)
+int64_t NOOP(void)
 {
 	struct agios_list_head *list; 
 	struct request_t *req;
-	bool update_time=0;
 	bool stop_processing=false;
-	long hash;
+	int32_t hash;
 
 	while(!stop_processing) 
 	{
@@ -30,7 +35,7 @@ int64_t NOOP(void *clnt)
 			//just take one request and process it
 			req = timeline_oldest_req(&hash);
 			debug("NOOP is processing leftover requests %s %ld %ld", req->file_id, req->offset, req->len);
-			stop_processing = process_requests(req, clnt, hash);
+			stop_processing = process_requests(req, hash);
 			generic_post_process(req);
 		}
 		timeline_unlock();	

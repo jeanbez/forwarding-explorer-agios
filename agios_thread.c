@@ -7,7 +7,14 @@
 #include <stdint.h>
 #include <pthread.h>
 
+#include "agios_config.h"
+#include "agios_counters.h"
 #include "agios_thread.h"
+#include "common_functions.h"
+#include "data_structures.h"
+#include "performance.h"
+#include "scheduling_algorithms.h"
+#include "statistics.h"
 
 static pthread_cond_t g_request_added_cond = PTHREAD_COND_INITIALIZER;  /**< Used to let the agios thread know that we have new requests. */
 static pthread_mutex_t g_request_added_mutex = PTHREAD_MUTEX_INITIALIZER; /**< Used to protect the request_added_cond. */
@@ -77,7 +84,6 @@ void * agios_thread(void *arg)
 		current_scheduler = initialize_scheduler(current_alg);
 		agios_gettime(&g_last_algorithm_update);	//we will change the algorithm periodically		
 	}
-	statistics_set_new_algorithm(current_alg);
 	performance_set_new_algorithm(current_alg);
 	debug("selected algorithm: %s", current_scheduler->name);
 	//since the current algorithm is decided, we can allow requests to be included
@@ -89,25 +95,24 @@ void * agios_thread(void *arg)
 		if (g_dynamic_scheduler->is_dynamic) {
 			if (is_time_to_change_scheduler()) { //it is time to select!
 				//make a decision on the next scheduling algorithm
-				next_alg = d_dynamic_scheduler->select_algorithm();
+				int32_t next_alg = g_dynamic_scheduler->select_algorithm();
 				//change it
 				debug("HEY IM CHANGING THE SCHEDULING ALGORITHM\n\n\n\n");
 				change_selected_alg(next_alg);
-				statistics_set_new_algorithm(current_alg);
 				performance_set_new_algorithm(current_alg);
-				reset_stats_window(); //reset all stats so they will not affect the next selection
+				reset_all_statistics(); //reset all stats so they will not affect the next selection
 				unlock_all_data_structures(); //we can allow new requests to be added now
 				agios_gettime(&g_last_algorithm_update); 
 				debug("We've changed the scheduling algorithm to %s", current_scheduler->name);
 				remaining_time = config_agios_select_algorithm_period;
 			} else { //it is NOT time to select
-				remaining_time = config_agios_select_algoritm_period - get_nanoelapsed(g_last_algorithm_update);
+				remaining_time = config_agios_select_algorithm_period - get_nanoelapsed(g_last_algorithm_update);
 				if (remaining_time < 0) remaining_time = 0;
 			}
 		} //end scheduler is dynamic
 		//if we have queued requests, try to process them
 		if (0 < get_current_reqnb()) { //here we use the mutex to access the variable current_reqnb because we don't want to risk getting an outdated value and then sleeping for nothing
-			scheduler_waiting_time = current_scheduler->schedule(client); //the scheduler may have a reason to ask us for a sleeping time (for instance, TWINS keeps track of time windows) 
+			scheduler_waiting_time = current_scheduler->schedule(); //the scheduler may have a reason to ask us for a sleeping time (for instance, TWINS keeps track of time windows) 
 			if (scheduler_waiting_time > 0) { //the scheduling algorithm wants us to sleep for a while, so we'll respect that, and not with a cond_timedwait because this sleep is not to be interrupted by new request arrivals, and is not conditional to not having queued requests (we assume the scheduling algorithm knows what it is doing)
 				fill_struct_timespec(agios_min(scheduler_waiting_time, remaining_time), &timeout); //if we are supposed to change the scheduling algorithm before the end of the waiting time provided by the scheduler, we just wait until then
 				if (TWINS_SCHEDULER != current_alg) {

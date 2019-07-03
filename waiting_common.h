@@ -3,9 +3,11 @@
 */
 
 #pragma once
+#include "agios_request.h"
 
-
-void update_waiting_time_counters(struct request_file_t *req_file, 
-					int *shortest_waiting_time);
+void update_waiting_time_counters(struct file_t *req_file, 
+					int32_t *shortest_waiting_time);
 bool check_selection(struct request_t *req, 
-			struct request_file_t *req_file);
+			struct file_t *req_file);
+void increment_sched_factor(struct request_t *req);
+void waiting_algorithms_postprocess(struct request_t *req);

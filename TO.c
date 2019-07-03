@@ -1,11 +1,17 @@
 /*! \file TO.c
     \brief Implementation of the timeorder and timeorder with aggregations scheduling algorithms. Their processing phases is the same, the only difference is in the requests insertion in the queue.
  */
-#include <stdlib.h>
-#include <stdio.h>
-#include <time.h>
+#include <assert.h>
 #include <limits.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#include "agios_counters.h"
+#include "process_request.h"
+#include "req_timeline.h"
+#include "scheduling_algorithms.h"
 
 /**
  * repeatedly process the first request of the timeline, until process_requests notify us to stop.

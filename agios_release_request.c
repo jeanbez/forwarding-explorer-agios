@@ -10,6 +10,8 @@
 #include "hash.h"
 #include "mylist.h"
 #include "performance.h"
+#include "req_hashtable.h"
+#include "req_timeline.h"
 
 /**
  * This function is called by the release function, when the library user signaled it finished processing a request. In the case of a virtual request, its requests will be signaled separately, so here we are sure to receive a single request.
@@ -71,8 +73,8 @@ bool agios_release_request(char *file_id,
 		print_hashtable_line(hash);
 #endif
 		//get the relevant list 
-		if (type == RT_WRITE) related = &req_file->related_writes;
-		else related = &req_file->related_reads;
+		if (type == RT_WRITE) related = &req_file->write_queue;
+		else related = &req_file->read_queue;
 		//find the request in the dispatch queue
 		agios_list_for_each_entry (req, &related->dispatch, related) {
 			if ((req->len == len) && (req->offset == offset)) {

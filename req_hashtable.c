@@ -5,10 +5,22 @@
     @see hash.c
     @see req_timeline.c
  */
+#include <assert.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
 
+#include "agios.h"
+#include "agios_add_request.h"
+#include "agios_request.h"
+#include "common_functions.h"
+#include "hash.h"
+#include "mylist.h"
+#include "req_hashtable.h"
 
 struct agios_list_head *hashlist;  /**< the hashtable. */
-int64_t *hashlist_reqcounter = NULL; /**< how many requests are present in each position from the hashtable (used to speed the search for requests in the scheduling algorithms). */
+int32_t *hashlist_reqcounter = NULL; /**< how many requests are present in each position from the hashtable (used to speed the search for requests in the scheduling algorithms). */
 static pthread_mutex_t *hashlist_locks; /**< one mutex per line of the hashtable. */
 
 /**
@@ -29,7 +41,7 @@ bool hashtable_init(void)
 		free(hashlist);
 		return false;
 	}
-	hashlist_reqcounter = (int64_t *)malloc(sizeof(int64_t)*AGIOS_HASH_ENTRIES);
+	hashlist_reqcounter = (int32_t *)malloc(sizeof(int32_t)*AGIOS_HASH_ENTRIES);
 	if (!hashlist_reqcounter) {
 		agios_print("AGIOS: cannot allocate memory for req counters\n");
 		free(hashlist);
@@ -39,35 +51,35 @@ bool hashtable_init(void)
 	//initialize structures
 	for (int32_t i = 0; i < AGIOS_HASH_ENTRIES; i++) {
 		init_agios_list_head(&hashlist[i]);
-		agios_mutex_init(&(hashlist_locks[i]));
+		pthread_mutex_init(&(hashlist_locks[i]), NULL);
 		hashlist_reqcounter[i]=0;
 	}
 	return true;
 }
 /**
- * funtion called while freeing structures from the hashtable. It cleans up a queue (related_list_t) by freeing all requests in its regular and dispatch lists. It does NOT frees the related_list_t itself.
- * @param related_list the queue to be freed.
+ * funtion called while freeing structures from the hashtable. It cleans up a queue (queue_t) by freeing all requests in its regular and dispatch lists. It does NOT frees the queue_t itself.
+ * @param queue the queue to be freed.
  */
-void related_list_cleanup(struct related_list_t *related_list)
+void queue_cleanup(struct queue_t *queue)
 {
-	list_of_requests_cleanup(&related_list->list);
-	list_of_requests_cleanup(&related_list->dispatch);
+	list_of_requests_cleanup(&queue->list);
+	list_of_requests_cleanup(&queue->dispatch);
 }
 /**
  * called at the end of the execution to clean up the hashtable structures.
  */
 void hashtable_cleanup(void)
 {
-	struct request_file_t *req_file; /**< used to iterate over all files in a hashtable line. */
-	struct request_file_t *aux_req_file=NULL; /**< used to avoid freeing a file structure before moving the iterator to the next one, otherwise the loop breaks. */
+	struct file_t *req_file; /**< used to iterate over all files in a hashtable line. */
+	struct file_t *aux_req_file=NULL; /**< used to avoid freeing a file structure before moving the iterator to the next one, otherwise the loop breaks. */
 
 	if (hashlist) {
 		for (int32_t i=0; i< AGIOS_HASH_ENTRIES; i++) { //go through all lines of the hashtable
 			if (!agios_list_empty(&hashlist[i])) {
 				agios_list_for_each_entry (req_file, &hashlist[i], hashlist) { //go through all file structures
 					//go through all requests in the related lists
-					related_list_cleanup(&req_file->related_reads);
-					related_list_cleanup(&req_file->related_writes);
+					queue_cleanup(&req_file->read_queue);
+					queue_cleanup(&req_file->write_queue);
 					if (req_file->file_id) free(req_file->file_id);
 					if (aux_req_file) {
 						agios_list_del(&aux_req_file->hashlist);
@@ -96,28 +108,28 @@ void hashtable_cleanup(void)
  */ 
 bool hashtable_add_req(struct request_t *req, 
 			int32_t hash_val, 
-			struct request_file_t *given_req_file)
+			struct file_t *given_req_file)
 {
 	struct agios_list_head *queue; /**< will receive the queue where the request is to be added (read or write) */
-	struct request_file_t *req_file = given_req_file; /**< the file that is being accessed by this request. */
+	struct file_t *req_file = given_req_file; /**< the file that is being accessed by this request. */
 	struct request_t *tmp; /**< used to find the insertion place for this request. */
 	struct agios_list_head *insertion_place; /**< used to find the insertion place for this request. */
 
 	debug("adding request to file %s, offset %ld, size %ld", req->file_id, req->offset, req->len);
 	/*finds the file to add to*/
 	if (!req_file) { //a file structure was not provided, we have to find/create it and update statistics
-		req_file = find_req_file(&hashlist[hash_val], req->file_id, req->state);
+		req_file = find_req_file(&hashlist[hash_val], req->file_id);
 		if (!req_file) return false;
 		/*if it is the first request to this file, we have to store its arrival time. */ 
 		if (req_file->first_request_time == 0) req_file->first_request_time = req->arrival_time;
 	}
 	//choose the appropriate list to add the request
 	if (req->type == RT_READ) {
-		queue = &req_file->related_reads.list;
-		req->globalinfo = &req_file->related_reads;
+		queue = &req_file->read_queue.list;
+		req->globalinfo = &req_file->read_queue;
 	} else {
-		queue = &req_file->related_writes.list;
-		req->globalinfo = &req_file->related_writes;
+		queue = &req_file->write_queue.list;
+		req->globalinfo = &req_file->write_queue;
 	}
 	/* search for the position in the offset-sorted list. */ 
 	insertion_place = queue;
@@ -143,9 +155,9 @@ bool hashtable_add_req(struct request_t *req,
 void hashtable_safely_del_req(struct request_t *req)
 {
 	int32_t hash = get_hashtable_position(req->file_id);
-	agios_mutex_lock(&hashlist_locks[hash_val]);
+	pthread_mutex_lock(&hashlist_locks[hash]);
 	agios_list_del(&req->related);
-	agios_mutex_unlock(&hashlist_locks[hash_val]);
+	pthread_mutex_unlock(&hashlist_locks[hash]);
 }
 /**
  * alternative to hastable_safely_del_req to remove a request from the hashtable when we ARE holding the mutex to the relevant line.
@@ -163,7 +175,7 @@ void hashtable_del_req(struct request_t *req)
 struct agios_list_head *hashtable_lock(int32_t index)
 {
 	assert((index >= 0) && (index < AGIOS_HASH_ENTRIES));
-	agios_mutex_lock(&hashlist_locks[index]);
+	pthread_mutex_lock(&hashlist_locks[index]);
 	return &hashlist[index];
 }
 /**
@@ -182,7 +194,7 @@ struct agios_list_head *hashtable_trylock(int32_t index)
  */
 void hashtable_unlock(int32_t index)
 {
-	agios_mutex_unlock(&hashlist_locks[index]);
+	pthread_mutex_unlock(&hashlist_locks[index]);
 }
 /**
  * prints all contents of a line of the hashtable. Used for debug purposes. The caller must hold the mutex for this line.
@@ -192,26 +204,26 @@ void print_hashtable_line(int32_t i)
 {
 #if AGIOS_DEBUG
 	struct agios_list_head *hash_list; /**< to access the line of the hashtable. */
-	struct request_file_t *req_file; /**< to iterate over all files in the line of the hashtable. */
+	struct file_t *req_file; /**< to iterate over all files in the line of the hashtable. */
 	struct request_t *req; /**< to iterate over all requests to each file in the line of the hashtable. */
 
 	hash_list = &hashlist[i];
 	if (!agios_list_empty(hash_list)) debug("[%d]", i);
 	agios_list_for_each_entry (req_file, hash_list, hashlist) { //go over all files
 		debug("\t%s", req_file->file_id);
-		if (!(agios_list_empty(&req_file->related_reads.list) && 
-		      agios_list_empty(&req_file->related_reads.dispatch))) {
+		if (!(agios_list_empty(&req_file->read_queue.list) && 
+		      agios_list_empty(&req_file->read_queue.dispatch))) {
 			debug("\t\tread");
-			agios_list_for_each_entry (req, &req_file->related_reads.list, related) print_request(req);
+			agios_list_for_each_entry (req, &req_file->read_queue.list, related) print_request(req);
 			debug("\t\tdispatch read");
-			agios_list_for_each_entry (req, &req_file->related_reads.dispatch, related) print_request(req);
+			agios_list_for_each_entry (req, &req_file->read_queue.dispatch, related) print_request(req);
 		}
-		if (!(agios_list_empty(&req_file->related_writes.list) && 
-		      agios_list_empty(&req_file->related_writes.dispatch))) {
+		if (!(agios_list_empty(&req_file->write_queue.list) && 
+		      agios_list_empty(&req_file->write_queue.dispatch))) {
 			debug("\t\twrite");
-			agios_list_for_each_entry (req, &req_file->related_writes.list, related) print_request(req);
+			agios_list_for_each_entry (req, &req_file->write_queue.list, related) print_request(req);
 			debug("\t\tdispatch writes");
-			agios_list_for_each_entry (req, &req_file->related_writes.dispatch, related) print_request(req);
+			agios_list_for_each_entry (req, &req_file->write_queue.dispatch, related) print_request(req);
 		}
 	}
 #endif

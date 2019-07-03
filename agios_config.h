@@ -5,6 +5,7 @@
 */
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define DEFAULT_CONFIGFILE	"/etc/agios.conf" /**< If a filename is not provided in agios_init, we'll try to read from this one */

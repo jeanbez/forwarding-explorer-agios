@@ -1,7 +1,21 @@
 /*! \file process_request.c
     \brief Implementation of the processing of requests, when they are sent back to the user through the callback functions.
  */
-struct user_callbacks; /**< contains the pointers to the user-provided callbacks to be used to process requests */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+
+#include "agios_counters.h"
+#include "agios_request.h"
+#include "agios_thread.h"
+#include "common_functions.h"
+#include "mylist.h"
+#include "process_request.h"
+#include "req_hashtable.h"
+#include "req_timeline.h"
+#include "scheduling_algorithms.h"
+
+struct agios_client user_callbacks; /**< contains the pointers to the user-provided callbacks to be used to process requests */
 
 
 /**
@@ -36,8 +50,8 @@ void put_this_request_in_dispatch(struct request_t *req, int64_t this_time, stru
 {
 	agios_list_add_tail(&req->related, dispatch);
 	req->dispatch_timestamp = this_time;
-	debug("request - size %ld, offset %ld, file %s - going back to the file system", req->io_data.len, req->io_data.offset, req->file_id);
-	req->globalinfo->current_size -= req->io_data.len; //when we aggregate overlapping requests, we don't adjust the related list current_size, since it is simply the sum of all requests sizes. For this reason, we have to subtract all requests from it individually when processing a virtual request.
+	debug("request - size %ld, offset %ld, file %s - going back to the file system", req->len, req->offset, req->file_id);
+	req->globalinfo->current_size -= req->len; //when we aggregate overlapping requests, we don't adjust the related list current_size, since it is simply the sum of all requests sizes. For this reason, we have to subtract all requests from it individually when processing a virtual request.
 	req->globalinfo->req_file->timeline_reqnb--;
 }
 /** 
@@ -57,7 +71,7 @@ bool process_requests(struct request_t *head_req, int32_t hash)
 	//get the timestamp for now
 	agios_gettime(&now);
 	this_time = get_timespec2long(now);
-	if ((user_callbacks->process_requests_cb) && (head_req->reqnb > 1)) { //if the user has a function capable of processing a list of requests at once and this is an aggregated request
+	if ((user_callbacks.process_requests_cb) && (head_req->reqnb > 1)) { //if the user has a function capable of processing a list of requests at once and this is an aggregated request
 		//make a list of requests to be given to the callback function
 		//we give to the user an array with the requests' data (the field used by the user, provided in agios_add_request)
 		int64_t *reqs = (int64_t *)malloc(sizeof(int64_t)*(head_req->reqnb)); /**< list of requests to be given to the callback function. */
@@ -76,7 +90,7 @@ bool process_requests(struct request_t *head_req, int32_t hash)
 		}
 		if (aux_req) {
 			put_this_request_in_dispatch(aux_req, this_time, &head_req->globalinfo->dispatch);
-			reqs[reqs_index]=aux_req->data;
+			reqs[reqs_index]=aux_req->user_id;
 			reqs_index++;
 		}
 		//process
@@ -90,20 +104,20 @@ bool process_requests(struct request_t *head_req, int32_t hash)
 		agios_list_for_each_entry (req, &head_req->reqs_list, related) { //go through all sub-requests	
 			if (aux_req) {
 				put_this_request_in_dispatch(aux_req, this_time, &head_req->globalinfo->dispatch);
-				user_callbacks.process_request_cb(aux_req->data);
+				user_callbacks.process_request_cb(aux_req->user_id);
 			}
 			aux_req = req;
 		}
 		if(aux_req)
 		{
 			put_this_request_in_dispatch(aux_req, this_time, &head_req->globalinfo->dispatch);
-			user_callbacks.process_request_cb(aux_req->data);
+			user_callbacks.process_request_cb(aux_req->user_id);
 		}
 	} //end virtual request but no list callback
 	//update requests and files counters
-	if (head_req->globalinfo->req_file->timeline_reqnb == 0) dec_current_reqfilenb(); //timeline_reqnb is updated in the put_this_request_in_dispatch function
+	if (head_req->globalinfo->req_file->timeline_reqnb == 0) dec_current_filenb(); //timeline_reqnb is updated in the put_this_request_in_dispatch function
 	dec_many_current_reqnb(hash, head_req->reqnb);
-	debug("current status. hashtable[%d] has %d requests, there are %d requests in the scheduler to %d files.", hash, hashlist_reqcounter[hash], current_reqnb, current_reqfilenb); //attention: it could be outdated info since we are not using the lock
+	debug("current status. hashtable[%d] has %d requests, there are %d requests in the scheduler to %d files.", hash, hashlist_reqcounter[hash], current_reqnb, current_filenb); //attention: it could be outdated info since we are not using the lock
 	//now check if the scheduling algorithms should stop because it is time to periodic events
 	return is_time_to_change_scheduler();
 }

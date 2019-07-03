@@ -82,7 +82,7 @@ struct request_t {
 	int64_t offset; /**< position of the file in bytes */
 	int64_t len; /**< request size in bytes */
 	int32_t queue_id; /**< an identifier of the queue to be used for this request, relevant for SW and TWINS only */
-	int64_t tw_priority; /**< value calculated by the SW algorithm to insert the request into the queue */
+	int64_t sw_priority; /**< value calculated by the SW algorithm to insert the request into the queue */
 	int64_t user_id;  /**< value passed by AGIOS' user (for knowing which request is this one)*/
 	int32_t sched_factor; /**< used by MLF and aIOLi */
 	int64_t timestamp; /**< the arrival order at the scheduler (a global value incremented each time a request arrives so the current value is given to that request as its timestamp)*/
@@ -97,3 +97,5 @@ struct request_t {
 };
 
 void request_cleanup(struct request_t *aux_req);
+void list_of_requests_cleanup(struct agios_list_head *list);
+void print_request(struct request_t *req);

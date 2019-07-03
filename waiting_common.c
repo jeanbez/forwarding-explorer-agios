@@ -3,15 +3,18 @@
 
     aIOLi and MLF are the scheduling algorithms that try to predict shift phenomena and better aggregations, and then impose waiting times on files to improve the access pattern. Here we have some functions common to both.
  */
-#include "waiting_common.h"
 
+#include "agios_config.h"
+#include "common_functions.h"
+#include "scheduling_algorithms.h"
+#include "waiting_common.h"
 /**
  * function used by AIOLI and MLF when we find a file that is currently waiting. Since we try not to wait (when waiting on one file, we go on processing requests to other files), every time we try to get requests from a file we need to update its waiting time to see if it is still waiting or not. 
  * @param req_file the pointer to the structure containing information about a file that is waiting
  * @param shortest_waiting_time is updated in this function and kept by the caller to find the shortest waiting time among all waiting files.
  */
-void update_waiting_time_counters(struct request_file_t *req_file, 
-					int *shortest_waiting_time)
+void update_waiting_time_counters(struct file_t *req_file, 
+					int32_t *shortest_waiting_time)
 {
 	int64_t elapsed = get_nanoelapsed(req_file->waiting_start); /**< for how long has it been waiting? */
 	if (req_file->waiting_time > elapsed) { //we have not waited enough
@@ -26,7 +29,7 @@ void update_waiting_time_counters(struct request_file_t *req_file,
  * @return true or false to proceed with this request
  */ 
 bool check_selection(struct request_t *req, 
-			struct request_file_t *req_file)
+			struct file_t *req_file)
 {
 	/*waiting times are cause by 2 phenomena:*/
 	/*1. shift phenomenon. One of the processes issuing requests to this queue is a little delayed, causing a contiguous request to arrive shortly after the other ones*/

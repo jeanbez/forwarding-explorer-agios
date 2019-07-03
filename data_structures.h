@@ -3,6 +3,8 @@
  */
 #pragma once
 
+#include <stdbool.h>
+
 void migrate_from_hashtable_to_timeline();
 void migrate_from_timeline_to_hashtable();
 void lock_all_data_structures();

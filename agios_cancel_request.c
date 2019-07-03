@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "agios.h"
+#include "agios_counters.h"
 #include "common_functions.h"
 #include "data_structures.h"
 #include "hash.h"
@@ -59,8 +60,8 @@ bool agios_cancel_request(char *file_id,
 	debug("REMOVING a request from file %s:", req_file->file_id );
 	//get the relevant queue
 	if (using_hashtable) {
-		if (type == RT_WRITE) list = &req_file->related_writes.list;
-		else list = &req_file->related_reads.list;
+		if (type == RT_WRITE) list = &req_file->write_queue.list;
+		else list = &req_file->read_queue.list;
 	} else list = &timeline;
 	//find the request in the queue and remove it
 	found = false;
@@ -72,7 +73,7 @@ bool agios_cancel_request(char *file_id,
 				//update information about the file and request counters
 				req->globalinfo->current_size -= req->len;
 				req->globalinfo->req_file->timeline_reqnb--;
-				if (req->globalinfo->req_file->timeline_reqnb == 0) dec_current_reqfilenb();
+				if (req->globalinfo->req_file->timeline_reqnb == 0) dec_current_filenb();
 				dec_current_reqnb(hash);
 	 			//finally, free the structure
 				request_cleanup(req);
@@ -127,7 +128,7 @@ bool agios_cancel_request(char *file_id,
 						aux_req->globalinfo->current_size -= aux_req->len;
 						aux_req->globalinfo->req_file->timeline_reqnb--;
 						if(aux_req->globalinfo->req_file->timeline_reqnb == 0)
-							dec_current_reqfilenb();
+							dec_current_filenb();
 						dec_current_reqnb(hash);
 				 		//finally, free the structure
 						request_cleanup(aux_req);

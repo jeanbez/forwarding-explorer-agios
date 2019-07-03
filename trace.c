@@ -4,9 +4,17 @@
     Trace files are named according as prefix.N.sufix with prefix and sufix given as configuration parameters and N being a counter. In the initialization of this module, it tries to open trace files with increasing values to N until finding an unused one that will be used as the new trace file. A buffer is used to write information before sending it to disk, in order to avoid generating a large number of small requests to the local storage (and also to minimize the interference with the scheduled requests in case they are also to the local storage). The length of this buffer is also a configuration parameter.
     @see agios_config.c
  */
-#include <stdio.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "agios.h"
+#include "agios_config.h"
+#include "agios_request.h"
+#include "common_functions.h"
+
 
 static FILE *agios_tracefile_fd; /**< the current trace file*/
 static pthread_mutex_t agios_trace_mutex = PTHREAD_MUTEX_INITIALIZER; /**< since multiple threads call the Trace Module's functions, this mutex makes sure only one tries to access the trace file at a time. The thread calling the functions MUST NOT lock it, the function itself handles it. */
@@ -58,11 +66,11 @@ void agios_trace_print_request(struct request_t *req)
  */
 void agios_trace_add_request(struct request_t *req)
 {
-	agios_mutex_lock(&agios_trace_mutex);
+	pthread_mutex_lock(&agios_trace_mutex);
 	snprintf(aux_buf, aux_buf_size, "%ld\t", (req->arrival_time - get_timespec2long(agios_trace_t0)));
 	agios_trace_print_request(req);
 	agios_trace_write_to_buffer();
-	agios_mutex_unlock(&agios_trace_mutex);
+	pthread_mutex_unlock(&agios_trace_mutex);
 }
 /**
  * function called at the beginning of the execution. It checks for existing trace files given the prefix and sufix in the configuration parameters. Then it creates and opens the next one. It also allocates the buffers used to write to the trace file. The caller must NOT hold the trace mutex.
@@ -74,7 +82,7 @@ bool init_trace_module(void)
 	int32_t agios_trace_counter=0; /**< used to search for the next tracefile to be created. */ 
 	bool ret = true; /**< used to return false in case of errors. */
 
-	agios_mutex_lock(&agios_trace_mutex);
+	pthread_mutex_lock(&agios_trace_mutex);
 	agios_gettime(&agios_trace_t0);
 	/*we have to find out how many trace files are there*/
 	do {
@@ -102,7 +110,7 @@ bool init_trace_module(void)
 			}
 		}
 	}
-	agios_mutex_unlock(&agios_trace_mutex);
+	pthread_mutex_unlock(&agios_trace_mutex);
 	return ret;
 }
 /**
@@ -118,8 +126,8 @@ void cleanup_agios_trace(void)
  */
 void close_agios_trace()
 {
-	agios_mutex_lock(&agios_trace_mutex);
+	pthread_mutex_lock(&agios_trace_mutex);
 	agios_tracefile_flush_buffer();
 	fclose(agios_tracefile_fd);
-	agios_mutex_unlock(&agios_trace_mutex);
+	pthread_mutex_unlock(&agios_trace_mutex);
 }

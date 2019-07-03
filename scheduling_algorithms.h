@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "agios_request.h"
+
 #define MAX_AGGREG_SIZE   16 /**< how many requests can be aggregated into a single virtual request (used by many schedulers). */
 
 //identifiers of the scheduling algorithms
@@ -34,7 +36,7 @@ extern int32_t current_alg;
 extern struct io_scheduler_instance_t *current_scheduler;
 
 void change_selected_alg(int32_t new_alg);
-int32_t get_algorithm_from_string(const char *alg);
+bool get_algorithm_from_string(const char *alg, int32_t *index);
 char *get_algorithm_name_from_index(int32_t index);
 struct io_scheduler_instance_t *find_io_scheduler(int32_t index);
 struct io_scheduler_instance_t *initialize_scheduler(int32_t index);

@@ -11,7 +11,7 @@ extern int32_t multi_timeline_size;
 
 struct agios_list_head *timeline_lock(void);
 void timeline_unlock(void);
-void timeline_add_req(struct request_t *req, int32_t hash, struct request_file_t *given_req_file);
+bool timeline_add_req(struct request_t *req, int32_t hash, struct file_t *given_req_file);
 void reorder_timeline(void);
 struct request_t *timeline_oldest_req(int32_t *hash);
 bool timeline_init(int32_t max_queue_id);

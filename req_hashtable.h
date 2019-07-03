@@ -9,7 +9,7 @@
 #define AGIOS_HASH_ENTRIES		(1 << AGIOS_HASH_SHIFT) 		
 
 extern struct agios_list_head *hashlist;
-extern int *hashlist_reqcounter;
+extern int32_t *hashlist_reqcounter;
 
 bool hashtable_init(void);
 void hashtable_cleanup(void);
@@ -21,3 +21,5 @@ void hashtable_del_req(struct request_t *req);
 struct agios_list_head *hashtable_lock(int32_t index);
 struct agios_list_head *hashtable_trylock(int32_t index);
 void hashtable_unlock(int32_t index);
+void print_hashtable_line(int32_t i);
+void print_hashtable(void);

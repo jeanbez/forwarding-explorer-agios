@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "agios_add_request.h"
 #include "agios_config.h"
 #include "agios_counters.h"
 #include "agios_request.h"
@@ -26,12 +27,6 @@
 #include "statistics.h"
 #include "trace.h"
 
-/**
- * says if two requests to the same file are contiguous or not.
- */
-#define CHECK_AGGREGATE(req,nextreq) \
-     ( (req->offset <= nextreq->offset)&& \
-         ((req->offset+req->len)>=nextreq->offset))
 
 static int32_t g_last_timestamp=0; /**< We increase this number at every new request, just so each one of them has an unique identifier. */
 

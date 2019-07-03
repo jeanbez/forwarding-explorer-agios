@@ -1,9 +1,14 @@
 /*! \function statistics.c
     \brief Keeps global statistics (for all accesses) and provides functions to update and manipulate them. Also used to update local statistics (for each queue separately).
  */
-#include <string.h>
 #include <limits.h>
+#include <pthread.h>
+#include <string.h>
 
+#include "agios.h"
+#include "common_functions.h"
+#include "mylist.h"
+#include "req_hashtable.h"
 #include "statistics.h"
 
 static struct timespec last_req; /**< time of the last request arrival. */
@@ -15,7 +20,7 @@ static pthread_mutex_t global_statistics_mutex = PTHREAD_MUTEX_INITIALIZER; /**<
  * @param stats the statistics structure of the queue to be updated.
  * @param req the newly arrived request.
  */
-void update_local_stats(struct related_list_statistics_t *stats, struct request_t *req)
+void update_local_stats(struct queue_statistics_t *stats, struct request_t *req)
 {
 	int64_t elapsedtime=0; /**< used to measure the time since the last request's arrival. */
 	int64_t this_distance; /**< used to calculate the offset distance to the previous request. */
@@ -68,13 +73,11 @@ void update_global_stats_newreq(struct global_statistics_t *stats,
  */
 void statistics_newreq(struct request_t *req)
 {
-	int64_t elapsedtime=0;
-
 	req->globalinfo->stats.receivedreq_nb++;
 	//update global statistics
-	agios_mutex_lock(&global_statistics_mutex);
+	pthread_mutex_lock(&global_statistics_mutex);
 	update_global_stats_newreq(&global_stats, req);
-	agios_mutex_unlock(&global_statistics_mutex);
+	pthread_mutex_unlock(&global_statistics_mutex);
 	//update local statistics
 	update_local_stats(&req->globalinfo->stats, req);
 }
@@ -83,29 +86,29 @@ void statistics_newreq(struct request_t *req)
  */
 void reset_global_stats(void)
 {
-	agios_mutex_lock(&global_statistics_mutex);
+	pthread_mutex_lock(&global_statistics_mutex);
 	global_stats.total_reqnb =0;
 	global_stats.reads = 0;
 	global_stats.writes = 0;
 	global_stats.avg_time_between_requests = -1;
 	global_stats.avg_request_size = -1;
-	agios_mutex_unlock(&global_statistics_mutex);
+	pthread_mutex_unlock(&global_statistics_mutex);
 }
 /**
  * called by reset_all_statistics to reset all local statistics from a queue
  */
-void reset_stats_related_list(struct related_list_t *related_list)
+void reset_stats_queue(struct queue_t *queue)
 {
-	related_list->stats.processedreq_nb = 0;
-	related_list->stats.receivedreq_nb = 0;
-	related_list->stats.processed_req_size = 0;
-	related_list->stats.processed_bandwidth = -1;
-	related_list->stats.releasedreq_nb = 0;
-	related_list->avg_req_size = -1;
-	related_list->avg_time_between_requests = -1;
-	related_list->avg_distance = -1;
-	related_list->stats.aggs_no = 0;
-	related_list->stats.avg_agg_size = -1;
+	queue->stats.processedreq_nb = 0;
+	queue->stats.receivedreq_nb = 0;
+	queue->stats.processed_req_size = 0;
+	queue->stats.processed_bandwidth = -1;
+	queue->stats.releasedreq_nb = 0;
+	queue->stats.avg_req_size = -1;
+	queue->stats.avg_time_between_requests = -1;
+	queue->stats.avg_distance = -1;
+	queue->stats.aggs_no = 0;
+	queue->stats.avg_agg_size = -1;
 }
 /**
  * function called once in a while to completely reset all statistics (local and global) we have been keeping about the access pattern. Must hold ALL mutexes (this function is called after lock_all_data_structures, so no other locks are necessary). 
@@ -113,13 +116,13 @@ void reset_stats_related_list(struct related_list_t *related_list)
 void reset_all_statistics(void)
 {
 	struct agios_list_head *list; /**< used to access each line of the hashtable.*/
-	struct request_file_t *req_file; /**< used to iterate over all files in a line of the hashtable. */
+	struct file_t *req_file; /**< used to iterate over all files in a line of the hashtable. */
 
 	for (int32_t i=0; i< AGIOS_HASH_ENTRIES; i++) {
 		list = &hashlist[i];
 		agios_list_for_each_entry (req_file, list, hashlist) { //goes over all files of this line of the hashtable
-			reset_local_stats_from_related_list(&req_file->related_reads);
-			reset_local_stats_from_related_list(&req_file->related_writes);
+			reset_stats_queue(&req_file->read_queue);
+			reset_stats_queue(&req_file->write_queue);
 		}
 	}
 	//reset global statistics as well
@@ -129,7 +132,7 @@ void reset_all_statistics(void)
  * updates the local statistics for a queue after an aggregation. The size of the aggregation is not provided because it is already in related->lastaggregation.
  * @param related the queue.
  */
-void stats_aggregation(struct related_list_t *related)
+void stats_aggregation(struct queue_t *related)
 {
 	if (related->lastaggregation > 1) {
 		related->stats.aggs_no++;

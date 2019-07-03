@@ -3,7 +3,20 @@
 
     There is a timeline (queue) of requests, protected with a single mutex. The insertion order in this queue is usually FIFO, but may differ depending on the used scheduling algorithm. If a max_queue_id was provided to agios_init, the initialization function will also allocate the multi_timeline, a list of max_queue_id+1 request queues, which is used by some scheduling algorithms (for now just TWINS) and is also protected by the same timeline_mutex.
  */
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
+
+#include "agios.h"
+#include "agios_add_request.h"
+#include "agios_config.h"
+#include "agios_request.h"
+#include "common_functions.h"
+#include "hash.h"
+#include "mylist.h"
+#include "req_hashtable.h"
+#include "scheduling_algorithms.h"
 
 AGIOS_LIST_HEAD(timeline); /**< the request queue. */ 
 struct agios_list_head *multi_timeline; /**< multiple request queues, indexed by the queue_id provided by the user with each request to agios_add_request. This structure is used by TWINS. */
@@ -16,7 +29,7 @@ static pthread_mutex_t timeline_mutex = PTHREAD_MUTEX_INITIALIZER; /**< a lock t
  */
 struct agios_list_head *timeline_lock(void)
 {
-	agios_mutex_lock(&timeline_mutex);
+	pthread_mutex_lock(&timeline_mutex);
 	return &timeline;
 }
 /**
@@ -24,7 +37,7 @@ struct agios_list_head *timeline_lock(void)
  */
 void timeline_unlock(void)
 {
-	agios_mutex_unlock(&timeline_mutex);
+	pthread_mutex_unlock(&timeline_mutex);
 }
 /**
  * function used by timeline_add_request to add a request to the timeline. This is a separated function because when migrating to or from SW or TWINS we need to completely reorder the timeline, so we'll add requests to a temporary timeline in the process. 
@@ -37,24 +50,23 @@ void timeline_unlock(void)
  */
 bool __timeline_add_req(struct request_t *req, 
 			int32_t hash, 
-			struct request_file_t *given_req_file, 
+			struct file_t *given_req_file, 
 			struct agios_list_head *this_timeline)
 {
-	struct request_file_t *req_file = given_req_file; /**< used to find the structure holding information about the file being accessed. */
+	struct file_t *req_file = given_req_file; /**< used to find the structure holding information about the file being accessed. */
 	struct request_t *tmp; /**< used to iterate over the timeline to find the insertion place for the request (depending on the scheduling algorithm being used). */
-	bool aggregated=false; /**< did we aggregate the request into another virtual request? (used by some scheduling algorithms) */
 	int32_t sw_priority; /**< a value that will define the position in the timeline when using the SW scheduling algorithm. */
 	struct agios_list_head *insertion_place; /**< the insertion place of the new request in the queue. */
 
-	if (!req_file) { //if a req_file structure has been given, we are actually migrating from hashtable to timeline and will copy the request_file_t structures, so no need to create new. Also the request pointers are already set, and we don't need to use locks here
+	if (!req_file) { //if a req_file structure has been given, we are actually migrating from hashtable to timeline and will copy the file_t structures, so no need to create new. Also the request pointers are already set, and we don't need to use locks here
 		debug("adding request %ld %ld to file %s, app_id %u", req->offset, req->len, req->file_id, req->queue_id);	
 		/*find the file and update its informations if needed*/
-		req_file = find_req_file(&hashlist[hash], req->file_id, req->state); //we store file information in the hashtable 
+		req_file = find_req_file(&hashlist[hash], req->file_id); //we store file information in the hashtable 
 		if (!req_file) return false;
 		if (req_file->first_request_time == 0) req_file->first_request_time = req->arrival_time;
-		if (req->type == RT_READ) req->globalinfo = &req_file->related_reads;
-		else req->globalinfo = &req_file->related_writes;
-		if (current_alg == NOOP_SCHEDULER) return; //we don't really include requests when using the NOOP scheduler, we just go through this function because we want request_file_t  structures for statistics
+		if (req->type == RT_READ) req->globalinfo = &req_file->read_queue;
+		else req->globalinfo = &req_file->write_queue;
+		if (current_alg == NOOP_SCHEDULER) return true; //we don't really include requests when using the NOOP scheduler, we just go through this function because we want file_t  structures for statistics
 	}
 	//the SW scheduling algorithm separates requests into windows
 	if (current_alg == SW_SCHEDULER) {
@@ -89,7 +101,7 @@ bool __timeline_add_req(struct request_t *req,
 		} //end loop going over all requests 
 	}
 	//if we are here it means the request still has to be inserted in the queue
-	if ((!given_req_file) || (current_alg == NOOP_SCHEDULER))  { //if no request_file_t structure was given, this is a regular new request, so we simply add it to the end of the timeline. If we are here and are using NOOP, it means we are migrating between data structures (because otherwise we would have left the function earlier), and in that case we don't do much regarding ordering because we are going to schedule these requests as soon as possible and we don't care (NOOP does not usually have a queue, this is a special case). */
+	if ((!given_req_file) || (current_alg == NOOP_SCHEDULER))  { //if no file_t structure was given, this is a regular new request, so we simply add it to the end of the timeline. If we are here and are using NOOP, it means we are migrating between data structures (because otherwise we would have left the function earlier), and in that case we don't do much regarding ordering because we are going to schedule these requests as soon as possible and we don't care (NOOP does not usually have a queue, this is a special case). */
 		debug("request is not aggregated, inserting in the timeline");
 		agios_list_add_tail(&req->related, this_timeline); 
 	}
@@ -115,7 +127,7 @@ bool __timeline_add_req(struct request_t *req,
  * @param given_req_file the information about the file being accessed or NULL if unknown. It is important to notice that: when called by agios_add_request, given_req_file will be NULL. It will only have a different value when this function is being used to migrate between data structures.
  * @return true or false for success.
  */
-void timeline_add_req(struct request_t *req, int32_t hash, struct request_file_t *given_req_file)
+bool timeline_add_req(struct request_t *req, int32_t hash, struct file_t *given_req_file)
 {
 	return __timeline_add_req(req, hash, given_req_file, &timeline);
 }

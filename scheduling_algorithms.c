@@ -7,7 +7,18 @@
 #include <limits.h>
 #include <string.h>
 
+#include "aIOLi.h"
+#include "data_structures.h"
+#include "MLF.h"
+#include "NOOP.h"
+#include "req_hashtable.h"
+#include "req_timeline.h"
 #include "scheduling_algorithms.h"
+#include "SJF.h"
+#include "statistics.h"
+#include "SW.h"
+#include "TO.h"
+#include "TWINS.h"
 
 int32_t current_alg = 0; /**< the identifier of the scheduling algorithm being currently used. @see scheduling_algorithms.h */
 struct io_scheduler_instance_t *current_scheduler=NULL; /**< a pointer to the structure describing the scheduling algorithm being currently used. */
@@ -54,8 +65,8 @@ static struct io_scheduler_instance_t io_schedulers[] = {
 		{
 			.name = "aIOLi",
 			.index = AIOLI_SCHEDULER,
-			.init = AIOLI_init,
-			.schedule = &AIOLI,
+			.init = NULL,
+			.schedule = &aIOLi,
 			.exit = NULL,
 			.select_algorithm = NULL,
 			.max_aggreg_size = MAX_AGGREG_SIZE,
@@ -152,7 +163,7 @@ void change_selected_alg(int32_t new_alg)
 			//if we are changing from or to SW or TWINS, we need to reorder the list
 			//if we are changing to the timeorder with aggregation, we need to reorder the list
 			if ((current_alg != NOOP_SCHEDULER) && 
-			   ((previous_alg == SW_SCHEDULER) || (current_alg == TIME_WINDOW_SCHEDULER) || (current_alg == TWINS_SCHEDULER) || (previous_alg == TWINS_SCHEDULER))) {
+			   ((previous_alg == SW_SCHEDULER) || (current_alg == SW_SCHEDULER) || (current_alg == TWINS_SCHEDULER) || (previous_alg == TWINS_SCHEDULER))) {
 				reorder_timeline(); 
 			}
 		} //end fourth situation 

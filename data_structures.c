@@ -26,7 +26,7 @@
 #include "scheduling_algorithms.h"
 #include "statistics.h"
 
-void put_all_requests_in_timeline(struct agios_list_head *queue, struct file_t *req_file, long hash);
+void put_all_requests_in_timeline(struct agios_list_head *queue, struct file_t *req_file, int32_t hash);
 void put_all_requests_in_hashtable(struct agios_list_head *list);
 
 /**
@@ -117,8 +117,8 @@ void migrate_from_hashtable_to_timeline()
 		hash_list = &hashlist[i];
 		agios_list_for_each_entry (req_file, hash_list, hashlist) { //go though all files in this line of the hashtable
 			//get all requests from it and put them in the timeline
-			put_all_requests_in_timeline(&req_file->related_reads.list, req_file, i);
-			put_all_requests_in_timeline(&req_file->related_writes.list, req_file, i);
+			put_all_requests_in_timeline(&req_file->read_queue.list, req_file, i);
+			put_all_requests_in_timeline(&req_file->write_queue.list, req_file, i);
 		}
 	}
 }

@@ -107,7 +107,7 @@ bool read_configuration_file(char *config_file)
 	if (!config_trace_agios_file_sufix) return false;
 	strcpy(config_trace_agios_file_sufix, ret_str);
 	config_lookup_string(&agios_config, "library_options.default_algorithm", &ret_str);
-	config_agios_default_algorithm = get_algorithm_from_string(ret_str);
+	if (false == get_algorithm_from_string(ret_str, &config_agios_default_algorithm)) return false;
 	config_lookup_int(&agios_config, "library_options.waiting_time", &ret);
 	config_waiting_time = ret;
 	config_lookup_int(&agios_config, "library_options.aioli_quantum", &ret);
@@ -118,7 +118,7 @@ bool read_configuration_file(char *config_file)
 	config_agios_select_algorithm_period = ret*1000000L; //convert it to ns
 	config_lookup_int(&agios_config, "library_options.select_algorithm_min_reqnumber", &config_agios_select_algorithm_min_reqnumber);
 	config_lookup_string(&agios_config, "library_options.starting_algorithm", &ret_str);
-	config_agios_starting_algorithm = get_algorithm_from_string(ret_str);
+	if (false == get_algorithm_from_string(ret_str, &config_agios_starting_algorithm)) return false;
 #if 0 //test if the starting algorithm is a dynamic one
 	if((config_agios_starting_algorithm == DYN_TREE_SCHEDULER) || (config_agios_starting_algorithm == ARMED_BANDIT_SCHEDULER))
 	{
