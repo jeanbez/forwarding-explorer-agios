@@ -54,6 +54,52 @@ void put_this_request_in_dispatch(struct request_t *req, int64_t this_time, stru
 	req->globalinfo->current_size -= req->len; //when we aggregate overlapping requests, we don't adjust the related list current_size, since it is simply the sum of all requests sizes. For this reason, we have to subtract all requests from it individually when processing a virtual request.
 	req->globalinfo->req_file->timeline_reqnb--;
 }
+/**
+ * function executed by the thread that will use the provided callbacks to give requests back to the user. 
+ * @param arg is a pointer to a struct processing_thread_argument_t. It will be freed at the end.
+ */
+void * processing_thread(void *arg)
+{
+	struct processing_thread_argument_t *info = (struct processing_thread_argument_t *) arg;
+	assert(info);
+	assert(info->reqnb >= 1);
+	if (info->reqnb == 1) { //simplest case, a single request
+		user_callbacks.process_request_cb(*info->user_ids);
+	} else { //more than one request
+		if (NULL != user_callbacks.process_requests_cb) { //we have a callback for a list of requests
+			user_callbacks.process_requests_cb(info->user_ids, info->reqnb);
+		} else { //we don't have a callback
+			for (int32_t i=0; i < info->reqnb; i++) user_callbacks.process_request_cb(info->user_ids[i]);
+		}
+	}
+	free(info->user_ids);
+	free(info);
+}
+/**
+ * function called by the process_requests function to create a thread that will use the user callbacks to process requests. That is done separately because if the user callback takes a long time, or uses some mutexes, we don't want that to affect our scheduling algorithm.
+ * @param user_ids either a single user_id value (a pointer to it) or a list of them. This is the information provided by the user to agios_add_request to identify the request. If it is a list, we will pass it directly to the user, but if it is a single int64_t we will make a copy of it. Anyway this will be freed by the thread after returning from the callback.
+ * @param reqnb the number of user_id values in user_ids (>= 1)
+ * @return true or false for success
+ */
+bool create_processing_thread(int64_t *user_ids, int32_t reqnb)
+{
+	//first prepare the arguments to the thread
+	struct processing_thread_argument_t *arg = (struct processing_thread_argument_t *)malloc(sizeof(struct processing_thread_argument_t));
+	if (!arg) return false;
+	arg->reqnb = reqnb;
+	if (reqnb > 1) { //in this case we already allocated a new list to give it to the user
+		arg->user_ids = user_ids;
+	} else { //we are using the int64_t that comes from inside the request_t
+		arg->user_ids = (int64_t *)malloc(sizeof(int64_t));
+		if (!arq->user_ids) return false;
+		*(arg->user_ids) = *user_ids;
+	}
+	//now create the thread
+	pthread_t new_thread; /**< used to create the thread, we won't store it because we will never need it. */
+	int32_t ret = pthread_create(&new_thread, NULL, processing_thread, (void *)arg);
+	if (0 != ret) return false;
+	return true;
+}
 /** 
  * function called by scheduling algorithms to send requests back to the client through the callback functions. The caller must hold relevant data structure mutex (the function will release and then get it again tough). 
  * @param head_req the (possibly virtual) request being processed.
@@ -94,12 +140,16 @@ bool process_requests(struct request_t *head_req, int32_t hash)
 			reqs_index++;
 		}
 		//process
-		user_callbacks.process_requests_cb(reqs, head_req->reqnb);
-		//we no longer need this array
-		free(reqs);
+		if (!create_processing_thread(reqs, head_req->reqnb)) {
+			agios_print("PANIC! Cannot create processing thread.");
+			return false;		
+		}
 	} else if (head_req->reqnb == 1) {  //this is not a virtual request, just a singleo one
 		put_this_request_in_dispatch(head_req, this_time, &head_req->globalinfo->dispatch);
-		user_callbacks.process_request_cb(head_req->user_id);
+		if (!create_processing_thread(head_req->user_id, 1)) {
+			agios_print("PANIC! Cannot create processing thread.");
+			return false;		
+		}
 	} else { //this is a virtual request but the user does not have a callback for a list of requests
 		agios_list_for_each_entry (req, &head_req->reqs_list, related) { //go through all sub-requests	
 			if (aux_req) {

@@ -1,7 +1,8 @@
 #include <pthread.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #define ORANGEFS_AGIOS
 #include <agios.h>
 
@@ -23,7 +24,7 @@ struct client clnt;
 static pthread_t *threads;
 pthread_barrier_t test_start;
 
-unsigned long long int total_elapsed=0;
+int64_t total_elapsed=0;
 pthread_mutex_t elapsed_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void inc_processed_reqnb()
@@ -44,13 +45,12 @@ void test_process(int64_t req_id)
 void *test_thr(void *arg)
 {
 	char *filename = malloc(sizeof(char)*100);
-	long long offset = 0;
-	int i;
+	int64_t offset = 0;
 	struct timespec timeout;
 	struct timespec start_time, end_time;
-	unsigned long long int elapsed=0;
-	unsigned long long int previous_elapsed=0;
-	int finish=0;
+	int64_t elapsed=0;
+	int64_t previous_elapsed=0;
+	bool finish=false;
 
 	sprintf(filename, "arquivo.%d.out", (int)pthread_self());
 //	printf("starting generation of requests to file %s\n", filename);
@@ -58,12 +58,12 @@ void *test_thr(void *arg)
 	/*wait for the start signal*/
 	pthread_barrier_wait(&test_start);
 
-	for(i=0; i<reqnb_perthread; i++)
+	for(int32_t i=0; i<reqnb_perthread; i++)
 	{
 		/*start timestamp*/
 		clock_gettime(CLOCK_MONOTONIC, &start_time);
 		/*generate a request*/
-		agios_add_request(filename, REQ_TYPE, offset, req_size, i, &clnt, 0);
+		agios_add_request(filename, REQ_TYPE, offset, req_size, i, 0);
 		/*end timestamp*/
 		clock_gettime(CLOCK_MONOTONIC, &end_time);
 		elapsed += ((end_time.tv_nsec - start_time.tv_nsec) + ((end_time.tv_sec - start_time.tv_sec)*1000000000L));
@@ -73,7 +73,7 @@ void *test_thr(void *arg)
 			pthread_mutex_lock(&processed_reqnb_mutex);
 			pthread_cond_signal(&processed_reqnb_cond);
 			pthread_mutex_unlock(&processed_reqnb_mutex);
-			finish=1;
+			finish=true;
 			break;
 		}
 		previous_elapsed = elapsed;
@@ -101,9 +101,9 @@ void *test_thr(void *arg)
 
 int main (int argc, char **argv)
 {
-	int i, ret;
+	int32_t i, ret;
 	char **filenames;
-	unsigned long long int elapsed;
+	int64_t elapsed;
 
 	/*get arguments*/
 	if(argc < 6)
@@ -120,7 +120,7 @@ int main (int argc, char **argv)
 	/*start AGIOS*/
 	clnt.process_requests = NULL;
 	clnt.process_request = test_process;
-	if(agios_init(&clnt, "/tmp/agios.conf", 0) != 0)
+	if(agios_init(test_process, NULL, "/tmp/agios.conf", 0) != 0)
 	{
 		printf("PANIC! Could not initialize AGIOS!\n");
 		exit(1);
@@ -156,7 +156,6 @@ int main (int argc, char **argv)
 
 	printf("It took %lluns to add %d requests to the scheduler. Each inclusion takes on average %lluns\n", total_elapsed, generated_reqnb, total_elapsed / generated_reqnb);
 	
-	agios_print_stats_file(argv[5]);
 	agios_exit();
 
 	return 0;
