@@ -6,6 +6,7 @@
 
 #include "agios_config.h"
 #include "common_functions.h"
+#include "process_request.h"
 #include "scheduling_algorithms.h"
 #include "waiting_common.h"
 /**
@@ -74,4 +75,27 @@ void waiting_algorithms_postprocess(struct request_t *req)
 	}	
 	req->globalinfo->laststartoff = req->offset;
 	generic_post_process(req);
+}
+/**
+ * used by aIOLi and MLF to call step2 for a list of processing_info_t structures filled by multiple calls to process_requests_step1.
+ * @param info_list a list of filled processing_info_t structs. It will be empty (and all elements freed) after the call.
+ * @return true if any of the calls to process_requests_step2 returned true, false otherwise.
+ */ 
+bool call_step2_for_info_list(struct agios_list_head *info_list)
+{
+	struct processing_info_t *info; /**< used to iterate over the list */
+	struct processing_info_t *aux = NULL; /**< used to avoid freeing an info struct before iterating to the next element otherwise we will crash the loop. */
+	bool ret = false; /**< each call to step2 will return a boolean, we will return true if any of the returns is true */
+	agios_list_for_each_entry (info, info_list, list) {
+		if (aux) {
+			agios_list_del(&aux->list);
+			ret = ret || process_requests_step2(aux);
+		}
+		aux = info;
+	}
+	if (aux) {
+		agios_list_del(&aux->list);
+		ret = ret || process_requests_step2(aux);
+	}
+	return ret; 
 }

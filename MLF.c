@@ -1,6 +1,7 @@
 /*! \file MLF.c
     \brief Implementation of the MLF scheduling algorithm.
  */
+#include <assert.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -97,6 +98,7 @@ int64_t MLF(void)
 	bool mlf_stop=false; /**< flag that will be set by the process_request_step2 function, to let us know we should stop and give control back to the agios_thread */
 	int32_t waiting_time = 0; /**< the waiting time we will return if we leave for not having requests to process (or if all files are waiting, in that case this will receive shortest_waiting_time). */
 	struct processing_info_t *info; /**< the struct with information about requests to be processed, filled by process_requests_step1 and given as parameter to process_requests_step2 */
+	AGIOS_LIST_HEAD(info_list); /**< we will select multiple requests from a queue if the quantum allows, so we'll make a list of the struct processing_info_t structs returned by the multiple calls to process_requests_step1 to call process_requests_step2 later, when we are done with the queue and can unlock the mutex. */
 
 	/*search through all the files for requests to process*/
 	while ((current_reqnb > 0) && (!mlf_stop)) {
@@ -121,15 +123,16 @@ int64_t MLF(void)
 						/*sends it back to the file system*/
 						/* \todo do not hold the lock when calling step2! */
 						info = process_requests_step1(req, MLF_current_hash);
-						mlf_stop = process_requests_step2(info);
+						agios_list_add_tail(&info->list, &info_list);
 						processed_requests=true;
 						/*cleanup step*/
 						waiting_algorithms_postprocess(req);
-						if (mlf_stop) break; //get out of the agios_list_for_each_entry loop
 					} //end if we could select a request and it is ready to be processed
 				} //end for all files in the hashtable line
 			}
 			hashtable_unlock(MLF_current_hash);
+			mlf_stop = call_step2_for_info_list(&info_list);
+			assert(agios_list_empty(&info_list));
 		} //end if we got the lock	
 		//now we'll move on to the next line of the hashtable
 		if (!mlf_stop) { //if mlf_stop is true, we've left the loop without going through all reqfiles, we should not increase the current hash yet

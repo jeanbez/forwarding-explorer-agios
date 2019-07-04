@@ -1,6 +1,7 @@
 /*! \file aIOLi.c
     \brief Implementation of the aIOLi scheduling algorithm 
  */
+#include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
@@ -157,6 +158,7 @@ int64_t aIOLi(void)
 	int64_t waiting_time; /**< in case all files are currently waiting, for how long we should wait*/
 	int64_t ret = 0; /**< the timeout we are returning */
 	struct processing_info_t *info; /**< the struct with information about requests to be processed, filled by process_requests_step1 and given as parameter to process_requests_step2 */
+	AGIOS_LIST_HEAD(info_list); /**< we will select multiple requests from a queue if the quantum allows, so we'll make a list of the struct processing_info_t structs returned by the multiple calls to process_requests_step1 to call process_requests_step2 later, when we are done with the queue and can unlock the mutex. */
 
 	//we are not locking the current_reqnb_mutex, so we could be using outdated information. We have chosen to do this for performance reasons
 	while ((current_reqnb > 0) && (!aioli_stop)) {
@@ -178,10 +180,9 @@ int64_t aIOLi(void)
 				used_quantum += req->len;
 				/*removes the request from the hastable*/
 				hashtable_del_req(req);
-				/*sends it back to the file system
-				 *TODO should not hold lock for _step2*/
+				/*sends it back*/
 				info = process_requests_step1(req, selected_hash);
-				aioli_stop = process_requests_step2(info);
+				agios_list_add_tail(&info->list, &info_list);
 				/*cleanup step*/
 				waiting_algorithms_postprocess(req);
 				//here we used to wait until the request was processed before moving on (as in aioli's original design), but that proved to have very poor performance in modern systems because we want some request parallelism.
@@ -202,6 +203,8 @@ int64_t aIOLi(void)
 				}
 			}
 			hashtable_unlock(selected_hash);
+			aioli_stop = call_step2_for_info_list(&info_list);
+			assert(agios_list_empty(&info_list));
 		} //end if we have a selected queue
 		else if (waiting_time > 0) { //we may have requests, but we cannot process them because all files are waiting, it is better to return
 			ret = waiting_time;
