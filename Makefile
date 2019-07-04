@@ -62,16 +62,8 @@ library: ${OBJS}
 all: library
 
 ${OBJS}:
-	gcc -fPIC -Wall -O -L/usr/lib/ -L/usr/local/lib/ ${ccflags-y} -c ${FILES} -lm -lpthread -lrt -lconfig
-
-install: library
-	sudo rm -rf /usr/lib/libagios.so.1 /usr/lib/libagios.so
-	sudo cp ./libagios.so.1 /usr/lib
-	sudo cp agios.h /usr/include/agios.h
-	sudo chmod 0755 /usr/lib/libagios.so.1
-	sudo ln -s /usr/lib/libagios.so.1 /usr/lib/libagios.so
-	sudo ldconfig
+	gcc -fPIC -Wall -O ${ccflags-y} -c ${FILES} -lm -lpthread -lrt -lconfig
 
 clean: 
-	rm -rf *.so.1
+	rm -rf *.so
 	rm -rf *.o
