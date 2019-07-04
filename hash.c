@@ -43,5 +43,6 @@ int32_t get_hashtable_position(const char *file_handle)
 		sum += file_handle[i];
 	//calculates the hash and transforms it into a position of the hashtable
 	sum = calculate_hash(sum);
+	if (sum < 0) sum = -sum;
 	return sum % AGIOS_HASH_ENTRIES;
 }

@@ -57,12 +57,12 @@ OBJS=agios.o \
       waiting_common.o
 
 library: ${OBJS} 
-	gcc -shared -o libagios.so.1 ${OBJS}
+	gcc -shared -o libagios.so ${OBJS}
 
 all: library
 
 ${OBJS}:
-	gcc -fPIC -Wall -L/usr/lib/ -L/usr/local/lib/ ${ccflags-y} -c ${FILES} -lm -lpthread -lrt -lconfig
+	gcc -fPIC -Wall -O -L/usr/lib/ -L/usr/local/lib/ ${ccflags-y} -c ${FILES} -lm -lpthread -lrt -lconfig
 
 install: library
 	sudo rm -rf /usr/lib/libagios.so.1 /usr/lib/libagios.so
